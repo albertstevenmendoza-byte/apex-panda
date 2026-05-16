@@ -262,12 +262,21 @@
              style="padding-left:2.25rem;width:100%"
              oninput="filterPickerFoods()" autocomplete="off">
     </div>
-    <!-- Macro filter tabs -->
-    <div style="display:flex;gap:6px">
+    <!-- Macro filter tabs (library mode only) -->
+    <div id="picker-macro-filters" style="display:flex;gap:6px">
       <button class="filter-btn active" data-macro="" onclick="setPickerFilter(this)">All</button>
       <button class="filter-btn" data-macro="protein" onclick="setPickerFilter(this)">&#x1F356; Protein</button>
       <button class="filter-btn" data-macro="carb"    onclick="setPickerFilter(this)">&#x1F35A; Carbs</button>
       <button class="filter-btn" data-macro="fat"     onclick="setPickerFilter(this)">&#x1F95C; Fat</button>
+    </div>
+    <!-- Source toggle -->
+    <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">
+      <button class="source-btn active" data-src="library" onclick="setPickerSrc(this)">
+        My Library
+      </button>
+      <button class="source-btn" data-src="all" onclick="setPickerSrc(this)">
+        &#x1F30E; Search All Foods
+      </button>
     </div>
   </div>
 
@@ -341,11 +350,12 @@
     // ═══════════════════════════════════════════════════════
     // CONFIG — replace with real keys
     // ═══════════════════════════════════════════════════════
+    const FDC_KEY = '8WgoHcFWJmQoVUN70VhiMKmlWaKSD8tRgh89kZYO';
+
     const APEX_CONFIG = {
       url:  'https://iedeghnykrigeensamcj.supabase.co',
       anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImllZGVnaG55a3JpZ2VlbnNhbWNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MzIwMTMsImV4cCI6MjA5NDUwODAxM30.xfSKLPqofpHLSKFieUepFqvbVjHGgGGC6nRn2HvMOz8',
     };
-
 
     // ═══════════════════════════════════════════════════════
     // APP STATE
@@ -803,7 +813,12 @@
       slotId:       null,
       activeFilter: '',
       selectedFood: null,
+      source:       'library',   // 'library' | 'all'
+      cache:        new Map(),   // temp key -> food object for external results
     };
+
+    // Debounce handle for external search
+    const XSEARCH = { timer: null, ctrl: null };
 
     async function loadNutritionTab() {
       const { plan, slots, totals, error } = await ApexNutrition.MealPlan.getOrCreateToday();
@@ -943,13 +958,19 @@
       PICKER.slotId = slotId;
       PICKER.selectedFood = null;
       PICKER.activeFilter = '';
+      PICKER.source = 'library';
+      document.getElementById('picker-macro-filters').style.display = 'flex';
       document.getElementById('picker-title').textContent = `Add to ${slotName}`;
       document.getElementById('picker-search').value = '';
       document.getElementById('picker-footer').classList.add('hidden');
       document.getElementById('food-picker-modal').classList.remove('hidden');
-      // Reset filter buttons
+      // Reset filter + source buttons
       document.querySelectorAll('#food-picker-modal .filter-btn')
         .forEach(b => b.classList.toggle('active', b.dataset.macro === ''));
+      document.querySelectorAll('#food-picker-modal .source-btn')
+        .forEach(b => b.classList.toggle('active', b.dataset.src === 'library'));
+      // Pre-populate cache with library foods (keyed by id)
+      APP.allFoods.forEach(f => PICKER.cache.set(String(f.id), f));
       renderPickerFoods(APP.allFoods);
       setTimeout(() => document.getElementById('picker-search').focus(), 100);
     }
@@ -966,9 +987,42 @@
       filterPickerFoods();
     }
 
+    // ── Source switcher ────────────────────────────────────────────
+    function setPickerSrc(btn) {
+      document.querySelectorAll('#food-picker-modal .source-btn')
+        .forEach(b => b.classList.toggle('active', b === btn));
+      PICKER.source = btn.dataset.src;
+      PICKER.selectedFood = null;
+      document.getElementById('picker-footer').classList.add('hidden');
+
+      const macroRow = document.getElementById('picker-macro-filters');
+      macroRow.style.display = PICKER.source === 'library' ? 'flex' : 'none';
+
+      filterPickerFoods();
+    }
+
+    // ── Library + external search dispatcher ────────────────────
     function filterPickerFoods() {
+      const q = document.getElementById('picker-search').value.trim();
+
+      if (PICKER.source === 'all') {
+        if (q.length < 2) {
+          document.getElementById('picker-food-list').innerHTML =
+            '<div style="text-align:center;color:var(--text-3);' +
+            'font-size:0.875rem;padding:2.5rem 1rem;line-height:1.7">' +
+            '<div style="font-size:1.5rem;margin-bottom:8px">&#x1F30E;</div>' +
+            'Type to search 3,000,000+ foods<br>' +
+            '<span style="font-size:0.8125rem;opacity:.7">' +
+            'Includes brands, packaged foods, restaurant items</span></div>';
+          return;
+        }
+        clearTimeout(XSEARCH.timer);
+        XSEARCH.timer = setTimeout(() => searchExternal(q), 420);
+        return;
+      }
+
+      // Library mode
       let foods = APP.allFoods;
-      const q   = document.getElementById('picker-search').value.trim();
       if (PICKER.activeFilter)
         foods = ApexNutrition.FoodArchive.filter(foods, { macroClass: PICKER.activeFilter });
       if (q)
@@ -976,6 +1030,133 @@
       renderPickerFoods(foods);
     }
 
+    // ── External search (Open Food Facts + optional USDA FDC) ───
+    async function searchExternal(query) {
+      const list = document.getElementById('picker-food-list');
+      list.innerHTML =
+        '<div style="text-align:center;color:var(--text-3);font-size:0.875rem;padding:2rem">' +
+        'Searching...</div>';
+
+      if (XSEARCH.ctrl) XSEARCH.ctrl.abort();
+      XSEARCH.ctrl = new AbortController();
+      const sig = XSEARCH.ctrl.signal;
+
+      const results = [];
+
+      // -- Open Food Facts (no key needed, 3M+ branded products) --
+      try {
+        const r = await fetch(
+          'https://world.openfoodfacts.org/cgi/search.pl?' +
+          'search_terms=' + encodeURIComponent(query) +
+          '&search_simple=1&action=process&json=1&page_size=20' +
+          '&fields=product_name,product_name_en,brands,nutriments',
+          { signal: sig }
+        );
+        const d = await r.json();
+        (d.products || [])
+          .map(normalizeOFF)
+          .filter(f => f && f.kcal > 0 && f.name && f.name !== 'Unknown')
+          .forEach(f => results.push(f));
+      } catch(e) { if (e.name !== 'AbortError') console.warn('OFF:', e.message); }
+
+      // -- USDA FoodData Central (free key, 400k+ foods inc. branded) --
+      if (typeof FDC_KEY !== 'undefined' && FDC_KEY) {
+        try {
+          const r = await fetch(
+            'https://api.nal.usda.gov/fdc/v1/foods/search?' +
+            'query=' + encodeURIComponent(query) +
+            '&dataType=Branded,Foundation,SR%20Legacy&pageSize=20' +
+            '&api_key=' + FDC_KEY,
+            { signal: sig }
+          );
+          const d = await r.json();
+          (d.foods || [])
+            .map(normalizeFDC)
+            .filter(f => f && f.kcal > 0)
+            .forEach(f => results.unshift(f)); // USDA results first
+        } catch(e) { if (e.name !== 'AbortError') console.warn('USDA:', e.message); }
+      }
+
+      renderPickerFoods(results.slice(0, 40));
+    }
+
+    // ── Normalize Open Food Facts product ───────────────────────
+    function normalizeOFF(p) {
+      if (!p) return null;
+      const n = p.nutriments || {};
+      const kcal    = n['energy-kcal_100g'] || Math.round((n['energy_100g'] || 0) / 4.184);
+      const protein = +(n['proteins_100g']       || 0).toFixed(1);
+      const carbs   = +(n['carbohydrates_100g']  || 0).toFixed(1);
+      const fat     = +(n['fat_100g']            || 0).toFixed(1);
+      const fiber   = +(n['fiber_100g']          || 0).toFixed(1);
+      const sugar   = +(n['sugars_100g']         || 0).toFixed(1);
+      const name    = (p.product_name || p.product_name_en || '').trim();
+      if (!name) return null;
+      const pCal = protein*4, cCal = carbs*4, fCal = fat*9;
+      const macro = fCal>pCal && fCal>cCal ? 'fat' : pCal>=cCal ? 'protein' : 'carb';
+      const _key  = 'off-' + Math.random().toString(36).slice(2);
+      const food  = { _key, name, brand: (p.brands||'').trim()||null,
+                      serving_size_g:100, kcal:Math.round(kcal),
+                      protein_g:protein, carbs_g:carbs, fat_g:fat,
+                      fiber_g:fiber, sugar_g:sugar, macro_class:macro,
+                      is_whole_food:false, tags:[], source:'brands' };
+      PICKER.cache.set(_key, food);
+      return food;
+    }
+
+    // ── Normalize USDA FDC food object ──────────────────────────
+    function normalizeFDC(f) {
+      const get = name => {
+        const n = (f.foodNutrients||[]).find(n=>n.nutrientName===name);
+        return +(n?.value||0);
+      };
+      const kcal    = get('Energy') || get('Energy (Atwater General Factors)');
+      const protein = +get('Protein').toFixed(1);
+      const carbs   = +get('Carbohydrate, by difference').toFixed(1);
+      const fat     = +get('Total lipid (fat)').toFixed(1);
+      const fiber   = +get('Fiber, total dietary').toFixed(1);
+      const sugar   = +(get('Sugars, total including NLEA')||get('Sugars, total')).toFixed(1);
+      const pCal = protein*4, cCal = carbs*4, fCal = fat*9;
+      const macro = fCal>pCal && fCal>cCal ? 'fat' : pCal>=cCal ? 'protein' : 'carb';
+      const _key  = 'fdc-' + f.fdcId;
+      const food  = { _key, name: f.description||'Unknown',
+                      brand: f.brandOwner||f.brandName||null,
+                      serving_size_g:100, kcal:Math.round(kcal),
+                      protein_g:protein, carbs_g:carbs, fat_g:fat,
+                      fiber_g:fiber, sugar_g:sugar, macro_class:macro,
+                      is_whole_food:!f.brandOwner&&!f.brandName,
+                      tags:[], source:'usda' };
+      PICKER.cache.set(_key, food);
+      return food;
+    }
+
+    // ── Save an external food to user's library (foods table) ───
+    async function saveExternalFood(food) {
+      const user = await ApexCore.Auth.getUser();
+      if (!user) return { data:null, error:new Error('Not authenticated') };
+      const { data, error } = await ApexCore.getClient()
+        .from('foods')
+        .insert({
+          name:          food.name,
+          brand:         food.brand || null,
+          serving_size_g:100,
+          kcal:          food.kcal,
+          protein_g:     food.protein_g,
+          carbs_g:       food.carbs_g,
+          fat_g:         food.fat_g,
+          fiber_g:       food.fiber_g || 0,
+          sugar_g:       food.sugar_g || 0,
+          macro_class:   food.macro_class,
+          is_whole_food: food.is_whole_food || false,
+          tags:          food.tags || [],
+          created_by:    user.id,
+        })
+        .select()
+        .single();
+      return { data, error };
+    }
+
+    // ── Render food list (library + external) ───────────────────
     function renderPickerFoods(foods) {
       const list = document.getElementById('picker-food-list');
       if (!foods.length) {
@@ -986,33 +1167,44 @@
       }
 
       const tagColors = {
-        protein: { bg: 'var(--accent-light)',   text: 'var(--accent-dark)' },
-        carb:    { bg: 'var(--info-light)',      text: 'var(--info)' },
-        fat:     { bg: 'var(--warning-light)',   text: 'var(--warning)' },
+        protein: { bg:'var(--accent-light)',  text:'var(--accent-dark)' },
+        carb:    { bg:'var(--info-light)',     text:'var(--info)' },
+        fat:     { bg:'var(--warning-light)',  text:'var(--warning)' },
       };
-      const macroKey = { protein: 'protein_g', carb: 'carbs_g', fat: 'fat_g' };
-      const macroLbl = { protein: 'P', carb: 'C', fat: 'F' };
+      const macroKey = { protein:'protein_g', carb:'carbs_g', fat:'fat_g' };
+      const macroLbl = { protein:'P', carb:'C', fat:'F' };
+
+      const srcBadge = src =>
+        src === 'usda'   ? '<span style="font-size:0.65rem;font-weight:600;padding:1px 5px;border-radius:3px;background:#EEF2FF;color:#4F46E5;margin-left:5px">USDA</span>' :
+        src === 'brands' ? '<span style="font-size:0.65rem;font-weight:600;padding:1px 5px;border-radius:3px;background:#FDF4FF;color:#9333EA;margin-left:5px">Brand</span>' : '';
 
       list.innerHTML = foods.map(f => {
-        const tc  = tagColors[f.macro_class] ?? tagColors.protein;
-        const key = macroKey[f.macro_class];
-        const lbl = macroLbl[f.macro_class];
-        const isSelected = PICKER.selectedFood?.id === f.id;
+        const tc       = tagColors[f.macro_class] ?? tagColors.protein;
+        const key      = macroKey[f.macro_class];
+        const lbl      = macroLbl[f.macro_class];
+        const selKey   = f._key || f.id;
+        const isSel    = PICKER.selectedFood &&
+                         (PICKER.selectedFood._key || PICKER.selectedFood.id) === selKey;
+        const brandRow = f.brand
+          ? `<div style="font-size:0.72rem;color:var(--text-3);margin-top:1px">${f.brand}</div>` : '';
         return `
-          <div onclick="selectPickerFood(${JSON.stringify(f).replace(/"/g, '&quot;')})"
+          <div onclick="selectPickerFood('${String(selKey).replace(/'/g,"\'")}')"
                style="display:flex;align-items:center;gap:10px;padding:11px 14px;
                       cursor:pointer;border-bottom:0.5px solid var(--border);
-                      background:${isSelected ? 'var(--accent-light)' : 'transparent'};
+                      background:${isSel?'var(--accent-light)':'transparent'};
                       transition:background 0.12s">
             <div style="flex:1;min-width:0">
-              <div style="font-size:0.9rem;font-weight:500">${f.name}</div>
-              <div style="font-size:0.75rem;color:var(--text-3);margin-top:1px">
-                per 100 g &nbsp;&middot;&nbsp; ${Math.round(f.kcal)} kcal
-                &nbsp;&middot;&nbsp; P:${f.protein_g}g C:${f.carbs_g}g F:${f.fat_g}g
+              <div style="font-size:0.875rem;font-weight:500;display:flex;align-items:center;flex-wrap:wrap">
+                ${f.name}${srcBadge(f.source)}
+              </div>
+              ${brandRow}
+              <div style="font-size:0.72rem;color:var(--text-3);margin-top:2px">
+                per 100 g &middot; ${Math.round(f.kcal)} kcal
+                &middot; P:${f.protein_g}g C:${f.carbs_g}g F:${f.fat_g}g
               </div>
             </div>
             <span style="font-size:0.75rem;font-weight:500;padding:3px 8px;
-                         border-radius:4px;white-space:nowrap;
+                         border-radius:4px;white-space:nowrap;flex-shrink:0;
                          background:${tc.bg};color:${tc.text}">
               ${lbl}: ${f[key]}g
             </span>
@@ -1020,29 +1212,35 @@
       }).join('');
     }
 
-    function selectPickerFood(food) {
+    // ── Select a food from the list ─────────────────────────────
+    function selectPickerFood(key) {
+      // key is either a DB id (number) or a temp cache key (string)
+      const food = PICKER.cache.get(key)
+                || PICKER.cache.get(Number(key))
+                || APP.allFoods.find(f => String(f.id) === String(key));
+      if (!food) return;
       PICKER.selectedFood = food;
-      document.getElementById('picker-selected-name').textContent = food.name;
+      const label = food.brand ? `${food.name} (${food.brand})` : food.name;
+      document.getElementById('picker-selected-name').textContent = label;
       document.getElementById('picker-qty').value = 100;
       document.getElementById('picker-footer').classList.remove('hidden');
       updatePickerPreview();
-      // Scroll footer into view
-      document.getElementById('picker-footer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      // Re-render to highlight selected row
-      filterPickerFoods();
+      document.getElementById('picker-footer')
+        .scrollIntoView({ behavior:'smooth', block:'nearest' });
     }
 
     function updatePickerPreview() {
       const food = PICKER.selectedFood;
       if (!food) return;
-      const g      = parseFloat(document.getElementById('picker-qty').value) || 0;
-      const ratio  = g / 100;
-      document.getElementById('pp-p').textContent = `P: ${(food.protein_g * ratio).toFixed(1)}g`;
-      document.getElementById('pp-c').textContent = `C: ${(food.carbs_g   * ratio).toFixed(1)}g`;
-      document.getElementById('pp-f').textContent = `F: ${(food.fat_g     * ratio).toFixed(1)}g`;
-      document.getElementById('pp-k').textContent = `${Math.round(food.kcal * ratio)} kcal`;
+      const g     = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const ratio = g / 100;
+      document.getElementById('pp-p').textContent = `P: ${(food.protein_g*ratio).toFixed(1)}g`;
+      document.getElementById('pp-c').textContent = `C: ${(food.carbs_g*ratio).toFixed(1)}g`;
+      document.getElementById('pp-f').textContent = `F: ${(food.fat_g*ratio).toFixed(1)}g`;
+      document.getElementById('pp-k').textContent = `${Math.round(food.kcal*ratio)} kcal`;
     }
 
+    // ── Add selected food to meal ────────────────────────────────
     async function addSelectedFood() {
       const food = PICKER.selectedFood;
       const g    = parseFloat(document.getElementById('picker-qty').value);
@@ -1050,11 +1248,40 @@
 
       const btn = document.querySelector('#picker-footer .btn-primary');
       btn.textContent = 'Adding...';
-      btn.disabled = true;
+      btn.disabled    = true;
 
-      const { error } = await ApexNutrition.MealItems.add(food.id, PICKER.slotId, g);
+      // External food (no DB id) — save to library first
+      let foodId = food.id;
+      if (!foodId) {
+        const { data, error: saveErr } = await saveExternalFood(food);
+        if (saveErr && saveErr.code !== '23505') {
+          showToast('Could not save food: ' + saveErr.message, 'error');
+          btn.textContent = 'Add to meal';
+          btn.disabled    = false;
+          return;
+        }
+        if (data) {
+          foodId = data.id;
+          APP.allFoods.push({ ...food, id: data.id }); // cache locally
+        } else {
+          // Duplicate — find the existing row
+          const user = await ApexCore.Auth.getUser();
+          const { data: existing } = await ApexCore.getClient()
+            .from('foods').select('id')
+            .eq('name', food.name).eq('created_by', user.id).maybeSingle();
+          if (existing) foodId = existing.id;
+        }
+        if (!foodId) {
+          showToast('Could not resolve food id', 'error');
+          btn.textContent = 'Add to meal';
+          btn.disabled    = false;
+          return;
+        }
+      }
+
+      const { error } = await ApexNutrition.MealItems.add(foodId, PICKER.slotId, g);
       btn.textContent = 'Add to meal';
-      btn.disabled = false;
+      btn.disabled    = false;
 
       if (error) { showToast(error.message, 'error'); return; }
 
