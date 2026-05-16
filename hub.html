@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apex Fitness</title>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Apex">
+  <meta name="theme-color" content="#0C0C0E">
+  <link rel="stylesheet" href="css/apex-styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="js/apex-core.js"></script>
+  <script src="js/training.js"></script>
+  <script src="js/nutrition.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/panda.js"></script>
+</head>
+<body>
+
+  <!-- ── Top bar ──────────────────────────────────────────── -->
+  <header id="topbar">
+    <div class="topbar-logo">Apex<span>.</span></div>
+    <div class="row gap-12">
+      <div id="phase-pill" class="pill" style="background:var(--accent-light);color:var(--accent-dark);font-size:0.8rem"></div>
+      <button class="btn-icon btn-ghost" id="weight-log-btn" title="Log weight" onclick="openWeightModal()">⚖️</button>
+      <div id="user-avatar" class="row gap-8" style="cursor:pointer" onclick="toggleUserMenu()">
+        <div id="avatar-circle" style="width:32px;height:32px;border-radius:50%;background:var(--accent-light);color:var(--accent-dark);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:600"></div>
+      </div>
+    </div>
+    <!-- User menu -->
+    <div id="user-menu" class="card" style="position:absolute;top:58px;right:1.5rem;width:180px;z-index:50;display:none;padding:0.5rem">
+      <button class="btn btn-ghost btn-full" style="justify-content:flex-start;font-size:0.875rem" onclick="window.location.href='onboarding.html'">⚙ Profile settings</button>
+      <div class="divider" style="margin:6px 0"></div>
+      <button class="btn btn-ghost btn-full" style="justify-content:flex-start;font-size:0.875rem;color:var(--danger)" onclick="ApexCore.Auth.signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <!-- ── Tab nav ───────────────────────────────────────────── -->
+  <nav id="tab-nav">
+    <button class="tab-btn active" data-tab="training" onclick="switchTab('training', this)">
+      🏋️ Training
+    </button>
+    <button class="tab-btn" data-tab="nutrition" onclick="switchTab('nutrition', this)">
+      🥗 Nutrition
+    </button>
+    <button class="tab-btn" data-tab="stats" onclick="switchTab('stats', this)">
+      📈 Stats
+    </button>
+  </nav>
+
+  <!-- ── Training panel ───────────────────────────────────── -->
+  <section id="panel-training" class="panel active">
+
+    <!-- Week header -->
+    <div class="row-between" style="margin-bottom:1.25rem">
+      <div>
+        <div class="row gap-8" style="margin-bottom:4px">
+          <h2 class="t-heading" id="week-title">Loading…</h2>
+          <div id="deload-badge" class="badge badge-warning hidden">Deload week</div>
+        </div>
+        <div class="t-small t-muted" id="week-sub"></div>
+      </div>
+      <div class="row gap-8">
+        <div id="next-deload-badge" class="badge badge-neutral hidden"></div>
+      </div>
+    </div>
+
+    <!-- 7-day grid -->
+    <div id="days-grid" class="days-grid"></div>
+
+    <!-- Workout detail -->
+    <div id="workout-detail" class="card hidden">
+      <div class="row-between" style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:0.5px solid var(--border)">
+        <div>
+          <div class="t-subhead" id="detail-workout-name"></div>
+          <div class="t-small t-muted" id="detail-workout-meta"></div>
+        </div>
+        <div class="row gap-8">
+          <div id="detail-deload-note" class="badge badge-warning hidden">Deload — 60% volume</div>
+          <button id="start-workout-btn" class="btn btn-primary btn-sm" onclick="startWorkout()">Start workout</button>
+        </div>
+      </div>
+      <table class="exercise-table" id="exercise-table">
+        <thead>
+          <tr>
+            <th style="width:40%">Exercise</th>
+            <th>Sets</th>
+            <th>Reps</th>
+            <th>RPE</th>
+            <th>Rest</th>
+            <th style="width:32px"></th>
+          </tr>
+        </thead>
+        <tbody id="exercise-tbody"></tbody>
+      </table>
+
+      <!-- Cardio prescription (for cardio days) -->
+      <div id="cardio-detail" class="hidden">
+        <div class="card-flat" id="cardio-prescription"></div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div id="training-empty" class="card hidden" style="text-align:center;padding:3rem">
+      <div style="font-size:2.5rem;margin-bottom:1rem">🗓️</div>
+      <div class="t-subhead" style="margin-bottom:6px">No active program</div>
+      <div class="t-muted t-small" style="margin-bottom:1.25rem">Generate a program to get started.</div>
+      <button class="btn btn-primary" onclick="generateProgram()">Generate program</button>
+    </div>
+
+  </section>
+
+  <!-- ── Nutrition panel ───────────────────────────────────── -->
+  <section id="panel-nutrition" class="panel">
+
+    <!-- Macro bars -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="row-between" style="margin-bottom:1rem">
+        <div class="t-subhead" id="nutr-date-label">Today's nutrition</div>
+        <div class="t-small t-muted" id="nutr-kcal-summary"></div>
+      </div>
+      <div class="macro-bars" id="macro-bars">
+        <div class="macro-row">
+          <div class="macro-label">Protein</div>
+          <div class="macro-track"><div class="macro-fill protein" id="bar-protein" style="width:0%"></div></div>
+          <div class="macro-nums"><strong id="val-protein">0</strong> / <span id="tgt-protein">—</span>g</div>
+        </div>
+        <div class="macro-row">
+          <div class="macro-label">Carbs</div>
+          <div class="macro-track"><div class="macro-fill carbs" id="bar-carbs" style="width:0%"></div></div>
+          <div class="macro-nums"><strong id="val-carbs">0</strong> / <span id="tgt-carbs">—</span>g</div>
+        </div>
+        <div class="macro-row">
+          <div class="macro-label">Fat</div>
+          <div class="macro-track"><div class="macro-fill fat" id="bar-fat" style="width:0%"></div></div>
+          <div class="macro-nums"><strong id="val-fat">0</strong> / <span id="tgt-fat">—</span>g</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two-column layout -->
+    <div class="nutr-layout">
+
+      <!-- Meal slots column -->
+      <div id="meal-slots-col"></div>
+
+      <!-- Food archive -->
+      <div class="archive-panel">
+        <div class="t-label t-muted" style="margin-bottom:10px">Food archive</div>
+        <div class="archive-search">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="food-search" placeholder="Search foods…" oninput="filterArchive()">
+        </div>
+        <div class="macro-filters">
+          <button class="filter-btn active" data-macro="" onclick="setMacroFilter(this)">All</button>
+          <button class="filter-btn" data-macro="protein" onclick="setMacroFilter(this)">Protein</button>
+          <button class="filter-btn" data-macro="carb"    onclick="setMacroFilter(this)">Carbs</button>
+          <button class="filter-btn" data-macro="fat"     onclick="setMacroFilter(this)">Fat</button>
+        </div>
+        <div id="food-archive-list"></div>
+        <div id="food-archive-empty" class="hidden" style="font-size:0.8125rem;color:var(--text-3);text-align:center;padding:1.5rem 0">
+          No foods match your search
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Stats panel ───────────────────────────────────────── -->
+  <section id="panel-stats" class="panel">
+
+    <!-- Metric cards -->
+    <div class="stats-grid" id="stats-cards">
+      <div class="stat-card"><div class="stat-label">Body weight</div><div class="stat-value" id="sc-weight">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-weight-d"></div></div>
+      <div class="stat-card"><div class="stat-label">Avg. daily balance</div><div class="stat-value" id="sc-balance">—<span class="stat-unit">kcal</span></div><div class="stat-delta" id="sc-balance-d"></div></div>
+      <div class="stat-card"><div class="stat-label">Training streak</div><div class="stat-value" id="sc-streak">—<span class="stat-unit">days</span></div><div class="stat-delta" id="sc-streak-d"></div></div>
+      <div class="stat-card"><div class="stat-label">Best squat (est. 1RM)</div><div class="stat-value" id="sc-squat">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-squat-d"></div></div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Body weight — 90 days</div>
+        <div class="chart-wrap" style="height:160px"><canvas id="chart-weight"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Calorie balance</div>
+        <div class="chart-wrap" style="height:160px"><canvas id="chart-balance"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Volume + PR row -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Weekly volume — sets</div>
+        <div class="chart-wrap" style="height:160px"><canvas id="chart-volume"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Strength PRs</div>
+        <div class="t-small t-muted" style="margin-bottom:1rem" id="pr-empty-hint" hidden>Log some sessions to start tracking PRs</div>
+        <table class="pr-table" id="pr-table">
+          <thead>
+            <tr><th>Exercise</th><th>Best</th><th>Latest</th><th>Gain</th></tr>
+          </thead>
+          <tbody id="pr-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── Active workout session overlay ───────────────────── -->
+  <div id="session-overlay" class="hidden">
+    <div class="session-topbar">
+      <button class="btn btn-ghost btn-sm" onclick="abandonSession()">✕ Abandon</button>
+      <div class="stack" style="align-items:center">
+        <div class="session-title" id="sess-title"></div>
+        <div class="session-timer" id="sess-timer">00:00</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openCompleteModal()">Complete ✓</button>
+    </div>
+    <div class="session-body" id="session-body"></div>
+  </div>
+
+  <!-- ── Complete session modal ────────────────────────────── -->
+  <div id="complete-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-title">Complete session?</div>
+      <div class="stack gap-14">
+        <div class="form-group">
+          <label for="sess-rpe">Overall session RPE <span class="t-hint">(6–10)</span></label>
+          <input id="sess-rpe" type="number" min="6" max="10" step="0.5" placeholder="8.0">
+        </div>
+        <div class="form-group">
+          <label for="sess-notes">Notes <span class="t-hint">optional</span></label>
+          <input id="sess-notes" type="text" placeholder="Felt strong on squats…">
+        </div>
+        <div class="row gap-10" style="justify-content:flex-end">
+          <button class="btn" onclick="document.getElementById('complete-modal').classList.add('hidden')">Cancel</button>
+          <button class="btn btn-primary" onclick="completeSession()">Save session</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Weight log modal ──────────────────────────────────── -->
+  <div id="weight-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-title">Log today's weight</div>
+      <div class="stack gap-14">
+        <div class="form-group">
+          <label for="wt-input">Weight</label>
+          <div class="input-group">
+            <input id="wt-input" type="number" min="30" max="400" step="0.1" placeholder="82.5">
+            <span class="input-suffix">kg</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="wt-notes">Notes <span class="t-hint">optional</span></label>
+          <input id="wt-notes" type="text" placeholder="Post-deload, morning…">
+        </div>
+        <div class="row gap-10" style="justify-content:flex-end">
+          <button class="btn" onclick="document.getElementById('weight-modal').classList.add('hidden')">Cancel</button>
+          <button class="btn btn-primary" onclick="logWeight()">Log weight</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast container ───────────────────────────────────── -->
+  <div id="toast-container"></div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════
+    // CONFIG — replace with real keys
+    // ═══════════════════════════════════════════════════════
+    const APEX_CONFIG = {
+      url:  'https://iedeghnykrigeensamcj.supabase.co',
+      anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImllZGVnaG55a3JpZ2VlbnNhbWNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MzIwMTMsImV4cCI6MjA5NDUwODAxM30.xfSKLPqofpHLSKFieUepFqvbVjHGgGGC6nRn2HvMOz8',
+    };
+
+    // ═══════════════════════════════════════════════════════
+    // APP STATE
+    // ═══════════════════════════════════════════════════════
+    const APP = {
+      profile:         null,
+      activeTab:       'training',
+      loadedTabs:      new Set(),
+      trainingData:    null,   // { week, workouts, program }
+      selectedWorkout: null,   // planned_workout row + planned_sets
+      timerInterval:   null,
+      charts:          {},
+      allFoods:        [],
+      activeMacroFilter: '',
+      mealPlanId:      null,
+    };
+
+    // ═══════════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', async () => {
+      await ApexCore.init(APEX_CONFIG);
+      const user = await ApexCore.Auth.requireAuth();
+      if (!user) return;
+
+      APP.profile = await ApexCore.Profile.getCached();
+      if (!APP.profile?.onboarding_done) {
+        window.location.href = 'onboarding.html'; return;
+      }
+
+      renderTopBar();
+      setupEventBus();
+      await loadTab('training');
+    });
+
+    // ── Event bus listeners ───────────────────────────────
+    function setupEventBus() {
+      ApexCore.on(ApexCore.Events.MACROS_RECALCULATED, () => {
+        APP.loadedTabs.delete('nutrition');
+        if (APP.activeTab === 'nutrition') loadTab('nutrition');
+      });
+      ApexCore.on(ApexCore.Events.DELOAD_TRIGGERED, ({ reason }) => {
+        showToast(`Deload triggered: ${reason}`, 'warning');
+      });
+      ApexCore.on(ApexCore.Events.OVERLOAD_FLAGGED, ({ estimated1RM, delta }) => {
+        showToast(`New PR! Est. 1RM: ${estimated1RM} kg (+${delta} kg)`, 'success');
+      });
+    }
+
+    // ── Top bar ───────────────────────────────────────────
+    function renderTopBar() {
+      const p = APP.profile;
+      const phase = p.phase ?? 'maintain';
+      const pill  = document.getElementById('phase-pill');
+      pill.textContent = `● ${phase.charAt(0).toUpperCase() + phase.slice(1)} phase`;
+      pill.style.background = phase === 'cut' ? '#FAEEDA' : phase === 'bulk' ? '#E1F5EE' : '#E6F1FB';
+      pill.style.color      = phase === 'cut' ? '#633806' : phase === 'bulk' ? '#0F6E56' : '#0C447C';
+
+      const initials = (p.display_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+      document.getElementById('avatar-circle').textContent = initials;
+    }
+
+    function toggleUserMenu() {
+      const menu = document.getElementById('user-menu');
+      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+    document.addEventListener('click', e => {
+      if (!document.getElementById('user-avatar').contains(e.target))
+        document.getElementById('user-menu').style.display = 'none';
+    });
+
+    // ═══════════════════════════════════════════════════════
+    // TAB SWITCHING
+    // ═══════════════════════════════════════════════════════
+    async function switchTab(name, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      APP.activeTab = name;
+
+      const sceneMap = { training: 'training', nutrition: 'nutrition', stats: 'stats' };
+      const scene = sceneMap[name] ?? 'login';
+
+      // Run panda animation and data load in parallel.
+      // Promise.all waits for whichever finishes last — the panda
+      // guarantees a minimum display time; slow fetches extend it naturally.
+      await Promise.all([
+        PandaLoader.show(scene, 1700),
+        loadTab(name),
+      ]);
+
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById(`panel-${name}`).classList.add('active');
+    }
+
+    async function loadTab(name) {
+      if (APP.loadedTabs.has(name)) return;
+      APP.loadedTabs.add(name);
+      if (name === 'training')  await loadTrainingTab();
+      if (name === 'nutrition') await loadNutritionTab();
+      if (name === 'stats')     await loadStatsTab();
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TRAINING TAB
+    // ═══════════════════════════════════════════════════════
+    async function loadTrainingTab() {
+      const { week, workouts, program, error } = await ApexTraining.WeeklyPlan.getCurrent();
+
+      if (error || !program) {
+        document.getElementById('training-empty').classList.remove('hidden');
+        return;
+      }
+
+      APP.trainingData = { week, workouts, program };
+
+      // Week header
+      const phaseLabel = program.phase.charAt(0).toUpperCase() + program.phase.slice(1);
+      document.getElementById('week-title').textContent = `Week ${week.week_number} — ${phaseLabel}`;
+      document.getElementById('week-sub').textContent   =
+        `${program.name} · Calorie target: ${APP.profile.calorie_target?.toLocaleString() ?? '—'} kcal`;
+
+      if (week.is_deload) {
+        document.getElementById('deload-badge').classList.remove('hidden');
+      } else {
+        const weeksLeft = program.deload_interval -
+          ((week.week_number) % program.deload_interval || program.deload_interval);
+        if (weeksLeft === 1) {
+          const nb = document.getElementById('next-deload-badge');
+          nb.textContent = 'Deload next week';
+          nb.classList.remove('hidden');
+        }
+      }
+
+      // Cardio prescription note
+      const cardio = ApexTraining.CardioEngine.prescribe(program.phase, week.is_deload);
+      document.getElementById('week-sub').textContent +=
+        ` · Cardio: ${cardio.liss.sessions}× LISS${cardio.hiit.sessions > 0 ? ' + ' + cardio.hiit.sessions + '× HIIT' : ''}`;
+
+      // 7-day grid
+      renderDaysGrid(workouts, week);
+    }
+
+    function renderDaysGrid(workouts, week) {
+      const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      const grid = document.getElementById('days-grid');
+      grid.innerHTML = '';
+
+      // Build lookup: day_of_week → workout
+      const byDay = new Map(workouts.map(w => [w.day_of_week, w]));
+      const today = new Date().getDay(); // 0=Sun … 6=Sat
+      const todayDow = today === 0 ? 6 : today - 1; // convert to Mon=0
+
+      for (let i = 0; i < 7; i++) {
+        const wo  = byDay.get(i);
+        const div = document.createElement('div');
+        div.className = 'day-cell' + (!wo || wo.workout_type === null ? ' rest' : '');
+        if (wo?.is_completed) div.classList.add('done');
+        if (i === todayDow && wo) div.classList.add('active');
+
+        div.innerHTML = `
+          <div class="day-name">${DAY_NAMES[i]}</div>
+          <div class="day-type ${!wo || wo.workout_type === null ? 't-hint' : ''}">
+            ${wo ? wo.label : 'Rest'}
+          </div>
+          ${wo && wo.set_count > 0 ? `<div class="day-meta">${wo.set_count} sets</div>` : ''}
+          ${wo?.is_completed ? `<div class="day-done">✓ Done</div>` : ''}
+        `;
+
+        if (wo && wo.workout_type) {
+          div.style.cursor = 'pointer';
+          div.addEventListener('click', () => selectWorkout(wo, div));
+        }
+        grid.appendChild(div);
+      }
+
+      // Auto-select today's workout
+      const todayWo = byDay.get(todayDow);
+      if (todayWo && todayWo.workout_type) {
+        selectWorkout(todayWo, grid.children[todayDow]);
+      }
+    }
+
+    async function selectWorkout(wo, cellEl) {
+      document.querySelectorAll('.day-cell').forEach(c => c.classList.remove('active'));
+      cellEl.classList.add('active');
+
+      const { workout, error } = await ApexTraining.WeeklyPlan.getWorkout(wo.id);
+      if (error) { showToast('Failed to load workout', 'error'); return; }
+      APP.selectedWorkout = workout;
+
+      const detail      = document.getElementById('workout-detail');
+      const emptyEl     = document.getElementById('training-empty');
+      const cardioEl    = document.getElementById('cardio-detail');
+      const tableEl     = document.getElementById('exercise-table');
+      const isDeload    = workout.program_weeks?.is_deload;
+      const phase       = workout.program_weeks?.programs?.phase ?? APP.profile.phase;
+
+      detail.classList.remove('hidden');
+      emptyEl.classList.add('hidden');
+      document.getElementById('detail-workout-name').textContent = workout.label;
+      document.getElementById('detail-deload-note').classList.toggle('hidden', !isDeload);
+
+      if (workout.workout_type === 'cardio') {
+        tableEl.classList.add('hidden');
+        cardioEl.classList.remove('hidden');
+        const c = ApexTraining.CardioEngine.prescribe(phase, isDeload);
+        document.getElementById('cardio-prescription').innerHTML = `
+          <div class="t-label t-muted" style="margin-bottom:8px">Today's cardio</div>
+          <div class="stack gap-8">
+            <div class="row gap-8"><span class="badge badge-accent">LISS</span>
+              <span class="t-small">${c.liss.durationMin} min · ${c.liss.zone} · ${c.liss.notes}</span></div>
+            ${c.hiit.sessions > 0 ? `
+              <div class="row gap-8"><span class="badge badge-warning">HIIT</span>
+                <span class="t-small">${c.hiit.durationMin} min · ${c.hiit.notes}</span></div>` : ''}
+          </div>`;
+        document.getElementById('start-workout-btn').classList.add('hidden');
+        return;
+      }
+
+      // Strength day
+      tableEl.classList.remove('hidden');
+      cardioEl.classList.add('hidden');
+      document.getElementById('start-workout-btn').classList.remove('hidden');
+
+      const rpeLabel = isDeload ? 'RPE ~7 (deload)' :
+        workout.planned_sets?.[0]?.rpe_target ? `RPE target ${workout.planned_sets[0].rpe_target}` : '';
+      document.getElementById('detail-workout-meta').textContent =
+        `${workout.planned_sets?.length ?? 0} exercises · ${rpeLabel}`;
+
+      renderExerciseTable(workout.planned_sets ?? [], isDeload);
+    }
+
+    function renderExerciseTable(sets, isDeload) {
+      const tbody = document.getElementById('exercise-tbody');
+      tbody.innerHTML = '';
+
+      sets.forEach(s => {
+        const ex = s.exercises;
+        const nextWeightNote = s.notes?.startsWith('Target:') ? s.notes : null;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>
+            <div class="ex-name">
+              ${ex?.name ?? 'Unknown'}
+              ${ex?.is_compound ? '<span class="badge badge-accent" style="font-size:0.6rem;padding:1px 5px;margin-left:5px">compound</span>' : ''}
+            </div>
+            <div class="ex-muscle">${ex?.muscle_primary ?? ''}</div>
+            ${nextWeightNote ? `<div class="t-small" style="color:var(--accent);margin-top:2px;font-size:0.7rem">↑ ${nextWeightNote}</div>` : ''}
+          </td>
+          <td>${s.sets}</td>
+          <td>${s.reps_min}–${s.reps_max}</td>
+          <td><span class="rpe-dot"></span>${s.rpe_target}</td>
+          <td style="color:var(--text-3)">${s.rest_seconds >= 60 ? Math.floor(s.rest_seconds/60) + 'm' : s.rest_seconds + 's'}</td>
+          <td>
+            <button class="btn-icon btn-ghost" style="width:28px;height:28px;font-size:13px"
+              title="Swap exercise" onclick="openSwapModal('${s.id}','${ex?.muscle_primary}','${ex?.is_compound}')">⇄</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function generateProgram() {
+      showToast('Generating program…');
+      const { error } = await ApexTraining.ProgramBuilder.generate({ totalWeeks: 12 });
+      if (error) { showToast('Failed to generate program', 'error'); return; }
+      APP.loadedTabs.delete('training');
+      await loadTab('training');
+      showToast('Program generated!', 'success');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // WORKOUT SESSION
+    // ═══════════════════════════════════════════════════════
+    async function startWorkout() {
+      if (!APP.selectedWorkout) return;
+      const { session, error } = await ApexTraining.WorkoutSession.start(APP.selectedWorkout.id);
+      if (error) { showToast(error.message, 'error'); return; }
+
+      document.getElementById('session-overlay').classList.remove('hidden');
+      document.getElementById('sess-title').textContent = APP.selectedWorkout.label;
+      renderSessionBody(session);
+
+      // Start elapsed timer display
+      APP.timerInterval = setInterval(() => {
+        const s = ApexTraining.WorkoutSession.getState();
+        document.getElementById('sess-timer').textContent =
+          ApexTraining.SessionTimer.format(s.timer ?? ApexTraining.SessionTimer.create());
+      }, 1000);
+    }
+
+    function renderSessionBody(session) {
+      const body = document.getElementById('session-body');
+      body.innerHTML = '';
+
+      session.plannedSets.forEach(ps => {
+        const ex   = ps.exercises;
+        const card = document.createElement('div');
+        card.className = 'set-logger';
+        card.id = `sl-${ps.id}`;
+
+        const suggestedWeight = ps.notes?.match(/Target:\s*([\d.]+)/)?.[1] ?? '';
+
+        const rowsHTML = Array.from({ length: ps.sets }, (_, i) => `
+          <div class="set-row" id="row-${ps.id}-${i+1}">
+            <div class="set-num" id="dot-${ps.id}-${i+1}">${i+1}</div>
+            <input class="set-input" type="number" placeholder="${suggestedWeight || '—'}" min="0" step="2.5"
+              id="wt-${ps.id}-${i+1}">
+            <span class="set-sep">kg ×</span>
+            <input class="set-input" type="number" placeholder="${ps.reps_min}" min="1" max="100" step="1"
+              id="rp-${ps.id}-${i+1}">
+            <span class="set-sep">@ RPE</span>
+            <input class="set-rpe" type="number" placeholder="${ps.rpe_target}" min="6" max="10" step="0.5"
+              id="rpe-${ps.id}-${i+1}">
+            <button class="btn btn-sm btn-primary" onclick="logSet('${ps.id}','${ps.exercise_id}',${i+1})">Log</button>
+          </div>`).join('');
+
+        card.innerHTML = `
+          <div class="set-logger-header">
+            <strong style="font-size:0.9375rem">${ex?.name ?? 'Exercise'}</strong>
+            ${ex?.is_compound ? '<span class="badge badge-accent" style="font-size:0.6875rem">compound</span>' : ''}
+            <span class="t-hint t-small" style="margin-left:auto">${ps.reps_min}–${ps.reps_max} reps · RPE ${ps.rpe_target}</span>
+          </div>
+          <div class="set-logger-body">${rowsHTML}</div>
+          <div class="rest-timer hidden" id="rest-${ps.id}">
+            <span class="t-small">Rest timer</span>
+            <span class="rest-count" id="rest-count-${ps.id}"></span>
+            <button class="btn btn-sm btn-ghost" onclick="skipRest('${ps.id}')">Skip</button>
+          </div>`;
+
+        body.appendChild(card);
+      });
+    }
+
+    let _restIntervals = {};
+
+    async function logSet(plannedSetId, exerciseId, setNumber) {
+      const wt  = parseFloat(document.getElementById(`wt-${plannedSetId}-${setNumber}`).value);
+      const rp  = parseInt(document.getElementById(`rp-${plannedSetId}-${setNumber}`).value);
+      const rpe = parseFloat(document.getElementById(`rpe-${plannedSetId}-${setNumber}`).value);
+
+      if (isNaN(wt) || isNaN(rp) || isNaN(rpe)) {
+        showToast('Fill in weight, reps, and RPE', 'error'); return;
+      }
+
+      const { log, overload, isPR, error } = await ApexTraining.WorkoutSession.logSet({
+        plannedSetId, exerciseId, setNumber, weightKg: wt, reps: rp, rpe,
+      });
+
+      if (error) { showToast(error.message, 'error'); return; }
+
+      // Mark set as done
+      const dot = document.getElementById(`dot-${plannedSetId}-${setNumber}`);
+      if (dot) dot.classList.add('done');
+
+      if (isPR)                       showToast(`🏆 New PR! Est. 1RM: ${ApexCore.Overload.epley1RM(wt, rp)} kg`, 'success');
+      if (overload.flag === 'progress') showToast(`↑ Add ${wt + overload.nextWeightKg - wt} kg next session`);
+
+      // Start rest timer
+      const ps = APP.selectedWorkout?.planned_sets?.find(s => s.id === plannedSetId);
+      if (ps?.rest_seconds) startRestTimer(plannedSetId, ps.rest_seconds);
+    }
+
+    function startRestTimer(setId, seconds) {
+      if (_restIntervals[setId]) clearInterval(_restIntervals[setId]);
+      const el    = document.getElementById(`rest-${setId}`);
+      const count = document.getElementById(`rest-count-${setId}`);
+      if (!el || !count) return;
+
+      let remaining = seconds;
+      el.classList.remove('hidden');
+      count.textContent = formatTime(remaining);
+
+      _restIntervals[setId] = setInterval(() => {
+        remaining--;
+        count.textContent = formatTime(remaining);
+        if (remaining <= 0) { skipRest(setId); }
+      }, 1000);
+    }
+
+    function skipRest(setId) {
+      if (_restIntervals[setId]) clearInterval(_restIntervals[setId]);
+      const el = document.getElementById(`rest-${setId}`);
+      if (el) el.classList.add('hidden');
+    }
+
+    function openCompleteModal() {
+      document.getElementById('complete-modal').classList.remove('hidden');
+    }
+
+    async function completeSession() {
+      const rpeVal   = parseFloat(document.getElementById('sess-rpe').value) || null;
+      const notesVal = document.getElementById('sess-notes').value.trim() || null;
+
+      const { deloadCheck, error } = await ApexTraining.WorkoutSession.completeSession({
+        rpeOverall: rpeVal, notes: notesVal,
+      });
+      if (error) { showToast(error.message, 'error'); return; }
+
+      closeSession();
+      showToast('Session saved! Great work.', 'success');
+      APP.loadedTabs.delete('training');
+      await loadTab('training');
+
+      if (deloadCheck?.shouldDeload) {
+        showToast(`Deload recommended: ${deloadCheck.reason}`, 'warning');
+      }
+    }
+
+    async function abandonSession() {
+      if (!confirm('Abandon this session? Set logs will not be saved.')) return;
+      await ApexTraining.WorkoutSession.abandon('User abandoned');
+      closeSession();
+    }
+
+    function closeSession() {
+      clearInterval(APP.timerInterval);
+      Object.values(_restIntervals).forEach(clearInterval);
+      _restIntervals = {};
+      document.getElementById('session-overlay').classList.add('hidden');
+      document.getElementById('complete-modal').classList.add('hidden');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // EXERCISE SWAP MODAL (simplified)
+    // ═══════════════════════════════════════════════════════
+    async function openSwapModal(plannedSetId, muscle, isCompound) {
+      const allEx = await ApexTraining.ExerciseLibrary.getAll();
+      const pool  = ApexTraining.ExerciseLibrary.filter(allEx, [muscle], isCompound === 'true');
+
+      const chosen = prompt(
+        `Swap exercise (${muscle}).\n` +
+        pool.slice(0, 8).map((e, i) => `${i+1}. ${e.name}`).join('\n') +
+        '\n\nEnter number:'
+      );
+
+      const idx = parseInt(chosen) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= pool.length) return;
+      const { error } = await ApexTraining.WeeklyPlan.swapExercise(plannedSetId, pool[idx].id);
+      if (error) { showToast('Swap failed', 'error'); return; }
+
+      APP.loadedTabs.delete('training');
+      await loadTab('training');
+      showToast(`Swapped to ${pool[idx].name}`, 'success');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // NUTRITION TAB
+    // ═══════════════════════════════════════════════════════
+    async function loadNutritionTab() {
+      const { plan, slots, totals, error } = await ApexNutrition.MealPlan.getOrCreateToday();
+      if (error) { showToast('Failed to load meal plan', 'error'); return; }
+
+      APP.mealPlanId = plan.id;
+      const targets = {
+        proteinG: plan.protein_target ?? APP.profile.protein_target_g ?? 0,
+        carbsG:   plan.carb_target    ?? APP.profile.carb_target_g    ?? 0,
+        fatG:     plan.fat_target     ?? APP.profile.fat_target_g     ?? 0,
+        kcal:     plan.kcal_target    ?? APP.profile.calorie_target   ?? 0,
+      };
+
+      updateMacroBars(totals, targets);
+      renderMealSlots(slots, targets);
+
+      // Load food archive
+      APP.allFoods = await ApexNutrition.FoodArchive.getAll();
+      renderFoodArchive(APP.allFoods);
+    }
+
+    function updateMacroBars(totals, targets) {
+      const pct = ApexNutrition.MacroAccumulator.progress(totals, targets);
+      const over = ApexNutrition.MacroAccumulator.isOverTarget(totals, targets);
+
+      setBar('protein', totals.proteinG, targets.proteinG, pct.proteinPct, over.protein);
+      setBar('carbs',   totals.carbsG,   targets.carbsG,   pct.carbsPct,   over.carbs);
+      setBar('fat',     totals.fatG,      targets.fatG,     pct.fatPct,     over.fat);
+
+      document.getElementById('nutr-kcal-summary').textContent =
+        `${totals.kcal.toLocaleString()} / ${targets.kcal.toLocaleString()} kcal`;
+    }
+
+    function setBar(macro, val, target, pct, isOver) {
+      const bar = document.getElementById(`bar-${macro}`);
+      bar.style.width = pct + '%';
+      bar.classList.toggle('over', isOver);
+      document.getElementById(`val-${macro}`).textContent =
+        ApexNutrition.MealPlanUtils.formatMacro(val);
+      document.getElementById(`tgt-${macro}`).textContent = target ?? '—';
+    }
+
+    function renderMealSlots(slots, targets) {
+      const col = document.getElementById('meal-slots-col');
+      col.innerHTML = '';
+      const emptySlots = slots.filter(s => !s.meal_items?.length).length;
+
+      slots.forEach(slot => {
+        const slotTotals = ApexNutrition.MacroAccumulator.fromItems(slot.meal_items ?? []);
+        const div = document.createElement('div');
+        div.className = 'meal-slot';
+        div.id = `slot-${slot.id}`;
+
+        div.innerHTML = `
+          <div class="meal-slot-header">
+            <span class="meal-slot-name">${slot.label}</span>
+            <span class="meal-slot-kcal">${Math.round(slotTotals.kcal)} kcal</span>
+          </div>
+          <div class="meal-items-list" id="items-${slot.id}">
+            ${slot.meal_items?.length ? '' :
+              '<div class="drop-hint">Drop foods here</div>'}
+          </div>`;
+
+        // Render existing items
+        (slot.meal_items ?? []).forEach(item => {
+          const itemEl = buildMealItemEl(item, slot.id);
+          div.querySelector('.meal-items-list').appendChild(itemEl);
+          ApexNutrition.DragDrop.initSlotItem(itemEl, { ...item, meal_slot_id: slot.id });
+        });
+
+        // Wire drop zone
+        ApexNutrition.DragDrop.initSlot(div, slot.id, async ({ totals, error: dropErr }) => {
+          if (dropErr) { showToast(dropErr.message, 'error'); return; }
+          // Reload nutrition tab to reflect new totals
+          APP.loadedTabs.delete('nutrition');
+          await loadTab('nutrition');
+        });
+
+        col.appendChild(div);
+      });
+    }
+
+    function buildMealItemEl(item, slotId) {
+      const food    = item.foods;
+      const scaled  = ApexNutrition.MealPlanUtils.scaleMacros(food, item.quantity_g);
+      const el      = document.createElement('div');
+      el.className  = 'meal-item';
+      el.id         = `item-${item.id}`;
+      el.innerHTML  = `
+        <div class="meal-item-left">
+          <div class="meal-item-name">${food?.name ?? 'Food'}</div>
+          <div class="meal-item-macros">P:${ApexNutrition.MealPlanUtils.formatMacro(scaled.proteinG)}g · C:${ApexNutrition.MealPlanUtils.formatMacro(scaled.carbsG)}g · F:${ApexNutrition.MealPlanUtils.formatMacro(scaled.fatG)}g</div>
+        </div>
+        <div class="meal-item-right">
+          <input class="qty-input" type="number" value="${item.quantity_g}" min="1" max="5000" step="5"
+            onchange="updateItemQty('${item.id}','${slotId}',this.value)">
+          <span class="t-hint" style="font-size:0.7rem">g</span>
+          <button class="btn-icon btn-ghost" style="width:24px;height:24px;font-size:12px;flex-shrink:0"
+            onclick="removeItem('${item.id}','${slotId}')">✕</button>
+        </div>`;
+      return el;
+    }
+
+    async function updateItemQty(itemId, slotId, qty) {
+      const { error } = await ApexNutrition.MealItems.updateQuantity(itemId, parseFloat(qty), slotId);
+      if (error) { showToast(error.message, 'error'); return; }
+      APP.loadedTabs.delete('nutrition');
+      loadTab('nutrition');
+    }
+
+    async function removeItem(itemId, slotId) {
+      const { error } = await ApexNutrition.MealItems.remove(itemId, slotId);
+      if (error) { showToast(error.message, 'error'); return; }
+      APP.loadedTabs.delete('nutrition');
+      loadTab('nutrition');
+    }
+
+    // Food archive
+    function renderFoodArchive(foods) {
+      const list = document.getElementById('food-archive-list');
+      const empty = document.getElementById('food-archive-empty');
+      list.innerHTML = '';
+
+      if (foods.length === 0) { empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+
+      foods.forEach(food => {
+        const tagClass = food.macro_class === 'protein' ? 'tag-protein' :
+                         food.macro_class === 'carb'    ? 'tag-carb'    : 'tag-fat';
+        const macroLetter = food.macro_class === 'protein' ? 'P' :
+                            food.macro_class === 'carb'    ? 'C' : 'F';
+        const el = document.createElement('div');
+        el.className = 'food-card';
+        el.innerHTML = `
+          <div>
+            <div class="food-name">${food.name}</div>
+            <div class="food-meta">${food.serving_size_g}g · ${Math.round(food.kcal)} kcal</div>
+          </div>
+          <span class="food-macro-tag ${tagClass}">
+            ${macroLetter}: ${food[food.macro_class === 'carb' ? 'carbs_g' : food.macro_class === 'fat' ? 'fat_g' : 'protein_g']}g
+          </span>`;
+        ApexNutrition.DragDrop.initArchiveCard(el, food);
+        list.appendChild(el);
+      });
+    }
+
+    function setMacroFilter(btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      APP.activeMacroFilter = btn.dataset.macro;
+      filterArchive();
+    }
+
+    function filterArchive() {
+      const query = document.getElementById('food-search').value;
+      let foods   = APP.allFoods;
+      if (APP.activeMacroFilter) {
+        foods = ApexNutrition.FoodArchive.filter(foods, { macroClass: APP.activeMacroFilter });
+      }
+      if (query) foods = ApexNutrition.FoodArchive.search(foods, query);
+      renderFoodArchive(foods);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // STATS TAB
+    // ═══════════════════════════════════════════════════════
+    async function loadStatsTab() {
+      const data = await ApexStats.Dashboard.getSummary(90);
+
+      renderStatCards(data);
+      renderCharts(data);
+      renderPRTable(data.strength.summary);
+    }
+
+    function renderStatCards(data) {
+      // Weight
+      const wt = data.weight.latest;
+      const wTrends = data.weight.trends;
+      document.getElementById('sc-weight').innerHTML =
+        `${wt?.weight_kg ?? '—'}<span class="stat-unit">kg</span>`;
+      if (wTrends.weeklyRateKg !== null) {
+        const d = document.getElementById('sc-weight-d');
+        const sign = wTrends.weeklyRateKg >= 0 ? '+' : '';
+        d.textContent   = `${sign}${wTrends.weeklyRateKg} kg/week`;
+        d.className     = `stat-delta ${wTrends.direction === 'up' ? 'up' : wTrends.direction === 'down' ? 'down' : 'flat'}`;
+      }
+
+      // Balance
+      const bs = data.balance.summary;
+      const bEl = document.getElementById('sc-balance');
+      const sign = bs.avgDailyBalance >= 0 ? '+' : '';
+      bEl.innerHTML = `${sign}${bs.avgDailyBalance}<span class="stat-unit">kcal</span>`;
+      document.getElementById('sc-balance-d').textContent   = `${bs.adherencePct}% on target`;
+      document.getElementById('sc-balance-d').className     = 'stat-delta flat';
+
+      // Streak
+      document.getElementById('sc-streak').innerHTML =
+        `${data.training.streak}<span class="stat-unit">days</span>`;
+      document.getElementById('sc-streak-d').textContent = 'Current streak';
+      document.getElementById('sc-streak-d').className   = 'stat-delta up';
+
+      // Best squat PR
+      const squatPR = data.strength.summary.find(s => s.name?.toLowerCase().includes('squat'));
+      if (squatPR) {
+        document.getElementById('sc-squat').innerHTML =
+          `${squatPR.bestKg}<span class="stat-unit">kg</span>`;
+        const dEl  = document.getElementById('sc-squat-d');
+        dEl.textContent = squatPR.deltaKg >= 0 ? `+${squatPR.deltaKg} kg gained` : `${squatPR.deltaKg} kg`;
+        dEl.className   = `stat-delta ${squatPR.deltaKg >= 0 ? 'up' : 'down'}`;
+      }
+    }
+
+    function renderCharts(data) {
+      const OPTS = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 10 }, maxTicksLimit: 7 }, grid: { display: false } },
+          y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
+        },
+      };
+
+      // Weight trend
+      if (APP.charts.weight) APP.charts.weight.destroy();
+      const wData = ApexStats.ChartHelpers.weightTrendDataset(data.weight.logs);
+      if (wData.labels.length) {
+        APP.charts.weight = new Chart(document.getElementById('chart-weight'), {
+          type: 'line', data: wData,
+          options: { ...OPTS, plugins: { legend: { display: true, labels: { font: { size: 11 } } } } },
+        });
+      }
+
+      // Calorie balance
+      if (APP.charts.balance) APP.charts.balance.destroy();
+      const bData = ApexStats.ChartHelpers.calorieBalanceDataset(data.balance.daily);
+      if (bData.labels.length) {
+        APP.charts.balance = new Chart(document.getElementById('chart-balance'), {
+          type: 'bar', data: bData, options: OPTS,
+        });
+      }
+
+      // Weekly volume
+      if (APP.charts.volume) APP.charts.volume.destroy();
+      const vData = ApexStats.ChartHelpers.weeklyVolumeDataset(data.training.weeklyVolume);
+      if (vData.labels.length) {
+        APP.charts.volume = new Chart(document.getElementById('chart-volume'), {
+          type: 'bar', data: vData,
+          options: {
+            ...OPTS,
+            plugins: { legend: { display: true, labels: { font: { size: 10 }, boxWidth: 10 } } },
+            scales: {
+              ...OPTS.scales,
+              x: { ...OPTS.scales.x, stacked: true },
+              y: { ...OPTS.scales.y, stacked: true },
+            },
+          },
+        });
+      }
+    }
+
+    function renderPRTable(summary) {
+      const tbody = document.getElementById('pr-tbody');
+      tbody.innerHTML = '';
+      if (!summary?.length) {
+        document.getElementById('pr-empty-hint').hidden = false; return;
+      }
+
+      ApexStats.StrengthStats.topMovers(summary, 8).forEach(ex => {
+        const tr = document.createElement('tr');
+        const isUp = ex.deltaKg > 0;
+        tr.innerHTML = `
+          <td><strong>${ex.name}</strong><br><span class="t-hint" style="font-size:0.75rem">${ex.muscle ?? ''}</span></td>
+          <td>${ex.bestKg ?? '—'} kg</td>
+          <td>${ex.latestKg ?? '—'} kg</td>
+          <td class="${isUp ? 'pr-delta-up' : 'pr-delta-flat'}">
+            ${ex.deltaKg !== null ? (isUp ? '+' : '') + ex.deltaKg + ' kg' : '—'}
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // WEIGHT LOG MODAL
+    // ═══════════════════════════════════════════════════════
+    function openWeightModal() {
+      document.getElementById('weight-modal').classList.remove('hidden');
+      document.getElementById('wt-input').focus();
+    }
+
+    async function logWeight() {
+      const kg    = parseFloat(document.getElementById('wt-input').value);
+      const notes = document.getElementById('wt-notes').value.trim() || null;
+      if (isNaN(kg)) { showToast('Enter a valid weight', 'error'); return; }
+
+      const { error } = await ApexStats.WeightStats.log(kg, notes);
+      if (error) { showToast(error.message, 'error'); return; }
+
+      document.getElementById('weight-modal').classList.add('hidden');
+      document.getElementById('wt-input').value  = '';
+      document.getElementById('wt-notes').value  = '';
+      showToast('Weight logged ✓', 'success');
+
+      if (APP.activeTab === 'stats') {
+        APP.loadedTabs.delete('stats');
+        loadTab('stats');
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // UTILITIES
+    // ═══════════════════════════════════════════════════════
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    function showToast(msg, type = '') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = msg;
+      document.getElementById('toast-container').appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+  </script>
+</body>
+</html>

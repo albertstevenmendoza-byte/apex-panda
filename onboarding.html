@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apex — Setup your profile</title>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Apex">
+  <meta name="theme-color" content="#0C0C0E">
+  <link rel="stylesheet" href="css/apex-styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js/apex-core.js"></script>
+  <script src="js/training.js"></script>
+  <style>
+    body { background: var(--bg); min-height: 100dvh; display: flex; flex-direction: column; }
+    .onboarding-wrap {
+      flex: 1; display: flex; align-items: flex-start; justify-content: center;
+      padding: 3rem 1.5rem;
+    }
+    .onboarding-box { width: 100%; max-width: 480px; }
+    .ob-header { margin-bottom: 2rem; }
+    .ob-logo { font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.025em; margin-bottom: 2rem; }
+    .ob-logo span { color: var(--accent); }
+    .ob-step-label { font-size: 0.75rem; color: var(--text-3); font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+    .ob-title { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; }
+    .ob-subtitle { font-size: 0.9375rem; color: var(--text-2); margin-top: 6px; line-height: 1.6; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .seg-group { display: flex; gap: 0; border: 0.5px solid var(--border-strong); border-radius: var(--r-md); overflow: hidden; }
+    .seg-btn {
+      flex: 1; padding: 9px; border: none; background: transparent;
+      font-family: inherit; font-size: 0.875rem; color: var(--text-2);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .seg-btn.active { background: var(--accent); color: #fff; font-weight: 500; }
+    .seg-btn:not(.active):hover { background: var(--surface-alt); }
+    .option-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .option-card {
+      padding: 14px; border: 0.5px solid var(--border); border-radius: var(--r-md);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .option-card:hover { border-color: var(--accent); }
+    .option-card.selected { border-color: var(--accent); border-width: 1.5px; background: var(--accent-light); }
+    .option-card .opt-title { font-size: 0.9375rem; font-weight: 500; margin-bottom: 3px; }
+    .option-card .opt-desc  { font-size: 0.75rem; color: var(--text-3); line-height: 1.4; }
+    .ob-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 2rem; }
+    .ob-footer-right { display: flex; gap: 10px; }
+  </style>
+</head>
+<body>
+
+  <div class="onboarding-wrap">
+    <div class="onboarding-box">
+
+      <div class="ob-header">
+        <div class="ob-logo">Apex<span>.</span></div>
+
+        <!-- Progress dots -->
+        <div class="step-indicators" id="step-dots">
+          <div class="step-dot active"  data-step="0"></div>
+          <div class="step-dot"         data-step="1"></div>
+          <div class="step-dot"         data-step="2"></div>
+          <div class="step-dot"         data-step="3"></div>
+        </div>
+
+        <div id="step-label" class="ob-step-label">Step 1 of 4</div>
+        <div id="step-title" class="ob-title">About you</div>
+        <div id="step-sub"   class="ob-subtitle">This drives your calorie and macro targets.</div>
+      </div>
+
+      <!-- ── Step 0: Personal info ──────────────────────────── -->
+      <div id="step-0" class="step-panel active">
+        <div class="stack gap-16">
+
+          <div class="form-group">
+            <label>Name</label>
+            <input id="display-name" type="text" placeholder="First name or nickname" autocomplete="given-name">
+          </div>
+
+          <div class="form-group">
+            <label>Biological sex <span class="t-hint">(affects BMR formula)</span></label>
+            <div class="seg-group">
+              <button type="button" class="seg-btn active" data-val="male"   onclick="pickSeg(this,'sex')">Male</button>
+              <button type="button" class="seg-btn"        data-val="female" onclick="pickSeg(this,'sex')">Female</button>
+              <button type="button" class="seg-btn"        data-val="other"  onclick="pickSeg(this,'sex')">Other</button>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="dob">Date of birth</label>
+              <input id="dob" type="date" max="">
+            </div>
+            <div class="form-group">
+              <label for="height">Height (cm)</label>
+              <input id="height" type="number" placeholder="178" min="100" max="250" step="0.5">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── Step 1: Current stats ──────────────────────────── -->
+      <div id="step-1" class="step-panel">
+        <div class="stack gap-16">
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="weight">Current weight (kg)</label>
+              <input id="weight" type="number" placeholder="82.0" min="30" max="400" step="0.1">
+            </div>
+            <div class="form-group">
+              <label for="goal-weight">Goal weight (kg) <span class="t-hint">optional</span></label>
+              <input id="goal-weight" type="number" placeholder="85.0" min="30" max="400" step="0.1">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="body-fat">Body fat % <span class="t-hint">optional — unlocks Katch-McArdle formula</span></label>
+            <div class="input-group">
+              <input id="body-fat" type="number" placeholder="15" min="3" max="60" step="0.1">
+              <span class="input-suffix">%</span>
+            </div>
+          </div>
+
+          <div class="card-flat" style="font-size:0.8125rem;color:var(--text-2);line-height:1.7">
+            💡 Don't know your body fat? Leave it blank — we'll use Mifflin-St Jeor instead, which is still very accurate.
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── Step 2: Training background ───────────────────── -->
+      <div id="step-2" class="step-panel">
+        <div class="stack gap-20">
+
+          <div class="form-group">
+            <label>Training experience</label>
+            <div class="option-grid">
+              <div class="option-card selected" data-group="experience" data-val="beginner" onclick="pickOption(this)">
+                <div class="opt-title">Beginner</div>
+                <div class="opt-desc">Under 1 year of consistent lifting</div>
+              </div>
+              <div class="option-card" data-group="experience" data-val="intermediate" onclick="pickOption(this)">
+                <div class="opt-title">Intermediate</div>
+                <div class="opt-desc">1–3 years, past the newbie gains phase</div>
+              </div>
+              <div class="option-card" data-group="experience" data-val="advanced" onclick="pickOption(this)">
+                <div class="opt-title">Advanced</div>
+                <div class="opt-desc">3+ years, deliberate periodization</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Activity level <span class="t-hint">(outside the gym)</span></label>
+            <div class="option-grid">
+              <div class="option-card" data-group="activity" data-val="1" onclick="pickOption(this)">
+                <div class="opt-title">Sedentary</div>
+                <div class="opt-desc">Desk job, minimal movement</div>
+              </div>
+              <div class="option-card" data-group="activity" data-val="2" onclick="pickOption(this)">
+                <div class="opt-title">Light</div>
+                <div class="opt-desc">1–3 workouts / week</div>
+              </div>
+              <div class="option-card selected" data-group="activity" data-val="3" onclick="pickOption(this)">
+                <div class="opt-title">Moderate</div>
+                <div class="opt-desc">3–5 workouts / week</div>
+              </div>
+              <div class="option-card" data-group="activity" data-val="4" onclick="pickOption(this)">
+                <div class="opt-title">Very active</div>
+                <div class="opt-desc">Hard training 6–7× / week</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── Step 3: Phase selection ────────────────────────── -->
+      <div id="step-3" class="step-panel">
+        <div class="stack gap-20">
+
+          <div class="form-group">
+            <label>Current goal</label>
+            <div class="stack gap-8">
+              <div class="option-card" data-group="phase" data-val="bulk" onclick="pickOption(this)">
+                <div class="row gap-8">
+                  <div>
+                    <div class="opt-title">Lean bulk</div>
+                    <div class="opt-desc">+300 kcal surplus · focus on muscle gain · 4–6 months recommended</div>
+                  </div>
+                  <div class="badge badge-accent" style="margin-left:auto;flex-shrink:0">+300 kcal</div>
+                </div>
+              </div>
+              <div class="option-card" data-group="phase" data-val="cut" onclick="pickOption(this)">
+                <div class="row gap-8">
+                  <div>
+                    <div class="opt-title">Cut</div>
+                    <div class="opt-desc">−500 kcal deficit · fat loss · high-protein to preserve muscle</div>
+                  </div>
+                  <div class="badge badge-warning" style="margin-left:auto;flex-shrink:0">−500 kcal</div>
+                </div>
+              </div>
+              <div class="option-card selected" data-group="phase" data-val="maintain" onclick="pickOption(this)">
+                <div class="row gap-8">
+                  <div>
+                    <div class="opt-title">Maintain</div>
+                    <div class="opt-desc">At TDEE · recomposition or recovery · ideal between phases</div>
+                  </div>
+                  <div class="badge badge-neutral" style="margin-left:auto;flex-shrink:0">± 0 kcal</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live TDEE preview (updates when profile is ready) -->
+          <div id="tdee-preview" class="card-flat hidden">
+            <div class="t-label t-muted" style="margin-bottom:8px">Estimated daily targets</div>
+            <div class="row gap-24">
+              <div><div id="prev-kcal"    style="font-size:1.5rem;font-weight:600;letter-spacing:-0.02em">—</div><div class="t-hint" style="font-size:0.75rem">kcal / day</div></div>
+              <div><div id="prev-protein" style="font-size:1.5rem;font-weight:600;letter-spacing:-0.02em">—</div><div class="t-hint" style="font-size:0.75rem">g protein</div></div>
+              <div><div id="prev-carbs"   style="font-size:1.5rem;font-weight:600;letter-spacing:-0.02em">—</div><div class="t-hint" style="font-size:0.75rem">g carbs</div></div>
+              <div><div id="prev-fat"     style="font-size:1.5rem;font-weight:600;letter-spacing:-0.02em">—</div><div class="t-hint" style="font-size:0.75rem">g fat</div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── Nav footer ─────────────────────────────────────── -->
+      <div class="ob-footer">
+        <button id="btn-back" class="btn btn-ghost" onclick="prevStep()" style="visibility:hidden">← Back</button>
+        <div id="ob-error" class="form-error hidden" style="flex:1;text-align:center;padding:0 1rem"></div>
+        <div class="ob-footer-right">
+          <button id="btn-next" class="btn btn-primary" onclick="nextStep()">Continue →</button>
+        </div>
+      </div>
+
+    </div><!-- /onboarding-box -->
+  </div><!-- /wrap -->
+
+  <!-- Generating overlay -->
+  <div id="gen-overlay" class="modal-backdrop hidden">
+    <div class="modal-box" style="text-align:center;padding:2.5rem 2rem">
+      <div style="font-size:2rem;margin-bottom:1rem">⚡</div>
+      <div class="t-subhead" style="margin-bottom:8px">Building your program</div>
+      <div class="t-muted t-small" id="gen-status">Calculating TDEE and macro targets…</div>
+      <div style="margin-top:1.5rem;height:4px;background:var(--surface-alt);border-radius:2px;overflow:hidden">
+        <div id="gen-bar" style="height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width 0.6s ease"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script>
+    const APEX_CONFIG = {
+      url:  'https://iedeghnykrigeensamcj.supabase.co',
+      anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImllZGVnaG55a3JpZ2VlbnNhbWNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MzIwMTMsImV4cCI6MjA5NDUwODAxM30.xfSKLPqofpHLSKFieUepFqvbVjHGgGGC6nRn2HvMOz8',
+    };
+
+    // ── State ─────────────────────────────────────────────────────────────
+    let currentStep = 0;
+    const TOTAL_STEPS = 4;
+    const selections = {
+      sex:        'male',
+      experience: 'beginner',
+      activity:   '3',
+      phase:      'maintain',
+    };
+
+    const STEP_META = [
+      { label: 'Step 1 of 4', title: 'About you',        sub: 'This drives your calorie and macro targets.' },
+      { label: 'Step 2 of 4', title: 'Current stats',    sub: 'Used to compute your TDEE and set your starting weights.' },
+      { label: 'Step 3 of 4', title: 'Training history', sub: "We'll pick the right split and volume for your level." },
+      { label: 'Step 4 of 4', title: 'Choose your goal', sub: 'You can change this at any time from your profile settings.' },
+    ];
+
+    // ── Init ─────────────────────────────────────────────────────────────
+    document.getElementById('dob').max = new Date().toISOString().split('T')[0];
+
+    ApexCore.init(APEX_CONFIG).then(async () => {
+      const user = await ApexCore.Auth.requireAuth();
+      if (!user) return;
+      const profile = await ApexCore.Profile.get();
+      if (profile?.onboarding_done) { window.location.href = 'hub.html'; }
+    });
+
+    // ── Segmented buttons ────────────────────────────────────────────────
+    function pickSeg(btn, group) {
+      btn.closest('.seg-group').querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selections[group] = btn.dataset.val;
+    }
+
+    // ── Option cards ─────────────────────────────────────────────────────
+    function pickOption(card) {
+      const group = card.dataset.group;
+      document.querySelectorAll(`[data-group="${group}"]`).forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      selections[group] = card.dataset.val;
+      if (group === 'phase' || group === 'activity') updatePreview();
+    }
+
+    // ── Live TDEE preview on step 3 ──────────────────────────────────────
+    function updatePreview() {
+      const weight = parseFloat(document.getElementById('weight').value);
+      const height = parseFloat(document.getElementById('height').value);
+      const dob    = document.getElementById('dob').value;
+      const bf     = parseFloat(document.getElementById('body-fat').value) || null;
+      if (!weight || !height || !dob) return;
+
+      const profile = {
+        weight_kg: weight, height_cm: height, date_of_birth: dob,
+        sex: selections.sex, body_fat_pct: bf,
+        activity_level: parseInt(selections.activity),
+        phase: selections.phase, experience: selections.experience,
+      };
+
+      const { calorieTarget } = ApexCore.TDEE.calculate(profile);
+      const macros = ApexCore.Macros.calculate(profile, calorieTarget);
+
+      document.getElementById('prev-kcal').textContent    = calorieTarget.toLocaleString();
+      document.getElementById('prev-protein').textContent = macros.proteinG;
+      document.getElementById('prev-carbs').textContent   = macros.carbsG;
+      document.getElementById('prev-fat').textContent     = macros.fatG;
+      document.getElementById('tdee-preview').classList.remove('hidden');
+    }
+
+    // ── Navigation ────────────────────────────────────────────────────────
+    function nextStep() {
+      const errEl = document.getElementById('ob-error');
+      errEl.classList.add('hidden');
+
+      const err = validateStep(currentStep);
+      if (err) { errEl.textContent = err; errEl.classList.remove('hidden'); return; }
+
+      if (currentStep === TOTAL_STEPS - 1) { submitOnboarding(); return; }
+      goToStep(currentStep + 1);
+    }
+
+    function prevStep() { if (currentStep > 0) goToStep(currentStep - 1); }
+
+    function goToStep(n) {
+      document.getElementById(`step-${currentStep}`).classList.remove('active');
+      currentStep = n;
+      document.getElementById(`step-${n}`).classList.add('active');
+
+      // Update dots
+      document.querySelectorAll('.step-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === n);
+        dot.classList.toggle('completed', i < n);
+      });
+
+      document.getElementById('step-label').textContent = STEP_META[n].label;
+      document.getElementById('step-title').textContent = STEP_META[n].title;
+      document.getElementById('step-sub').textContent   = STEP_META[n].sub;
+      document.getElementById('btn-back').style.visibility = n === 0 ? 'hidden' : 'visible';
+      document.getElementById('btn-next').textContent       = n === TOTAL_STEPS - 1 ? 'Generate my program' : 'Continue →';
+
+      if (n === 3) updatePreview();
+    }
+
+    // ── Validation ────────────────────────────────────────────────────────
+    function validateStep(step) {
+      if (step === 0) {
+        if (!document.getElementById('dob').value)    return 'Please enter your date of birth';
+        if (!document.getElementById('height').value) return 'Please enter your height';
+      }
+      if (step === 1) {
+        if (!document.getElementById('weight').value) return 'Please enter your current weight';
+      }
+      return null;
+    }
+
+    // ── Submit + generate ─────────────────────────────────────────────────
+    async function submitOnboarding() {
+      const overlay = document.getElementById('gen-overlay');
+      const status  = document.getElementById('gen-status');
+      const bar     = document.getElementById('gen-bar');
+      overlay.classList.remove('hidden');
+
+      const profileData = {
+        display_name:   document.getElementById('display-name').value.trim() || null,
+        sex:            selections.sex,
+        date_of_birth:  document.getElementById('dob').value,
+        height_cm:      parseFloat(document.getElementById('height').value),
+        weight_kg:      parseFloat(document.getElementById('weight').value),
+        goal_weight_kg: parseFloat(document.getElementById('goal-weight').value) || null,
+        body_fat_pct:   parseFloat(document.getElementById('body-fat').value) || null,
+        experience:     selections.experience,
+        activity_level: parseInt(selections.activity),
+        phase:          selections.phase,
+      };
+
+      // Step 1: Save profile
+      status.textContent = 'Saving your profile…'; bar.style.width = '20%';
+      const { error: profileErr } = await ApexCore.Profile.update(profileData);
+      if (profileErr) { showErr(profileErr.message); return; }
+
+      // Step 2: Generate program
+      status.textContent = 'Generating your training program…'; bar.style.width = '55%';
+      const { error: genErr } = await ApexTraining.ProgramBuilder.generate({ totalWeeks: 12 });
+      if (genErr) { showErr(genErr.message); return; }
+
+      // Step 3: Mark onboarding done
+      status.textContent = 'Setting up your nutrition plan…'; bar.style.width = '85%';
+      await ApexCore.Profile.update({ onboarding_done: true });
+
+      bar.style.width = '100%';
+      status.textContent = 'Done! Redirecting…';
+      setTimeout(() => { window.location.href = 'hub.html'; }, 700);
+    }
+
+    function showErr(msg) {
+      document.getElementById('gen-overlay').classList.add('hidden');
+      const errEl = document.getElementById('ob-error');
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+    }
+
+    function showToast(msg, type = '') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = msg;
+      document.getElementById('toast-container').appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+  </script>
+</body>
+</html>

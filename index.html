@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apex Fitness — Sign in</title>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Apex">
+  <meta name="theme-color" content="#0C0C0E">
+  <link rel="stylesheet" href="css/apex-styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js/apex-core.js"></script>
+  <script src="js/panda.js"></script>
+</head>
+<body>
+  <div class="split">
+
+    <!-- Left brand panel -->
+    <div class="auth-brand">
+      <div class="auth-brand-logo">Apex<span>.</span></div>
+      <div>
+        <p class="auth-tagline">
+          Science-backed training.<br>
+          <em>Built around you.</em>
+        </p>
+        <p style="margin-top:1.5rem;font-size:0.9375rem;color:rgba(255,255,255,0.5);max-width:340px;line-height:1.7">
+          Periodized programs, adaptive nutrition, and real-time overload tracking — all derived from your biometric data.
+        </p>
+      </div>
+      <div style="font-size:0.75rem;color:rgba(255,255,255,0.25)">
+        &copy; <span id="yr"></span> Apex Fitness
+      </div>
+    </div>
+
+    <!-- Right form panel -->
+    <div class="auth-form-col">
+      <div class="auth-form-box">
+        <div class="auth-logo-sm">Apex<span>.</span></div>
+
+        <!-- Tab toggle: Password / Magic link -->
+        <div style="display:flex;gap:0;border:0.5px solid var(--border);border-radius:var(--r-md);padding:3px;margin-bottom:1.75rem;background:var(--surface-alt)">
+          <button id="tab-password" class="auth-mode-btn active" onclick="switchMode('password')">Password</button>
+          <button id="tab-magic"    class="auth-mode-btn"        onclick="switchMode('magic')">Magic link</button>
+        </div>
+        <style>
+          .auth-mode-btn {
+            flex:1; padding:7px; border:none; border-radius:7px;
+            font-family:inherit; font-size:0.875rem; font-weight:400;
+            cursor:pointer; background:transparent; color:var(--text-2);
+            transition:all 0.15s;
+          }
+          .auth-mode-btn.active {
+            background:var(--surface); color:var(--text); font-weight:500;
+            box-shadow:0 1px 3px rgba(0,0,0,0.08);
+          }
+        </style>
+
+        <!-- Password form -->
+        <form id="form-password" novalidate>
+          <div class="stack gap-16">
+
+            <div class="form-group">
+              <label for="email-pw">Email</label>
+              <input id="email-pw" type="email" placeholder="you@example.com" autocomplete="email" required>
+            </div>
+
+            <div class="form-group">
+              <label for="password">Password</label>
+              <div style="position:relative">
+                <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required style="padding-right:2.75rem">
+                <button type="button" id="toggle-pw" onclick="togglePw()" tabindex="-1"
+                  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-3);font-size:15px;cursor:pointer">
+                  👁
+                </button>
+              </div>
+            </div>
+
+            <div id="auth-error" class="form-error hidden"></div>
+
+            <button type="submit" class="btn btn-primary btn-full btn-lg">
+              <span id="sign-in-label">Sign in</span>
+            </button>
+
+            <div class="divider-label">or</div>
+
+            <button type="button" onclick="showSignUp()" class="btn btn-full">
+              Create an account
+            </button>
+
+          </div>
+        </form>
+
+        <!-- Magic link form -->
+        <form id="form-magic" class="hidden" novalidate>
+          <div class="stack gap-16">
+            <p class="t-small t-muted" style="line-height:1.6">
+              Enter your email and we'll send you a one-time sign-in link — no password needed.
+            </p>
+
+            <div class="form-group">
+              <label for="email-magic">Email</label>
+              <input id="email-magic" type="email" placeholder="you@example.com" autocomplete="email" required>
+            </div>
+
+            <div id="magic-error"   class="form-error hidden"></div>
+            <div id="magic-success" class="hidden" style="font-size:0.875rem;color:var(--accent);background:var(--accent-light);padding:12px 14px;border-radius:var(--r-md)">
+              ✓ Link sent — check your inbox
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full btn-lg">Send link</button>
+          </div>
+        </form>
+
+      </div><!-- /form-box -->
+    </div><!-- /form-col -->
+
+  </div><!-- /split -->
+
+  <!-- Sign-up modal -->
+  <div id="signup-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="row-between" style="margin-bottom:1.25rem">
+        <div class="modal-title">Create your account</div>
+        <button class="btn-icon btn-ghost" onclick="hideSignUp()">✕</button>
+      </div>
+      <form id="form-signup" novalidate>
+        <div class="stack gap-14">
+          <div class="form-group">
+            <label for="su-email">Email</label>
+            <input id="su-email" type="email" placeholder="you@example.com" autocomplete="email" required>
+          </div>
+          <div class="form-group">
+            <label for="su-pw">Password <span style="color:var(--text-3);font-weight:400">(min. 8 characters)</span></label>
+            <input id="su-pw" type="password" placeholder="••••••••" autocomplete="new-password" required minlength="8">
+          </div>
+          <div id="signup-error" class="form-error hidden"></div>
+          <button type="submit" class="btn btn-primary btn-full">Create account</button>
+          <p class="t-hint" style="text-align:center;font-size:0.75rem">
+            By continuing you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+          </p>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script>
+    // ── Config (replace with your actual keys) ──────────────────────────
+    const APEX_CONFIG = {
+      url:  'https://iedeghnykrigeensamcj.supabase.co',
+      anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImllZGVnaG55a3JpZ2VlbnNhbWNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MzIwMTMsImV4cCI6MjA5NDUwODAxM30.xfSKLPqofpHLSKFieUepFqvbVjHGgGGC6nRn2HvMOz8',
+    };
+
+    // ── Init ─────────────────────────────────────────────────────────────
+    document.getElementById('yr').textContent = new Date().getFullYear();
+
+    ApexCore.init(APEX_CONFIG).then(async () => {
+      // If already signed in, skip to hub or onboarding
+      const user = await ApexCore.Auth.getUser();
+      if (user) await redirect(user);
+    });
+
+    async function redirect(user) {
+      const profile = await ApexCore.Profile.get();
+      window.location.href = profile?.onboarding_done ? 'hub.html' : 'onboarding.html';
+    }
+
+    // ── Mode switch ───────────────────────────────────────────────────────
+    function switchMode(mode) {
+      document.getElementById('form-password').classList.toggle('hidden', mode !== 'password');
+      document.getElementById('form-magic').classList.toggle('hidden',    mode !== 'magic');
+      document.getElementById('tab-password').classList.toggle('active',  mode === 'password');
+      document.getElementById('tab-magic').classList.toggle('active',     mode === 'magic');
+    }
+
+    // ── Password sign-in ─────────────────────────────────────────────────
+    document.getElementById('form-password').addEventListener('submit', async e => {
+      e.preventDefault();
+      const email    = document.getElementById('email-pw').value.trim();
+      const password = document.getElementById('password').value;
+      const errEl    = document.getElementById('auth-error');
+      const label    = document.getElementById('sign-in-label');
+
+      errEl.classList.add('hidden');
+      label.textContent = 'Signing in…';
+
+      const { session, error } = await ApexCore.Auth.signIn(email, password);
+      if (error) {
+        errEl.textContent = error.message;
+        errEl.classList.remove('hidden');
+        label.textContent = 'Sign in';
+        return;
+      }
+      await PandaLoader.show('login', 2000);
+      await redirect(session.user);
+    });
+
+    // ── Magic link ────────────────────────────────────────────────────────
+    document.getElementById('form-magic').addEventListener('submit', async e => {
+      e.preventDefault();
+      const email  = document.getElementById('email-magic').value.trim();
+      const errEl  = document.getElementById('magic-error');
+      const succEl = document.getElementById('magic-success');
+
+      errEl.classList.add('hidden');
+      succEl.classList.add('hidden');
+
+      const { error } = await ApexCore.Auth.signInWithMagicLink(email);
+      if (error) {
+        errEl.textContent = error.message;
+        errEl.classList.remove('hidden');
+        return;
+      }
+      succEl.classList.remove('hidden');
+    });
+
+    // ── Sign-up ───────────────────────────────────────────────────────────
+    function showSignUp() { document.getElementById('signup-modal').classList.remove('hidden'); }
+    function hideSignUp() { document.getElementById('signup-modal').classList.add('hidden'); }
+
+    document.getElementById('form-signup').addEventListener('submit', async e => {
+      e.preventDefault();
+      const email    = document.getElementById('su-email').value.trim();
+      const password = document.getElementById('su-pw').value;
+      const errEl    = document.getElementById('signup-error');
+
+      errEl.classList.add('hidden');
+      if (password.length < 8) {
+        errEl.textContent = 'Password must be at least 8 characters';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      const { user, error } = await ApexCore.Auth.signUp(email, password);
+      if (error) {
+        errEl.textContent = error.message;
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      hideSignUp();
+      showToast('Account created — check your email to confirm', 'success');
+    });
+
+    // ── Password visibility toggle ────────────────────────────────────────
+    function togglePw() {
+      const input = document.getElementById('password');
+      const btn   = document.getElementById('toggle-pw');
+      input.type  = input.type === 'password' ? 'text' : 'password';
+      btn.textContent = input.type === 'password' ? '👁' : '🙈';
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────────
+    function showToast(msg, type = '') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = msg;
+      document.getElementById('toast-container').appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+  </script>
+</body>
+</html>
