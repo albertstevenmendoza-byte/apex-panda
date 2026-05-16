@@ -461,13 +461,10 @@ window.ApexCore = (function () {
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();   // returns null (no error) when row does not exist
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = row not found
-        _handleError('Profile.get', error);
-        return null;
-      }
-      return data;
+      if (error) { _handleError('Profile.get', error); return null; }
+      return data;        // null for new users, profile object otherwise
     },
 
     /**
@@ -500,17 +497,16 @@ window.ApexCore = (function () {
       const user = await Auth.getUser();
       if (!user) return { data: null, macros: null, error: new Error('Not authenticated') };
 
-      // Merge with existing profile to get full data for TDEE recalculation
+      // Merge with existing profile for TDEE recalculation.
+      // For brand-new users there is no row yet -- that is fine, upsert creates it.
       const existing = await Profile.get();
-      if (!existing) return { data: null, macros: null, error: new Error('Profile not found') };
+      const merged   = { ...existing, ...fields, id: user.id };
 
-      const merged = { ...existing, ...fields };
-
-      // Recalculate TDEE and macros
       const tdeeResult  = TDEE.calculate(merged);
       const macroResult = Macros.calculate(merged, tdeeResult.calorieTarget);
 
-      const updatePayload = {
+      const payload = {
+        id: user.id,          // required so upsert knows which row to match
         ...fields,
         tdee:             tdeeResult.tdee,
         calorie_target:   macroResult.calorieTarget,
@@ -521,8 +517,7 @@ window.ApexCore = (function () {
 
       const { data, error } = await getClient()
         .from('profiles')
-        .update(updatePayload)
-        .eq('id', user.id)
+        .upsert(payload, { onConflict: 'id' })  // insert if new, update if exists
         .select()
         .single();
 
