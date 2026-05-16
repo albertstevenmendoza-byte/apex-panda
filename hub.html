@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -23,6 +24,7 @@
 <body>
 
   <!-- ── Top bar ──────────────────────────────────────────── -->
+
   <header id="topbar">
     <div class="topbar-logo">Apex<span>.</span></div>
     <div class="row gap-12">
@@ -41,6 +43,7 @@
   </header>
 
   <!-- ── Tab nav ───────────────────────────────────────────── -->
+
   <nav id="tab-nav">
     <button class="tab-btn active" data-tab="training" onclick="switchTab('training', this)">
       🏋️ Training
@@ -54,167 +57,154 @@
   </nav>
 
   <!-- ── Training panel ───────────────────────────────────── -->
+
   <section id="panel-training" class="panel active">
 
-    <!-- Week header -->
-    <div class="row-between" style="margin-bottom:1.25rem">
-      <div>
-        <div class="row gap-8" style="margin-bottom:4px">
-          <h2 class="t-heading" id="week-title">Loading…</h2>
-          <div id="deload-badge" class="badge badge-warning hidden">Deload week</div>
-        </div>
-        <div class="t-small t-muted" id="week-sub"></div>
-      </div>
-      <div class="row gap-8">
-        <div id="next-deload-badge" class="badge badge-neutral hidden"></div>
-      </div>
+```
+<!-- Week header -->
+<div class="row-between" style="margin-bottom:1.25rem">
+  <div>
+    <div class="row gap-8" style="margin-bottom:4px">
+      <h2 class="t-heading" id="week-title">Loading…</h2>
+      <div id="deload-badge" class="badge badge-warning hidden">Deload week</div>
     </div>
+    <div class="t-small t-muted" id="week-sub"></div>
+  </div>
+  <div class="row gap-8">
+    <div id="next-deload-badge" class="badge badge-neutral hidden"></div>
+  </div>
+</div>
 
-    <!-- 7-day grid -->
-    <div id="days-grid" class="days-grid"></div>
+<!-- 7-day grid -->
+<div id="days-grid" class="days-grid"></div>
 
-    <!-- Workout detail -->
-    <div id="workout-detail" class="card hidden">
-      <div class="row-between" style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:0.5px solid var(--border)">
-        <div>
-          <div class="t-subhead" id="detail-workout-name"></div>
-          <div class="t-small t-muted" id="detail-workout-meta"></div>
-        </div>
-        <div class="row gap-8">
-          <div id="detail-deload-note" class="badge badge-warning hidden">Deload — 60% volume</div>
-          <button id="start-workout-btn" class="btn btn-primary btn-sm" onclick="startWorkout()">Start workout</button>
-        </div>
-      </div>
-      <table class="exercise-table" id="exercise-table">
-        <thead>
-          <tr>
-            <th style="width:40%">Exercise</th>
-            <th>Sets</th>
-            <th>Reps</th>
-            <th>RPE</th>
-            <th>Rest</th>
-            <th style="width:32px"></th>
-          </tr>
-        </thead>
-        <tbody id="exercise-tbody"></tbody>
-      </table>
-
-      <!-- Cardio prescription (for cardio days) -->
-      <div id="cardio-detail" class="hidden">
-        <div class="card-flat" id="cardio-prescription"></div>
-      </div>
+<!-- Workout detail -->
+<div id="workout-detail" class="card hidden">
+  <div class="row-between" style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:0.5px solid var(--border)">
+    <div>
+      <div class="t-subhead" id="detail-workout-name"></div>
+      <div class="t-small t-muted" id="detail-workout-meta"></div>
     </div>
-
-    <!-- Empty state -->
-    <div id="training-empty" class="card hidden" style="text-align:center;padding:3rem">
-      <div style="font-size:2.5rem;margin-bottom:1rem">🗓️</div>
-      <div class="t-subhead" style="margin-bottom:6px">No active program</div>
-      <div class="t-muted t-small" style="margin-bottom:1.25rem">Generate a program to get started.</div>
-      <button class="btn btn-primary" onclick="generateProgram()">Generate program</button>
+    <div class="row gap-8">
+      <div id="detail-deload-note" class="badge badge-warning hidden">Deload — 60% volume</div>
+      <button id="start-workout-btn" class="btn btn-primary btn-sm" onclick="startWorkout()">Start workout</button>
     </div>
+  </div>
+  <table class="exercise-table" id="exercise-table">
+    <thead>
+      <tr>
+        <th style="width:40%">Exercise</th>
+        <th>Sets</th>
+        <th>Reps</th>
+        <th>RPE</th>
+        <th>Rest</th>
+        <th style="width:32px"></th>
+      </tr>
+    </thead>
+    <tbody id="exercise-tbody"></tbody>
+  </table>
+
+  <!-- Cardio prescription (for cardio days) -->
+  <div id="cardio-detail" class="hidden">
+    <div class="card-flat" id="cardio-prescription"></div>
+  </div>
+</div>
+
+<!-- Empty state -->
+<div id="training-empty" class="card hidden" style="text-align:center;padding:3rem">
+  <div style="font-size:2.5rem;margin-bottom:1rem">🗓️</div>
+  <div class="t-subhead" style="margin-bottom:6px">No active program</div>
+  <div class="t-muted t-small" style="margin-bottom:1.25rem">Generate a program to get started.</div>
+  <button class="btn btn-primary" onclick="generateProgram()">Generate program</button>
+</div>
+```
 
   </section>
 
   <!-- ── Nutrition panel ───────────────────────────────────── -->
+
   <section id="panel-nutrition" class="panel">
 
-    <!-- Macro bars -->
-    <div class="card" style="margin-bottom:1rem">
-      <div class="row-between" style="margin-bottom:1rem">
-        <div class="t-subhead" id="nutr-date-label">Today's nutrition</div>
-        <div class="t-small t-muted" id="nutr-kcal-summary"></div>
-      </div>
-      <div class="macro-bars" id="macro-bars">
-        <div class="macro-row">
-          <div class="macro-label">Protein</div>
-          <div class="macro-track"><div class="macro-fill protein" id="bar-protein" style="width:0%"></div></div>
-          <div class="macro-nums"><strong id="val-protein">0</strong> / <span id="tgt-protein">—</span>g</div>
-        </div>
-        <div class="macro-row">
-          <div class="macro-label">Carbs</div>
-          <div class="macro-track"><div class="macro-fill carbs" id="bar-carbs" style="width:0%"></div></div>
-          <div class="macro-nums"><strong id="val-carbs">0</strong> / <span id="tgt-carbs">—</span>g</div>
-        </div>
-        <div class="macro-row">
-          <div class="macro-label">Fat</div>
-          <div class="macro-track"><div class="macro-fill fat" id="bar-fat" style="width:0%"></div></div>
-          <div class="macro-nums"><strong id="val-fat">0</strong> / <span id="tgt-fat">—</span>g</div>
-        </div>
-      </div>
+```
+<!-- Macro bars -->
+<div class="card" style="margin-bottom:1rem">
+  <div class="row-between" style="margin-bottom:1rem">
+    <div class="t-subhead" id="nutr-date-label">Today's nutrition</div>
+    <div class="t-small t-muted" id="nutr-kcal-summary"></div>
+  </div>
+  <div class="macro-bars" id="macro-bars">
+    <div class="macro-row">
+      <div class="macro-label">Protein</div>
+      <div class="macro-track"><div class="macro-fill protein" id="bar-protein" style="width:0%"></div></div>
+      <div class="macro-nums"><strong id="val-protein">0</strong> / <span id="tgt-protein">—</span>g</div>
     </div>
-
-    <!-- Two-column layout -->
-    <div class="nutr-layout">
-
-      <!-- Meal slots column -->
-      <div id="meal-slots-col"></div>
-
-      <!-- Food archive -->
-      <div class="archive-panel">
-        <div class="t-label t-muted" style="margin-bottom:10px">Food archive</div>
-        <div class="archive-search">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="food-search" placeholder="Search foods…" oninput="filterArchive()">
-        </div>
-        <div class="macro-filters">
-          <button class="filter-btn active" data-macro="" onclick="setMacroFilter(this)">All</button>
-          <button class="filter-btn" data-macro="protein" onclick="setMacroFilter(this)">Protein</button>
-          <button class="filter-btn" data-macro="carb"    onclick="setMacroFilter(this)">Carbs</button>
-          <button class="filter-btn" data-macro="fat"     onclick="setMacroFilter(this)">Fat</button>
-        </div>
-        <div id="food-archive-list"></div>
-        <div id="food-archive-empty" class="hidden" style="font-size:0.8125rem;color:var(--text-3);text-align:center;padding:1.5rem 0">
-          No foods match your search
-        </div>
-      </div>
-
+    <div class="macro-row">
+      <div class="macro-label">Carbs</div>
+      <div class="macro-track"><div class="macro-fill carbs" id="bar-carbs" style="width:0%"></div></div>
+      <div class="macro-nums"><strong id="val-carbs">0</strong> / <span id="tgt-carbs">—</span>g</div>
     </div>
+    <div class="macro-row">
+      <div class="macro-label">Fat</div>
+      <div class="macro-track"><div class="macro-fill fat" id="bar-fat" style="width:0%"></div></div>
+      <div class="macro-nums"><strong id="val-fat">0</strong> / <span id="tgt-fat">—</span>g</div>
+    </div>
+  </div>
+</div>
+
+<!-- Meal slot cards — tap + to add foods -->
+<div id="meal-slots-list"></div>
+```
+
   </section>
 
   <!-- ── Stats panel ───────────────────────────────────────── -->
+
   <section id="panel-stats" class="panel">
 
-    <!-- Metric cards -->
-    <div class="stats-grid" id="stats-cards">
-      <div class="stat-card"><div class="stat-label">Body weight</div><div class="stat-value" id="sc-weight">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-weight-d"></div></div>
-      <div class="stat-card"><div class="stat-label">Avg. daily balance</div><div class="stat-value" id="sc-balance">—<span class="stat-unit">kcal</span></div><div class="stat-delta" id="sc-balance-d"></div></div>
-      <div class="stat-card"><div class="stat-label">Training streak</div><div class="stat-value" id="sc-streak">—<span class="stat-unit">days</span></div><div class="stat-delta" id="sc-streak-d"></div></div>
-      <div class="stat-card"><div class="stat-label">Best squat (est. 1RM)</div><div class="stat-value" id="sc-squat">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-squat-d"></div></div>
-    </div>
+```
+<!-- Metric cards -->
+<div class="stats-grid" id="stats-cards">
+  <div class="stat-card"><div class="stat-label">Body weight</div><div class="stat-value" id="sc-weight">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-weight-d"></div></div>
+  <div class="stat-card"><div class="stat-label">Avg. daily balance</div><div class="stat-value" id="sc-balance">—<span class="stat-unit">kcal</span></div><div class="stat-delta" id="sc-balance-d"></div></div>
+  <div class="stat-card"><div class="stat-label">Training streak</div><div class="stat-value" id="sc-streak">—<span class="stat-unit">days</span></div><div class="stat-delta" id="sc-streak-d"></div></div>
+  <div class="stat-card"><div class="stat-label">Best squat (est. 1RM)</div><div class="stat-value" id="sc-squat">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-squat-d"></div></div>
+</div>
 
-    <!-- Charts row -->
-    <div class="charts-grid">
-      <div class="chart-card">
-        <div class="chart-title">Body weight — 90 days</div>
-        <div class="chart-wrap" style="height:160px"><canvas id="chart-weight"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">Calorie balance</div>
-        <div class="chart-wrap" style="height:160px"><canvas id="chart-balance"></canvas></div>
-      </div>
-    </div>
+<!-- Charts row -->
+<div class="charts-grid">
+  <div class="chart-card">
+    <div class="chart-title">Body weight — 90 days</div>
+    <div class="chart-wrap" style="height:160px"><canvas id="chart-weight"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Calorie balance</div>
+    <div class="chart-wrap" style="height:160px"><canvas id="chart-balance"></canvas></div>
+  </div>
+</div>
 
-    <!-- Volume + PR row -->
-    <div class="charts-grid">
-      <div class="chart-card">
-        <div class="chart-title">Weekly volume — sets</div>
-        <div class="chart-wrap" style="height:160px"><canvas id="chart-volume"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">Strength PRs</div>
-        <div class="t-small t-muted" style="margin-bottom:1rem" id="pr-empty-hint" hidden>Log some sessions to start tracking PRs</div>
-        <table class="pr-table" id="pr-table">
-          <thead>
-            <tr><th>Exercise</th><th>Best</th><th>Latest</th><th>Gain</th></tr>
-          </thead>
-          <tbody id="pr-tbody"></tbody>
-        </table>
-      </div>
-    </div>
+<!-- Volume + PR row -->
+<div class="charts-grid">
+  <div class="chart-card">
+    <div class="chart-title">Weekly volume — sets</div>
+    <div class="chart-wrap" style="height:160px"><canvas id="chart-volume"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Strength PRs</div>
+    <div class="t-small t-muted" style="margin-bottom:1rem" id="pr-empty-hint" hidden>Log some sessions to start tracking PRs</div>
+    <table class="pr-table" id="pr-table">
+      <thead>
+        <tr><th>Exercise</th><th>Best</th><th>Latest</th><th>Gain</th></tr>
+      </thead>
+      <tbody id="pr-tbody"></tbody>
+    </table>
+  </div>
+</div>
+```
 
   </section>
 
   <!-- ── Active workout session overlay ───────────────────── -->
+
   <div id="session-overlay" class="hidden">
     <div class="session-topbar">
       <button class="btn btn-ghost btn-sm" onclick="abandonSession()">✕ Abandon</button>
@@ -228,6 +218,7 @@
   </div>
 
   <!-- ── Complete session modal ────────────────────────────── -->
+
   <div id="complete-modal" class="modal-backdrop hidden">
     <div class="modal-box">
       <div class="modal-title">Complete session?</div>
@@ -248,7 +239,77 @@
     </div>
   </div>
 
+  <!-- Food picker modal (slide-up sheet) -->
+
+  <div id="food-picker-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeFoodPicker()">
+    <div style="background:var(--surface);border-radius:var(--r-xl) var(--r-xl) 0 0;width:100%;max-width:520px;
+                max-height:88dvh;display:flex;flex-direction:column;overflow:hidden;
+                position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+                box-shadow:0 -8px 40px rgba(0,0,0,.18)">
+
+```
+  <!-- Header -->
+  <div style="padding:1.125rem 1.25rem 0.875rem;border-bottom:0.5px solid var(--border);flex-shrink:0">
+    <div class="row-between" style="margin-bottom:0.875rem">
+      <div style="font-size:1rem;font-weight:600" id="picker-title">Add food</div>
+      <button class="btn-icon btn-ghost" onclick="closeFoodPicker()">&#x2715;</button>
+    </div>
+    <!-- Search -->
+    <div style="position:relative;margin-bottom:0.625rem">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
+                   color:var(--text-3);pointer-events:none;font-size:15px">&#x1F50D;</span>
+      <input id="picker-search" type="text" placeholder="Search foods..."
+             style="padding-left:2.25rem;width:100%"
+             oninput="filterPickerFoods()" autocomplete="off">
+    </div>
+    <!-- Macro filter tabs -->
+    <div style="display:flex;gap:6px">
+      <button class="filter-btn active" data-macro="" onclick="setPickerFilter(this)">All</button>
+      <button class="filter-btn" data-macro="protein" onclick="setPickerFilter(this)">&#x1F356; Protein</button>
+      <button class="filter-btn" data-macro="carb"    onclick="setPickerFilter(this)">&#x1F35A; Carbs</button>
+      <button class="filter-btn" data-macro="fat"     onclick="setPickerFilter(this)">&#x1F95C; Fat</button>
+    </div>
+  </div>
+
+  <!-- Food list -->
+  <div id="picker-food-list" style="flex:1;overflow-y:auto;padding:0.5rem 0"></div>
+
+  <!-- Selected food footer (hidden until a food is tapped) -->
+  <div id="picker-footer" class="hidden"
+       style="padding:1rem 1.25rem;border-top:0.5px solid var(--border);
+              background:var(--surface);flex-shrink:0">
+    <div style="font-size:0.9375rem;font-weight:600;margin-bottom:0.75rem"
+         id="picker-selected-name"></div>
+    <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:0.875rem">
+      <div class="form-group" style="flex:0 0 130px">
+        <label for="picker-qty">Amount</label>
+        <div class="input-group">
+          <input id="picker-qty" type="number" min="1" max="2000" step="5" value="100"
+                 oninput="updatePickerPreview()">
+          <span class="input-suffix">g</span>
+        </div>
+      </div>
+      <div id="picker-preview"
+           style="flex:1;display:flex;gap:10px;flex-wrap:wrap;
+                  font-size:0.8125rem;padding-bottom:6px;color:var(--text-2)">
+        <span id="pp-p">P: 0g</span>
+        <span id="pp-c">C: 0g</span>
+        <span id="pp-f">F: 0g</span>
+        <span id="pp-k" style="color:var(--accent);font-weight:600">0 kcal</span>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="addSelectedFood()">
+      Add to meal
+    </button>
+  </div>
+
+</div>
+```
+
+  </div>
+
   <!-- ── Weight log modal ──────────────────────────────────── -->
+
   <div id="weight-modal" class="modal-backdrop hidden">
     <div class="modal-box">
       <div class="modal-title">Log today's weight</div>
@@ -273,6 +334,7 @@
   </div>
 
   <!-- ── Toast container ───────────────────────────────────── -->
+
   <div id="toast-container"></div>
 
   <script>
@@ -283,6 +345,7 @@
       url:  'https://iedeghnykrigeensamcj.supabase.co',
       anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImllZGVnaG55a3JpZ2VlbnNhbWNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MzIwMTMsImV4cCI6MjA5NDUwODAxM30.xfSKLPqofpHLSKFieUepFqvbVjHGgGGC6nRn2HvMOz8',
     };
+
 
     // ═══════════════════════════════════════════════════════
     // APP STATE
@@ -731,6 +794,17 @@
     // ═══════════════════════════════════════════════════════
     // NUTRITION TAB
     // ═══════════════════════════════════════════════════════
+    // =======================================================
+    // NUTRITION TAB
+    // =======================================================
+
+    // State for the food picker
+    const PICKER = {
+      slotId:       null,
+      activeFilter: '',
+      selectedFood: null,
+    };
+
     async function loadNutritionTab() {
       const { plan, slots, totals, error } = await ApexNutrition.MealPlan.getOrCreateToday();
       if (error) { showToast('Failed to load meal plan', 'error'); return; }
@@ -744,23 +818,18 @@
       };
 
       updateMacroBars(totals, targets);
-      renderMealSlots(slots, targets);
-
-      // Load food archive
+      renderMealSlotCards(slots);
       APP.allFoods = await ApexNutrition.FoodArchive.getAll();
-      renderFoodArchive(APP.allFoods);
     }
 
     function updateMacroBars(totals, targets) {
-      const pct = ApexNutrition.MacroAccumulator.progress(totals, targets);
+      const pct  = ApexNutrition.MacroAccumulator.progress(totals, targets);
       const over = ApexNutrition.MacroAccumulator.isOverTarget(totals, targets);
-
       setBar('protein', totals.proteinG, targets.proteinG, pct.proteinPct, over.protein);
       setBar('carbs',   totals.carbsG,   targets.carbsG,   pct.carbsPct,   over.carbs);
-      setBar('fat',     totals.fatG,      targets.fatG,     pct.fatPct,     over.fat);
-
+      setBar('fat',     totals.fatG,     targets.fatG,     pct.fatPct,     over.fat);
       document.getElementById('nutr-kcal-summary').textContent =
-        `${totals.kcal.toLocaleString()} / ${targets.kcal.toLocaleString()} kcal`;
+        `${Math.round(totals.kcal).toLocaleString()} / ${targets.kcal.toLocaleString()} kcal`;
     }
 
     function setBar(macro, val, target, pct, isOver) {
@@ -769,72 +838,94 @@
       bar.classList.toggle('over', isOver);
       document.getElementById(`val-${macro}`).textContent =
         ApexNutrition.MealPlanUtils.formatMacro(val);
-      document.getElementById(`tgt-${macro}`).textContent = target ?? '—';
+      document.getElementById(`tgt-${macro}`).textContent = target ?? '---';
     }
 
-    function renderMealSlots(slots, targets) {
-      const col = document.getElementById('meal-slots-col');
-      col.innerHTML = '';
-      const emptySlots = slots.filter(s => !s.meal_items?.length).length;
-
+    // ── Meal slot cards ─────────────────────────────────────
+    function renderMealSlotCards(slots) {
+      const list = document.getElementById('meal-slots-list');
+      list.innerHTML = '';
       slots.forEach(slot => {
         const slotTotals = ApexNutrition.MacroAccumulator.fromItems(slot.meal_items ?? []);
-        const div = document.createElement('div');
-        div.className = 'meal-slot';
-        div.id = `slot-${slot.id}`;
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.cssText = 'margin-bottom:10px;padding:0;overflow:hidden';
 
-        div.innerHTML = `
-          <div class="meal-slot-header">
-            <span class="meal-slot-name">${slot.label}</span>
-            <span class="meal-slot-kcal">${Math.round(slotTotals.kcal)} kcal</span>
+        // Slot header
+        const header = document.createElement('div');
+        header.style.cssText =
+          'display:flex;align-items:center;justify-content:space-between;' +
+          'padding:12px 14px;border-bottom:' +
+          (slot.meal_items?.length ? '0.5px solid var(--border)' : 'none');
+        header.innerHTML = `
+          <div>
+            <div style="font-size:0.875rem;font-weight:600">${slot.label}</div>
+            ${slotTotals.kcal > 0
+              ? `<div style="font-size:0.75rem;color:var(--text-3);margin-top:1px">
+                   ${Math.round(slotTotals.kcal)} kcal &nbsp;·&nbsp;
+                   P:${ApexNutrition.MealPlanUtils.formatMacro(slotTotals.proteinG)}g
+                   C:${ApexNutrition.MealPlanUtils.formatMacro(slotTotals.carbsG)}g
+                   F:${ApexNutrition.MealPlanUtils.formatMacro(slotTotals.fatG)}g
+                 </div>`
+              : ''}
           </div>
-          <div class="meal-items-list" id="items-${slot.id}">
-            ${slot.meal_items?.length ? '' :
-              '<div class="drop-hint">Drop foods here</div>'}
-          </div>`;
+          <button class="btn btn-sm btn-primary" onclick="openFoodPicker('${slot.id}','${slot.label}')">
+            + Add food
+          </button>`;
+        card.appendChild(header);
 
-        // Render existing items
+        // Logged items
         (slot.meal_items ?? []).forEach(item => {
-          const itemEl = buildMealItemEl(item, slot.id);
-          div.querySelector('.meal-items-list').appendChild(itemEl);
-          ApexNutrition.DragDrop.initSlotItem(itemEl, { ...item, meal_slot_id: slot.id });
+          card.appendChild(buildItemRow(item, slot.id));
         });
 
-        // Wire drop zone
-        ApexNutrition.DragDrop.initSlot(div, slot.id, async ({ totals, error: dropErr }) => {
-          if (dropErr) { showToast(dropErr.message, 'error'); return; }
-          // Reload nutrition tab to reflect new totals
-          APP.loadedTabs.delete('nutrition');
-          await loadTab('nutrition');
-        });
-
-        col.appendChild(div);
+        list.appendChild(card);
       });
     }
 
-    function buildMealItemEl(item, slotId) {
-      const food    = item.foods;
-      const scaled  = ApexNutrition.MealPlanUtils.scaleMacros(food, item.quantity_g);
-      const el      = document.createElement('div');
-      el.className  = 'meal-item';
-      el.id         = `item-${item.id}`;
-      el.innerHTML  = `
-        <div class="meal-item-left">
-          <div class="meal-item-name">${food?.name ?? 'Food'}</div>
-          <div class="meal-item-macros">P:${ApexNutrition.MealPlanUtils.formatMacro(scaled.proteinG)}g · C:${ApexNutrition.MealPlanUtils.formatMacro(scaled.carbsG)}g · F:${ApexNutrition.MealPlanUtils.formatMacro(scaled.fatG)}g</div>
+    function buildItemRow(item, slotId) {
+      const food   = item.foods;
+      const scaled = ApexNutrition.MealPlanUtils.scaleMacros(food, item.quantity_g);
+      const row    = document.createElement('div');
+      row.id = `item-${item.id}`;
+      row.style.cssText =
+        'display:flex;align-items:center;gap:10px;padding:10px 14px;' +
+        'border-bottom:0.5px solid var(--border)';
+      row.innerHTML = `
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.875rem;font-weight:500;
+                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${food?.name ?? 'Food'}
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-3);margin-top:2px">
+            P:${ApexNutrition.MealPlanUtils.formatMacro(scaled.proteinG)}g &nbsp;
+            C:${ApexNutrition.MealPlanUtils.formatMacro(scaled.carbsG)}g &nbsp;
+            F:${ApexNutrition.MealPlanUtils.formatMacro(scaled.fatG)}g &nbsp;&middot;&nbsp;
+            ${Math.round(scaled.kcal)} kcal
+          </div>
         </div>
-        <div class="meal-item-right">
-          <input class="qty-input" type="number" value="${item.quantity_g}" min="1" max="5000" step="5"
-            onchange="updateItemQty('${item.id}','${slotId}',this.value)">
-          <span class="t-hint" style="font-size:0.7rem">g</span>
-          <button class="btn-icon btn-ghost" style="width:24px;height:24px;font-size:12px;flex-shrink:0"
-            onclick="removeItem('${item.id}','${slotId}')">✕</button>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <input type="number" value="${item.quantity_g}" min="1" max="2000" step="5"
+                 style="width:68px;padding:4px 8px;font-size:0.8125rem;
+                        border:0.5px solid var(--border);border-radius:var(--r-sm);
+                        text-align:center;background:var(--surface-alt)"
+                 onchange="updateItemQty('${item.id}','${slotId}',this.value)">
+          <span style="font-size:0.7rem;color:var(--text-3)">g</span>
+          <button onclick="removeItem('${item.id}','${slotId}')"
+                  style="width:26px;height:26px;border-radius:var(--r-sm);border:none;
+                         background:var(--danger-light);color:var(--danger);
+                         cursor:pointer;font-size:13px;display:flex;
+                         align-items:center;justify-content:center">
+            &times;
+          </button>
         </div>`;
-      return el;
+      return row;
     }
 
     async function updateItemQty(itemId, slotId, qty) {
-      const { error } = await ApexNutrition.MealItems.updateQuantity(itemId, parseFloat(qty), slotId);
+      const g = parseFloat(qty);
+      if (!g || g < 1) return;
+      const { error } = await ApexNutrition.MealItems.updateQuantity(itemId, g, slotId);
       if (error) { showToast(error.message, 'error'); return; }
       APP.loadedTabs.delete('nutrition');
       loadTab('nutrition');
@@ -847,50 +938,130 @@
       loadTab('nutrition');
     }
 
-    // Food archive
-    function renderFoodArchive(foods) {
-      const list = document.getElementById('food-archive-list');
-      const empty = document.getElementById('food-archive-empty');
-      list.innerHTML = '';
-
-      if (foods.length === 0) { empty.classList.remove('hidden'); return; }
-      empty.classList.add('hidden');
-
-      foods.forEach(food => {
-        const tagClass = food.macro_class === 'protein' ? 'tag-protein' :
-                         food.macro_class === 'carb'    ? 'tag-carb'    : 'tag-fat';
-        const macroLetter = food.macro_class === 'protein' ? 'P' :
-                            food.macro_class === 'carb'    ? 'C' : 'F';
-        const el = document.createElement('div');
-        el.className = 'food-card';
-        el.innerHTML = `
-          <div>
-            <div class="food-name">${food.name}</div>
-            <div class="food-meta">${food.serving_size_g}g · ${Math.round(food.kcal)} kcal</div>
-          </div>
-          <span class="food-macro-tag ${tagClass}">
-            ${macroLetter}: ${food[food.macro_class === 'carb' ? 'carbs_g' : food.macro_class === 'fat' ? 'fat_g' : 'protein_g']}g
-          </span>`;
-        ApexNutrition.DragDrop.initArchiveCard(el, food);
-        list.appendChild(el);
-      });
+    // ── Food picker modal ───────────────────────────────────
+    function openFoodPicker(slotId, slotName) {
+      PICKER.slotId = slotId;
+      PICKER.selectedFood = null;
+      PICKER.activeFilter = '';
+      document.getElementById('picker-title').textContent = `Add to ${slotName}`;
+      document.getElementById('picker-search').value = '';
+      document.getElementById('picker-footer').classList.add('hidden');
+      document.getElementById('food-picker-modal').classList.remove('hidden');
+      // Reset filter buttons
+      document.querySelectorAll('#food-picker-modal .filter-btn')
+        .forEach(b => b.classList.toggle('active', b.dataset.macro === ''));
+      renderPickerFoods(APP.allFoods);
+      setTimeout(() => document.getElementById('picker-search').focus(), 100);
     }
 
-    function setMacroFilter(btn) {
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    function closeFoodPicker() {
+      document.getElementById('food-picker-modal').classList.add('hidden');
+    }
+
+    function setPickerFilter(btn) {
+      document.querySelectorAll('#food-picker-modal .filter-btn')
+        .forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      APP.activeMacroFilter = btn.dataset.macro;
-      filterArchive();
+      PICKER.activeFilter = btn.dataset.macro;
+      filterPickerFoods();
     }
 
-    function filterArchive() {
-      const query = document.getElementById('food-search').value;
-      let foods   = APP.allFoods;
-      if (APP.activeMacroFilter) {
-        foods = ApexNutrition.FoodArchive.filter(foods, { macroClass: APP.activeMacroFilter });
+    function filterPickerFoods() {
+      let foods = APP.allFoods;
+      const q   = document.getElementById('picker-search').value.trim();
+      if (PICKER.activeFilter)
+        foods = ApexNutrition.FoodArchive.filter(foods, { macroClass: PICKER.activeFilter });
+      if (q)
+        foods = ApexNutrition.FoodArchive.search(foods, q);
+      renderPickerFoods(foods);
+    }
+
+    function renderPickerFoods(foods) {
+      const list = document.getElementById('picker-food-list');
+      if (!foods.length) {
+        list.innerHTML =
+          '<div style="text-align:center;color:var(--text-3);font-size:0.8125rem;padding:2rem">' +
+          'No foods found</div>';
+        return;
       }
-      if (query) foods = ApexNutrition.FoodArchive.search(foods, query);
-      renderFoodArchive(foods);
+
+      const tagColors = {
+        protein: { bg: 'var(--accent-light)',   text: 'var(--accent-dark)' },
+        carb:    { bg: 'var(--info-light)',      text: 'var(--info)' },
+        fat:     { bg: 'var(--warning-light)',   text: 'var(--warning)' },
+      };
+      const macroKey = { protein: 'protein_g', carb: 'carbs_g', fat: 'fat_g' };
+      const macroLbl = { protein: 'P', carb: 'C', fat: 'F' };
+
+      list.innerHTML = foods.map(f => {
+        const tc  = tagColors[f.macro_class] ?? tagColors.protein;
+        const key = macroKey[f.macro_class];
+        const lbl = macroLbl[f.macro_class];
+        const isSelected = PICKER.selectedFood?.id === f.id;
+        return `
+          <div onclick="selectPickerFood(${JSON.stringify(f).replace(/"/g, '&quot;')})"
+               style="display:flex;align-items:center;gap:10px;padding:11px 14px;
+                      cursor:pointer;border-bottom:0.5px solid var(--border);
+                      background:${isSelected ? 'var(--accent-light)' : 'transparent'};
+                      transition:background 0.12s">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.9rem;font-weight:500">${f.name}</div>
+              <div style="font-size:0.75rem;color:var(--text-3);margin-top:1px">
+                per 100 g &nbsp;&middot;&nbsp; ${Math.round(f.kcal)} kcal
+                &nbsp;&middot;&nbsp; P:${f.protein_g}g C:${f.carbs_g}g F:${f.fat_g}g
+              </div>
+            </div>
+            <span style="font-size:0.75rem;font-weight:500;padding:3px 8px;
+                         border-radius:4px;white-space:nowrap;
+                         background:${tc.bg};color:${tc.text}">
+              ${lbl}: ${f[key]}g
+            </span>
+          </div>`;
+      }).join('');
+    }
+
+    function selectPickerFood(food) {
+      PICKER.selectedFood = food;
+      document.getElementById('picker-selected-name').textContent = food.name;
+      document.getElementById('picker-qty').value = 100;
+      document.getElementById('picker-footer').classList.remove('hidden');
+      updatePickerPreview();
+      // Scroll footer into view
+      document.getElementById('picker-footer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // Re-render to highlight selected row
+      filterPickerFoods();
+    }
+
+    function updatePickerPreview() {
+      const food = PICKER.selectedFood;
+      if (!food) return;
+      const g      = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const ratio  = g / 100;
+      document.getElementById('pp-p').textContent = `P: ${(food.protein_g * ratio).toFixed(1)}g`;
+      document.getElementById('pp-c').textContent = `C: ${(food.carbs_g   * ratio).toFixed(1)}g`;
+      document.getElementById('pp-f').textContent = `F: ${(food.fat_g     * ratio).toFixed(1)}g`;
+      document.getElementById('pp-k').textContent = `${Math.round(food.kcal * ratio)} kcal`;
+    }
+
+    async function addSelectedFood() {
+      const food = PICKER.selectedFood;
+      const g    = parseFloat(document.getElementById('picker-qty').value);
+      if (!food || !g || g < 1) { showToast('Enter a valid amount', 'error'); return; }
+
+      const btn = document.querySelector('#picker-footer .btn-primary');
+      btn.textContent = 'Adding...';
+      btn.disabled = true;
+
+      const { error } = await ApexNutrition.MealItems.add(food.id, PICKER.slotId, g);
+      btn.textContent = 'Add to meal';
+      btn.disabled = false;
+
+      if (error) { showToast(error.message, 'error'); return; }
+
+      closeFoodPicker();
+      showToast(`${food.name} added`, 'success');
+      APP.loadedTabs.delete('nutrition');
+      loadTab('nutrition');
     }
 
     // ═══════════════════════════════════════════════════════
@@ -1055,5 +1226,6 @@
       setTimeout(() => t.remove(), 4000);
     }
   </script>
+
 </body>
 </html>
