@@ -1139,4 +1139,23 @@ input:focus, select:focus, textarea:focus {
 .btn-skip-rest:hover { background: var(--surface-alt); }
 
 
+/* ── Unit selector buttons (food picker) ─────────────────── */
+.unit-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: transparent;
+  font-family: inherit; font-size: 0.8125rem; font-weight: 400;
+  color: var(--text-3); cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.unit-btn:active  { transform: scale(0.95); }
+.unit-btn.active  {
+  background: var(--accent); border-color: var(--accent);
+  color: white; font-weight: 600;
+}
+
+
 ```
