@@ -303,10 +303,10 @@
 
     <!-- Metric cards -->
     <div class="stats-grid" id="stats-cards">
-      <div class="stat-card"><div class="stat-label">Body weight</div><div class="stat-value" id="sc-weight">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-weight-d"></div></div>
+      <div class="stat-card"><div class="stat-label">Body weight</div><div class="stat-value" id="sc-weight">—<span class="stat-unit">lbs</span></div><div class="stat-delta" id="sc-weight-d"></div></div>
       <div class="stat-card"><div class="stat-label">Avg. daily balance</div><div class="stat-value" id="sc-balance">—<span class="stat-unit">kcal</span></div><div class="stat-delta" id="sc-balance-d"></div></div>
       <div class="stat-card"><div class="stat-label">Training streak</div><div class="stat-value" id="sc-streak">—<span class="stat-unit">days</span></div><div class="stat-delta" id="sc-streak-d"></div></div>
-      <div class="stat-card"><div class="stat-label">Best squat (est. 1RM)</div><div class="stat-value" id="sc-squat">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-squat-d"></div></div>
+      <div class="stat-card"><div class="stat-label">Best squat (est. 1RM)</div><div class="stat-value" id="sc-squat">—<span class="stat-unit">lbs</span></div><div class="stat-delta" id="sc-squat-d"></div></div>
     </div>
 
     <!-- Charts row -->
@@ -364,12 +364,12 @@
 
       <div class="focus-inputs">
         <div>
-          <div class="focus-input-lbl">Weight (kg)</div>
+          <div class="focus-input-lbl">Weight (lbs)</div>
           <div class="stepper">
-            <button class="stepper-btn" onclick="adjustVal('focus-wt',-2.5)">&#x2212;</button>
-            <input  class="stepper-val" id="focus-wt" type="number" step="2.5" min="0"
+            <button class="stepper-btn" onclick="adjustVal('focus-wt',-5)">&#x2212;</button>
+            <input  class="stepper-val" id="focus-wt" type="number" step="5" min="0"
                     inputmode="decimal" placeholder="0">
-            <button class="stepper-btn" onclick="adjustVal('focus-wt',+2.5)">+</button>
+            <button class="stepper-btn" onclick="adjustVal('focus-wt',+5)">+</button>
           </div>
         </div>
         <div>
@@ -657,8 +657,8 @@
         <div class="form-group">
           <label for="wt-input">Weight</label>
           <div class="input-group">
-            <input id="wt-input" type="number" min="30" max="400" step="0.1" placeholder="82.5">
-            <span class="input-suffix">kg</span>
+            <input id="wt-input" type="number" min="66" max="880" step="0.5" placeholder="180">
+            <span class="input-suffix">lbs</span>
           </div>
         </div>
         <div class="form-group">
@@ -681,6 +681,12 @@
     // CONFIG — replace with real keys
     // ═══════════════════════════════════════════════════════
     const FDC_KEY = '8WgoHcFWJmQoVUN70VhiMKmlWaKSD8tRgh89kZYO';
+
+    // Weight unit helpers — DB stores kg, UI shows lbs
+    const KG_TO_LBS = 2.20462;
+    const kgToLbs = kg  => Math.round(kg  * KG_TO_LBS * 10) / 10;
+    const lbsToKg = lbs => lbs / KG_TO_LBS;
+    const fmtLbs  = kg  => kg != null ? Math.round(kg * KG_TO_LBS) : '—';
 
     // ── Goal-phase display configs ──────────────────────────
     const GOAL_CONFIGS = {
@@ -794,7 +800,7 @@
         showToast(`Deload triggered: ${reason}`, 'warning');
       });
       ApexCore.on(ApexCore.Events.OVERLOAD_FLAGGED, ({ estimated1RM, delta }) => {
-        showToast(`New PR! Est. 1RM: ${estimated1RM} kg (+${delta} kg)`, 'success');
+        showToast(`New PR! Est. 1RM: ${Math.round(kgToLbs(estimated1RM))} lbs (+${Math.round(kgToLbs(delta))} lbs)`, 'success');
       });
     }
 
@@ -1097,8 +1103,9 @@
 
       // Pre-fill inputs from last log or program target
       const last = item.logs.at(-1);
-      const suggestWt = ps.notes?.match(/Target:\s*([\d.]+)/)?.[1] ?? '';
-      document.getElementById('focus-wt').value   = last?.wt   ?? suggestWt ?? '';
+      const suggestKg = ps.notes?.match(/Target:\s*([\d.]+)/)?.[1] ?? '';
+      const suggestWt = suggestKg ? Math.round(kgToLbs(parseFloat(suggestKg))) : '';
+      document.getElementById('focus-wt').value   = last?.wt ?? suggestWt ?? '';
       document.getElementById('focus-reps').value = last?.reps ?? ps.reps_min ?? '';
 
       // RPE
@@ -1141,7 +1148,7 @@
         ${logs.map(l => `
           <div class="focus-history-row">
             <span class="fhr-set">Set ${l.set}</span>
-            <span class="fhr-val">${l.wt} kg &times; ${l.reps}</span>
+            <span class="fhr-val">${l.wt} lbs &times; ${l.reps}</span>
             <span class="fhr-rpe">RPE ${l.rpe}</span>
             <span class="fhr-check">&#x2713;</span>
           </div>`).join('')}`;
@@ -1164,7 +1171,7 @@
 
       const { log, overload, isPR, error } = await ApexTraining.WorkoutSession.logSet({
         plannedSetId: ps.id, exerciseId: ps.exercise_id,
-        setNumber: WORKOUT.curSet, weightKg: wt, reps, rpe,
+        setNumber: WORKOUT.curSet, weightKg: lbsToKg(wt), reps, rpe,
       });
 
       if (error) {
@@ -1178,7 +1185,7 @@
       item.setsDone++;
 
       if (isPR) showToast(
-        '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' kg', 'success');
+        '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' lbs', 'success');
 
       showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
     }
@@ -2669,11 +2676,11 @@
       const wt = data.weight.latest;
       const wTrends = data.weight.trends;
       document.getElementById('sc-weight').innerHTML =
-        `${wt?.weight_kg ?? '—'}<span class="stat-unit">kg</span>`;
+        `${wt?.weight_kg != null ? Math.round(kgToLbs(wt.weight_kg)) : '—'}<span class="stat-unit">lbs</span>`;
       if (wTrends.weeklyRateKg !== null) {
         const d = document.getElementById('sc-weight-d');
         const sign = wTrends.weeklyRateKg >= 0 ? '+' : '';
-        d.textContent   = `${sign}${wTrends.weeklyRateKg} kg/week`;
+        d.textContent   = `${sign}${Math.round(kgToLbs(wTrends.weeklyRateKg) * 10) / 10} lbs/week`;
         d.className     = `stat-delta ${wTrends.direction === 'up' ? 'up' : wTrends.direction === 'down' ? 'down' : 'flat'}`;
       }
 
@@ -2695,9 +2702,9 @@
       const squatPR = data.strength.summary.find(s => s.name?.toLowerCase().includes('squat'));
       if (squatPR) {
         document.getElementById('sc-squat').innerHTML =
-          `${squatPR.bestKg}<span class="stat-unit">kg</span>`;
+          `${Math.round(kgToLbs(squatPR.bestKg))}<span class="stat-unit">lbs</span>`;
         const dEl  = document.getElementById('sc-squat-d');
-        dEl.textContent = squatPR.deltaKg >= 0 ? `+${squatPR.deltaKg} kg gained` : `${squatPR.deltaKg} kg`;
+        dEl.textContent = squatPR.deltaKg >= 0 ? `+${Math.round(kgToLbs(squatPR.deltaKg))} lbs gained` : `${Math.round(kgToLbs(squatPR.deltaKg))} lbs`;
         dEl.className   = `stat-delta ${squatPR.deltaKg >= 0 ? 'up' : 'down'}`;
       }
     }
@@ -2762,10 +2769,10 @@
         const isUp = ex.deltaKg > 0;
         tr.innerHTML = `
           <td><strong>${ex.name}</strong><br><span class="t-hint" style="font-size:0.75rem">${ex.muscle ?? ''}</span></td>
-          <td>${ex.bestKg ?? '—'} kg</td>
-          <td>${ex.latestKg ?? '—'} kg</td>
+          <td>${ex.bestKg   != null ? Math.round(kgToLbs(ex.bestKg))   : '—'} lbs</td>
+          <td>${ex.latestKg != null ? Math.round(kgToLbs(ex.latestKg)) : '—'} lbs</td>
           <td class="${isUp ? 'pr-delta-up' : 'pr-delta-flat'}">
-            ${ex.deltaKg !== null ? (isUp ? '+' : '') + ex.deltaKg + ' kg' : '—'}
+            ${ex.deltaKg !== null ? (isUp ? '+' : '') + Math.round(kgToLbs(ex.deltaKg)) + ' lbs' : '—'}
           </td>`;
         tbody.appendChild(tr);
       });
@@ -2780,9 +2787,10 @@
     }
 
     async function logWeight() {
-      const kg    = parseFloat(document.getElementById('wt-input').value);
+      const lbsIn = parseFloat(document.getElementById('wt-input').value);
+      const kg     = lbsToKg(lbsIn);
       const notes = document.getElementById('wt-notes').value.trim() || null;
-      if (isNaN(kg)) { showToast('Enter a valid weight', 'error'); return; }
+      if (isNaN(lbsIn)) { showToast('Enter a valid weight', 'error'); return; }
 
       const { error } = await ApexStats.WeightStats.log(kg, notes);
       if (error) { showToast(error.message, 'error'); return; }
