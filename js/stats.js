@@ -812,14 +812,15 @@ window.ApexStats = (function () {
       if (!logs || logs.length === 0) return { labels: [], datasets: [] };
 
       const labels     = logs.map(l => l.log_date);
-      const rawValues  = logs.map(l => l.weight_kg);
+      const KG_TO_LBS  = 2.20462;
+      const rawValues  = logs.map(l => Math.round(l.weight_kg * KG_TO_LBS * 10) / 10);
       const maValues   = WeightStats.movingAverage(rawValues, window);
 
       return {
         labels,
         datasets: [
           {
-            label:           'Body weight (kg)',
+            label:           'Body weight (lbs)',
             data:            rawValues,
             borderColor:     CONFIG_S.COLORS.weight,
             backgroundColor: CONFIG_S.COLORS.weight + '22', // 13% opacity fill
