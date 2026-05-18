@@ -652,14 +652,14 @@
 
       renderTopBar();
       setupEventBus();
-      await loadTab('training');
+      await switchTab('training', document.querySelector('.nav-btn[data-tab="training"]'));
     });
 
     // ── Event bus listeners ───────────────────────────────
     function setupEventBus() {
       ApexCore.on(ApexCore.Events.MACROS_RECALCULATED, () => {
         APP.loadedTabs.delete('diary');
-        if (APP.activeTab === 'nutrition') loadTab('diary');
+        if (APP.activeTab === 'diary') loadTab('diary');
       });
       ApexCore.on(ApexCore.Events.DELOAD_TRIGGERED, ({ reason }) => {
         showToast(`Deload triggered: ${reason}`, 'warning');
@@ -695,31 +695,42 @@
     // TAB SWITCHING
     // ═══════════════════════════════════════════════════════
     async function switchTab(name, btn) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      APP.activeTab = name;
+      // 'nutrition' is the legacy alias — internally everything is 'diary'
+      const tab = (name === 'nutrition') ? 'diary' : name;
 
-      const sceneMap = { training: 'training', nutrition: 'nutrition', stats: 'stats' };
-      const scene = sceneMap[name] ?? 'login';
+      // Update bottom nav active state
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      const navBtn = btn || document.querySelector(`.nav-btn[data-tab="${tab}"]`);
+      if (navBtn) navBtn.classList.add('active');
 
-      // Run panda animation and data load in parallel.
-      // Promise.all waits for whichever finishes last — the panda
-      // guarantees a minimum display time; slow fetches extend it naturally.
+      APP.activeTab = tab;
+
+      const sceneMap = {
+        training: 'training',
+        diary:    'nutrition',
+        home:     'login',
+        stats:    'stats',
+      };
+      const scene = sceneMap[tab] ?? 'login';
+
       await Promise.all([
         PandaLoader.show(scene, 1700),
-        loadTab(name),
+        loadTab(tab),
       ]);
 
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.getElementById(`panel-${name}`).classList.add('active');
+      const panel = document.getElementById('panel-' + tab);
+      if (panel) panel.classList.add('active');
     }
 
     async function loadTab(name) {
       if (APP.loadedTabs.has(name)) return;
       APP.loadedTabs.add(name);
-      if (name === 'training')  await loadTrainingTab();
-      if (name === 'nutrition') await loadNutritionTab();
-      if (name === 'stats')     await loadStatsTab();
+      if (name === 'training')           await loadTrainingTab();
+      if (name === 'diary' ||
+          name === 'nutrition')          await loadNutritionTab();
+      if (name === 'stats')              await loadStatsTab();
+      if (name === 'home')               await loadHomeTab();
     }
 
     // ═══════════════════════════════════════════════════════
