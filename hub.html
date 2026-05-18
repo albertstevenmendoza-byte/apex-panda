@@ -462,61 +462,94 @@
         </button>
       </div>
 
-      <!-- Food detail footer -->
+      <!-- Food detail footer — simplified for speed -->
       <div id="picker-footer" class="hidden"
            style="padding:1rem 1.25rem;border-top:0.5px solid var(--border);
                   background:var(--surface);flex-shrink:0">
-        <!-- Name + brand -->
-        <div style="margin-bottom:0.875rem">
-          <div style="font-size:0.9375rem;font-weight:600;line-height:1.3" id="picker-selected-name"></div>
-          <div style="font-size:0.75rem;color:var(--text-3);margin-top:2px" id="picker-selected-brand"></div>
+        <div style="margin-bottom:0.625rem">
+          <div style="font-size:0.9375rem;font-weight:600" id="picker-selected-name"></div>
+          <div style="font-size:0.75rem;color:var(--text-3);margin-top:1px" id="picker-selected-brand"></div>
         </div>
-        <!-- Macro proportion bars -->
-        <div style="margin-bottom:0.875rem">
-          <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px">
-            <div id="pp-bar-p" style="background:var(--accent);height:100%;border-radius:4px;transition:width .3s"></div>
-            <div id="pp-bar-c" style="background:#3B82F6;height:100%;border-radius:4px;transition:width .3s"></div>
-            <div id="pp-bar-f" style="background:#F59E0B;height:100%;border-radius:4px;transition:width .3s"></div>
-          </div>
-          <div style="display:flex;gap:12px;margin-top:6px;font-size:0.75rem">
-            <span style="color:var(--accent)">&#x25A0; P <span id="pp-p">0g</span></span>
-            <span style="color:#3B82F6">&#x25A0; C <span id="pp-c">0g</span></span>
-            <span style="color:#F59E0B">&#x25A0; F <span id="pp-f">0g</span></span>
-            <span style="margin-left:auto;font-weight:600;color:var(--text)" id="pp-k">0 kcal</span>
-          </div>
+        <!-- Quick gram presets -->
+        <div style="display:flex;gap:6px;margin-bottom:0.75rem">
+          <button onclick="setQuickGrams(50)"  class="gram-preset">50g</button>
+          <button onclick="setQuickGrams(100)" class="gram-preset">100g</button>
+          <button onclick="setQuickGrams(150)" class="gram-preset">150g</button>
+          <button onclick="setQuickGrams(200)" class="gram-preset">200g</button>
         </div>
-        <!-- Servings + grams controls -->
-        <div style="display:flex;gap:10px;margin-bottom:0.875rem">
-          <div style="flex:1">
-            <div style="font-size:0.75rem;color:var(--text-3);margin-bottom:4px">Servings</div>
-            <div style="display:flex;align-items:center;border:0.5px solid var(--border);
-                        border-radius:var(--r-sm);overflow:hidden">
-              <button onclick="changeServings(-0.5)"
-                      style="width:36px;height:36px;border:none;background:var(--surface-alt);
-                             font-size:1.1rem;cursor:pointer;flex-shrink:0">-</button>
-              <input id="picker-servings" type="number" min="0.25" max="20" step="0.25" value="1"
-                     oninput="onServingsChange()"
-                     style="flex:1;border:none;text-align:center;font-size:0.9375rem;
-                            font-weight:500;min-width:0;padding:0">
-              <button onclick="changeServings(+0.5)"
-                      style="width:36px;height:36px;border:none;background:var(--surface-alt);
-                             font-size:1.1rem;cursor:pointer;flex-shrink:0">+</button>
-            </div>
+        <!-- Amount + live kcal on same row -->
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:0.625rem">
+          <div class="input-group" style="flex:1">
+            <input id="picker-qty" type="number" min="1" max="2000" step="5" value="100"
+                   oninput="updatePickerPreview()">
+            <span class="input-suffix">g</span>
           </div>
-          <div style="flex:1">
-            <div style="font-size:0.75rem;color:var(--text-3);margin-bottom:4px">Grams per serving</div>
-            <div class="input-group">
-              <input id="picker-qty" type="number" min="1" max="2000" step="5" value="100"
-                     oninput="onGramsChange()">
-              <span class="input-suffix">g</span>
-            </div>
-          </div>
+          <div id="pp-k" style="font-size:1.0625rem;font-weight:700;
+                                 color:var(--accent);min-width:76px;text-align:right">0 kcal</div>
+        </div>
+        <!-- Macro one-liner -->
+        <div style="font-size:0.8125rem;color:var(--text-3);margin-bottom:0.875rem">
+          P&nbsp;<span id="pp-p" style="color:var(--accent);font-weight:500">0g</span>
+          &nbsp;·&nbsp;
+          C&nbsp;<span id="pp-c" style="color:#3B82F6;font-weight:500">0g</span>
+          &nbsp;·&nbsp;
+          F&nbsp;<span id="pp-f" style="color:#F59E0B;font-weight:500">0g</span>
         </div>
         <button class="btn btn-primary btn-full" onclick="addSelectedFood()">
           Add to meal
         </button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ── Exercise swap modal ─────────────────────────────── -->
+  <div id="swap-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeSwapModal()">
+    <div class="modal-box" style="max-width:480px;max-height:75dvh;overflow:hidden;
+                                  display:flex;flex-direction:column;padding:0">
+      <div style="padding:1.25rem 1.25rem 0.875rem;border-bottom:0.5px solid var(--border);flex-shrink:0">
+        <div class="row-between" style="margin-bottom:0.625rem">
+          <div class="modal-title">Swap Exercise</div>
+          <button class="btn-icon btn-ghost" onclick="closeSwapModal()">&#x2715;</button>
+        </div>
+        <div style="font-size:0.8125rem;color:var(--text-3);margin-bottom:0.75rem" id="swap-subtitle"></div>
+        <input type="text" id="swap-search" placeholder="Search alternatives..."
+               oninput="filterSwapList()" style="width:100%">
+      </div>
+      <div id="swap-list" style="overflow-y:auto;flex:1"></div>
+    </div>
+  </div>
+
+  <!-- ── Goal edit modal ──────────────────────────────────── -->
+  <div id="goal-edit-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeGoalModal()">
+    <div class="modal-box" style="max-width:340px">
+      <div class="row-between" style="margin-bottom:1.25rem">
+        <div class="modal-title">Change Goal</div>
+        <button class="btn-icon btn-ghost" onclick="closeGoalModal()">&#x2715;</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px" id="goal-options">
+        <button class="goal-opt-btn" data-phase="bulk" onclick="selectGoal('bulk')">
+          <span style="font-size:1.5rem">&#x1F4AA;</span>
+          <div>
+            <div style="font-weight:600;text-align:left">Lean Bulk</div>
+            <div style="font-size:0.8125rem;color:var(--text-3);text-align:left">Caloric surplus &middot; Build muscle</div>
+          </div>
+        </button>
+        <button class="goal-opt-btn" data-phase="cut" onclick="selectGoal('cut')">
+          <span style="font-size:1.5rem">&#x1F525;</span>
+          <div>
+            <div style="font-weight:600;text-align:left">Cut</div>
+            <div style="font-size:0.8125rem;color:var(--text-3);text-align:left">Caloric deficit &middot; Lose fat</div>
+          </div>
+        </button>
+        <button class="goal-opt-btn" data-phase="maintain" onclick="selectGoal('maintain')">
+          <span style="font-size:1.5rem">&#x2696;&#xFE0F;</span>
+          <div>
+            <div style="font-weight:600;text-align:left">Maintain</div>
+            <div style="font-size:0.8125rem;color:var(--text-3);text-align:left">At TDEE &middot; Recomposition</div>
+          </div>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1056,24 +1089,90 @@
     // ═══════════════════════════════════════════════════════
     // EXERCISE SWAP MODAL (simplified)
     // ═══════════════════════════════════════════════════════
+    // ── Exercise swap state ──────────────────────────────────
+    const SWAP = { plannedSetId: null, pool: [] };
+
     async function openSwapModal(plannedSetId, muscle, isCompound) {
+      SWAP.plannedSetId = plannedSetId;
+      document.getElementById('swap-modal').classList.remove('hidden');
+      document.getElementById('swap-subtitle').textContent =
+        `${muscle} · ${isCompound === 'true' ? 'Compound' : 'Isolation'}`;
+      document.getElementById('swap-search').value = '';
+      document.getElementById('swap-list').innerHTML =
+        '<div style="padding:2rem;text-align:center;color:var(--text-3)">Loading alternatives…</div>';
+
       const allEx = await ApexTraining.ExerciseLibrary.getAll();
-      const pool  = ApexTraining.ExerciseLibrary.filter(allEx, [muscle], isCompound === 'true');
+      SWAP.pool   = ApexTraining.ExerciseLibrary.filter(allEx, [muscle], isCompound === 'true');
+      filterSwapList();
+      setTimeout(() => document.getElementById('swap-search').focus(), 80);
+    }
 
-      const chosen = prompt(
-        `Swap exercise (${muscle}).\n` +
-        pool.slice(0, 8).map((e, i) => `${i+1}. ${e.name}`).join('\n') +
-        '\n\nEnter number:'
-      );
+    function closeSwapModal() {
+      document.getElementById('swap-modal').classList.add('hidden');
+    }
 
-      const idx = parseInt(chosen) - 1;
-      if (isNaN(idx) || idx < 0 || idx >= pool.length) return;
-      const { error } = await ApexTraining.WeeklyPlan.swapExercise(plannedSetId, pool[idx].id);
-      if (error) { showToast('Swap failed', 'error'); return; }
+    function filterSwapList() {
+      const q    = document.getElementById('swap-search').value.toLowerCase().trim();
+      const list = q
+        ? SWAP.pool.filter(e => e.name.toLowerCase().includes(q) ||
+                                (e.equipment||'').toLowerCase().includes(q))
+        : SWAP.pool;
+      const el   = document.getElementById('swap-list');
 
+      if (!list.length) {
+        el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-3)">No alternatives found</div>';
+        return;
+      }
+      el.innerHTML = list.map(e => `
+        <div onclick="confirmSwap('${e.id}','${e.name.replace(/'/g,"\'")}')"
+             style="display:flex;align-items:center;justify-content:space-between;
+                    gap:10px;padding:0.875rem 1.25rem;cursor:pointer;
+                    border-bottom:0.5px solid var(--border);transition:background 0.1s"
+             onmouseenter="this.style.background='var(--surface-alt)'"
+             onmouseleave="this.style.background=''">
+          <div>
+            <div style="font-size:0.9375rem;font-weight:500">${e.name}</div>
+            <div style="font-size:0.75rem;color:var(--text-3);margin-top:2px">
+              ${e.muscle_primary||''} · ${e.equipment||''}
+            </div>
+          </div>
+          ${e.is_compound ? '<span class="badge badge-accent" style="font-size:0.65rem;flex-shrink:0">compound</span>' : ''}
+        </div>`).join('');
+    }
+
+    async function confirmSwap(exerciseId, exerciseName) {
+      const { error } = await ApexTraining.WeeklyPlan.swapExercise(SWAP.plannedSetId, exerciseId);
+      closeSwapModal();
+      if (error) { showToast('Swap failed: ' + error.message, 'error'); return; }
       APP.loadedTabs.delete('training');
       await loadTab('training');
-      showToast(`Swapped to ${pool[idx].name}`, 'success');
+      showToast(`Swapped to ${exerciseName}`, 'success');
+    }
+
+
+    // ── Goal editing ─────────────────────────────────────────
+    function openGoalModal() {
+      const current = APP.profile?.phase || 'maintain';
+      document.querySelectorAll('.goal-opt-btn').forEach(b => {
+        const match = b.dataset.phase === current;
+        b.style.borderColor  = match ? 'var(--accent)' : '';
+        b.style.background   = match ? 'var(--accent-light)' : '';
+      });
+      document.getElementById('goal-edit-modal').classList.remove('hidden');
+    }
+
+    function closeGoalModal() {
+      document.getElementById('goal-edit-modal').classList.add('hidden');
+    }
+
+    async function selectGoal(phase) {
+      const { error } = await ApexCore.Profile.update({ phase });
+      if (error) { showToast('Could not save goal', 'error'); return; }
+      APP.profile = { ...APP.profile, phase };
+      closeGoalModal();
+      APP.loadedTabs.delete('home');
+      loadTab('home');
+      showToast('Goal updated', 'success');
     }
 
     // ═══════════════════════════════════════════════════════
@@ -1129,7 +1228,14 @@
                           text-transform:uppercase;color:${cfg.accent};margin-bottom:3px">
                 Current Phase
               </div>
+              <div style="display:flex;align-items:center;gap:8px">
               <div style="font-size:1rem;font-weight:700">${cfg.icon} ${cfg.label}</div>
+              <button onclick="openGoalModal()"
+                      style="font-size:0.7rem;padding:3px 8px;border-radius:4px;
+                             border:0.5px solid ${cfg.accent};color:${cfg.accent};
+                             background:transparent;cursor:pointer;font-family:inherit;
+                             opacity:0.8">Edit</button>
+            </div>
             </div>
             <div style="text-align:right">
               <div style="font-size:0.7rem;color:var(--text-3);margin-bottom:2px">${cfg.heroLabel}</div>
@@ -1298,6 +1404,8 @@
       const micros = calculateMicros(slots);
       renderMicroSection(micros, APP.profile);
       APP.allFoods = await ApexNutrition.FoodArchive.getAll();
+      // Pre-warm recent foods cache so picker opens instantly
+      loadRecentFoods().then(foods => { APP.recentFoodsCache = foods; });
     }
 
     function updateMacroBars(totals, targets) {
@@ -1647,7 +1755,7 @@
           return;
         }
         clearTimeout(XSEARCH.timer);
-        XSEARCH.timer = setTimeout(() => searchExternal(q), 420);
+        XSEARCH.timer = setTimeout(() => searchExternal(q), 200);
         return;
       }
       // Library mode
@@ -1661,6 +1769,7 @@
 
     // Load recently used foods from DB
     async function loadRecentFoods() {
+      if (APP.recentFoodsCache) return APP.recentFoodsCache;
       if (PICKER._recentCache) return PICKER._recentCache;
       const { data } = await ApexCore.getClient()
         .from('meal_items')
@@ -1674,6 +1783,7 @@
         .map(r => ({ ...r.foods, _recentQty: r.quantity_g }));
       // Cache for this picker session
       PICKER._recentCache = foods;
+      APP.recentFoodsCache  = foods;
       foods.forEach(f => PICKER.cache.set(String(f.id), f));
       return foods;
     }
@@ -1909,11 +2019,8 @@
       PICKER.selectedFood = food;
       document.getElementById('picker-selected-name').textContent = food.name;
       document.getElementById('picker-selected-brand').textContent = food.brand || '';
-      // Pre-fill with last used qty if available
-      const defaultQty = food._recentQty || 100;
-      const servings   = +(defaultQty / 100).toFixed(2);
-      document.getElementById('picker-servings').value = servings;
-      document.getElementById('picker-qty').value = 100;
+      // Pre-fill with last used qty (shows what they actually ate last time)
+      document.getElementById('picker-qty').value = food._recentQty || 100;
       document.getElementById('picker-footer').classList.remove('hidden');
       updatePickerPreview();
       document.getElementById('picker-footer')
@@ -1940,26 +2047,18 @@
     function updatePickerPreview() {
       const food = PICKER.selectedFood;
       if (!food) return;
-      const gpServing = parseFloat(document.getElementById('picker-qty').value) || 100;
-      const servings  = parseFloat(document.getElementById('picker-servings').value) || 1;
-      const totalG    = gpServing * servings;
-      const ratio     = totalG / 100;
+      const g = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const r = g / 100;
+      const el = id => document.getElementById(id);
+      el('pp-p').textContent = (food.protein_g * r).toFixed(1) + 'g';
+      el('pp-c').textContent = (food.carbs_g   * r).toFixed(1) + 'g';
+      el('pp-f').textContent = (food.fat_g     * r).toFixed(1) + 'g';
+      el('pp-k').textContent = Math.round(food.kcal * r) + ' kcal';
+    }
 
-      const p = food.protein_g * ratio;
-      const c = food.carbs_g   * ratio;
-      const f = food.fat_g     * ratio;
-      const k = food.kcal      * ratio;
-      const total = p*4 + c*4 + f*9 || 1;
-
-      document.getElementById('pp-p').textContent = p.toFixed(1);
-      document.getElementById('pp-c').textContent = c.toFixed(1);
-      document.getElementById('pp-f').textContent = f.toFixed(1);
-      document.getElementById('pp-k').textContent = Math.round(k) + ' kcal';
-
-      // Proportion bars
-      document.getElementById('pp-bar-p').style.width = `${(p*4/total*100).toFixed(1)}%`;
-      document.getElementById('pp-bar-c').style.width = `${(c*4/total*100).toFixed(1)}%`;
-      document.getElementById('pp-bar-f').style.width = `${(f*9/total*100).toFixed(1)}%`;
+    function setQuickGrams(g) {
+      const inp = document.getElementById('picker-qty');
+      if (inp) { inp.value = g; updatePickerPreview(); }
     }
 
     // ── Bulk add (multi-add mode) ───────────────────────────────
@@ -1989,10 +2088,8 @@
 
     // ── Add selected food to meal ────────────────────────────────
     async function addSelectedFood() {
-      const food     = PICKER.selectedFood;
-      const gpServ   = parseFloat(document.getElementById('picker-qty').value) || 100;
-      const servings = parseFloat(document.getElementById('picker-servings').value) || 1;
-      const g        = Math.round(gpServ * servings);
+      const food = PICKER.selectedFood;
+      const g    = parseFloat(document.getElementById('picker-qty').value) || 0;
       if (!food || g < 1) { showToast('Enter a valid amount', 'error'); return; }
 
       const btn = document.querySelector('#picker-footer .btn-primary');
@@ -2204,3 +2301,4 @@
   </script>
 </body>
 </html>
+
