@@ -1,3 +1,6 @@
+# hub.html
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -342,16 +345,83 @@
   </section>
 
   <!-- ── Active workout session overlay ───────────────────── -->
-  <div id="session-overlay" class="hidden">
-    <div class="session-topbar">
-      <button class="btn btn-ghost btn-sm" onclick="abandonSession()">✕ Abandon</button>
-      <div class="stack" style="align-items:center">
-        <div class="session-title" id="sess-title"></div>
-        <div class="session-timer" id="sess-timer">00:00</div>
+  <!-- ── Focus mode ──────────────────────────────────────────── -->
+  <div id="focus-mode" class="fm-hidden">
+
+    <div class="focus-topbar">
+      <button class="focus-abandon-btn" data-confirm="0" onclick="confirmAbandon()">&#x2715; End</button>
+      <div class="focus-topbar-center">
+        <div id="focus-ex-counter" class="focus-ex-counter"></div>
+        <div id="focus-elapsed"    class="focus-elapsed">00:00</div>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="openCompleteModal()">Complete ✓</button>
+      <button class="focus-done-btn" onclick="openCompleteModal()">Done &#x2713;</button>
     </div>
-    <div class="session-body" id="session-body"></div>
+
+    <div class="focus-body" id="focus-body">
+
+      <div class="focus-ex-header">
+        <div id="focus-ex-name" class="focus-ex-name"></div>
+        <div id="focus-ex-meta" class="focus-ex-meta"></div>
+        <div id="focus-set-dots" class="focus-set-dots"></div>
+      </div>
+
+      <div class="focus-inputs">
+        <div>
+          <div class="focus-input-lbl">Weight (kg)</div>
+          <div class="stepper">
+            <button class="stepper-btn" onclick="adjustVal('focus-wt',-2.5)">&#x2212;</button>
+            <input  class="stepper-val" id="focus-wt" type="number" step="2.5" min="0"
+                    inputmode="decimal" placeholder="0">
+            <button class="stepper-btn" onclick="adjustVal('focus-wt',+2.5)">+</button>
+          </div>
+        </div>
+        <div>
+          <div class="focus-input-lbl">Reps</div>
+          <div class="stepper">
+            <button class="stepper-btn" onclick="adjustVal('focus-reps',-1)">&#x2212;</button>
+            <input  class="stepper-val" id="focus-reps" type="number" step="1" min="1"
+                    inputmode="numeric" placeholder="8">
+            <button class="stepper-btn" onclick="adjustVal('focus-reps',+1)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rpe-section">
+        <div class="focus-input-lbl">Rate of Perceived Exertion (RPE)</div>
+        <div class="rpe-grid" id="rpe-row"></div>
+      </div>
+
+      <button id="log-set-btn" class="btn btn-primary btn-full btn-lg"
+              style="margin-bottom:1rem" onclick="logFocusSet()">Log Set</button>
+
+      <div id="focus-history"></div>
+
+    </div><!-- /focus-body -->
+  </div><!-- /focus-mode -->
+
+  <!-- ── Rest countdown ───────────────────────────────────── -->
+  <div id="rest-overlay" class="fm-hidden">
+    <div class="rest-label">Rest</div>
+    <div class="rest-ring-wrap">
+      <svg width="220" height="220" viewBox="0 0 220 220">
+        <circle cx="110" cy="110" r="88" fill="none"
+                stroke="var(--surface-alt)" stroke-width="10"/>
+        <circle id="rest-ring" cx="110" cy="110" r="88"
+                fill="none" stroke="var(--accent)" stroke-width="10"
+                stroke-linecap="round"
+                stroke-dasharray="553" stroke-dashoffset="0"
+                transform="rotate(-90 110 110)"/>
+      </svg>
+      <div class="rest-ring-center">
+        <div id="rest-sec" class="rest-seconds-big">90</div>
+        <div class="rest-sec-unit">sec</div>
+      </div>
+    </div>
+    <div class="rest-next-wrap">
+      <div class="rest-next-lbl">Up next</div>
+      <div id="rest-next" class="rest-next-val"></div>
+    </div>
+    <button class="btn-skip-rest" onclick="skipRest()">Skip Rest</button>
   </div>
 
   <!-- ── Complete session modal ────────────────────────────── -->
@@ -937,117 +1007,220 @@
     // ═══════════════════════════════════════════════════════
     // WORKOUT SESSION
     // ═══════════════════════════════════════════════════════
+    // ── Workout focus mode state ─────────────────────────────
+    const WORKOUT = {
+      exercises:   [],   // [{ps, setsTotal, setsDone, logs:[{set,wt,reps,rpe}]}]
+      curEx:       0,
+      curSet:      1,
+      selectedRPE: null,
+      _restTimer:  null,
+      _restCB:     null,
+    };
+
     async function startWorkout() {
       if (!APP.selectedWorkout) return;
       const { session, error } = await ApexTraining.WorkoutSession.start(APP.selectedWorkout.id);
       if (error) { showToast(error.message, 'error'); return; }
 
-      document.getElementById('session-overlay').classList.remove('hidden');
-      document.getElementById('sess-title').textContent = APP.selectedWorkout.label;
-      renderSessionBody(session);
+      WORKOUT.exercises   = session.plannedSets.map(ps => ({
+        ps, setsTotal: ps.sets, setsDone: 0, logs: [],
+      }));
+      WORKOUT.curEx       = 0;
+      WORKOUT.curSet      = 1;
+      WORKOUT.selectedRPE = null;
 
-      // Start elapsed timer display
+      // True focus mode — hide bottom nav completely
+      document.querySelector('.bottom-nav').style.setProperty('display','none','important');
+      document.getElementById('focus-mode').classList.remove('fm-hidden');
+      renderFocusExercise();
+
       APP.timerInterval = setInterval(() => {
-        const s = ApexTraining.WorkoutSession.getState();
-        document.getElementById('sess-timer').textContent =
-          ApexTraining.SessionTimer.format(s.timer ?? ApexTraining.SessionTimer.create());
+        const s  = ApexTraining.WorkoutSession.getState();
+        const el = document.getElementById('focus-elapsed');
+        if (el) el.textContent = ApexTraining.SessionTimer.format(
+          s.timer ?? ApexTraining.SessionTimer.create()
+        );
       }, 1000);
     }
 
-    function renderSessionBody(session) {
-      const body = document.getElementById('session-body');
-      body.innerHTML = '';
+    function renderFocusExercise() {
+      const item = WORKOUT.exercises[WORKOUT.curEx];
+      if (!item) { openCompleteModal(); return; }
+      const { ps } = item;
+      const ex = ps.exercises ?? {};
 
-      session.plannedSets.forEach(ps => {
-        const ex   = ps.exercises;
-        const card = document.createElement('div');
-        card.className = 'set-logger';
-        card.id = `sl-${ps.id}`;
+      // Progress counter
+      document.getElementById('focus-ex-counter').textContent =
+        `Exercise ${WORKOUT.curEx + 1} / ${WORKOUT.exercises.length}`;
 
-        const suggestedWeight = ps.notes?.match(/Target:\s*([\d.]+)/)?.[1] ?? '';
+      // Exercise name + meta
+      document.getElementById('focus-ex-name').textContent = ex.name ?? 'Exercise';
+      const parts = [ex.muscle_primary, `${ps.reps_min}–${ps.reps_max} reps`,
+                     `RPE ${ps.rpe_target}`,
+                     ps.rest_seconds >= 60
+                       ? `${Math.floor(ps.rest_seconds / 60)}m rest`
+                       : `${ps.rest_seconds}s rest`].filter(Boolean);
+      document.getElementById('focus-ex-meta').textContent = parts.join(' · ');
 
-        const rowsHTML = Array.from({ length: ps.sets }, (_, i) => `
-          <div class="set-row" id="row-${ps.id}-${i+1}">
-            <div class="set-num" id="dot-${ps.id}-${i+1}">${i+1}</div>
-            <input class="set-input" type="number" placeholder="${suggestedWeight || '—'}" min="0" step="2.5"
-              id="wt-${ps.id}-${i+1}">
-            <span class="set-sep">kg ×</span>
-            <input class="set-input" type="number" placeholder="${ps.reps_min}" min="1" max="100" step="1"
-              id="rp-${ps.id}-${i+1}">
-            <span class="set-sep">@ RPE</span>
-            <input class="set-rpe" type="number" placeholder="${ps.rpe_target}" min="6" max="10" step="0.5"
-              id="rpe-${ps.id}-${i+1}">
-            <button class="btn btn-sm btn-primary" onclick="logSet('${ps.id}','${ps.exercise_id}',${i+1})">Log</button>
-          </div>`).join('');
+      // Set dots
+      document.getElementById('focus-set-dots').innerHTML =
+        Array.from({ length: item.setsTotal }, (_, i) => {
+          const c = i < item.setsDone ? 'dot-done' : i === item.setsDone ? 'dot-cur' : '';
+          return `<div class="set-dot ${c}"></div>`;
+        }).join('');
 
-        card.innerHTML = `
-          <div class="set-logger-header">
-            <strong style="font-size:0.9375rem">${ex?.name ?? 'Exercise'}</strong>
-            ${ex?.is_compound ? '<span class="badge badge-accent" style="font-size:0.6875rem">compound</span>' : ''}
-            <span class="t-hint t-small" style="margin-left:auto">${ps.reps_min}–${ps.reps_max} reps · RPE ${ps.rpe_target}</span>
-          </div>
-          <div class="set-logger-body">${rowsHTML}</div>
-          <div class="rest-timer hidden" id="rest-${ps.id}">
-            <span class="t-small">Rest timer</span>
-            <span class="rest-count" id="rest-count-${ps.id}"></span>
-            <button class="btn btn-sm btn-ghost" onclick="skipRest('${ps.id}')">Skip</button>
-          </div>`;
+      // Pre-fill inputs from last log or program target
+      const last = item.logs.at(-1);
+      const suggestWt = ps.notes?.match(/Target:\s*([\d.]+)/)?.[1] ?? '';
+      document.getElementById('focus-wt').value   = last?.wt   ?? suggestWt ?? '';
+      document.getElementById('focus-reps').value = last?.reps ?? ps.reps_min ?? '';
 
-        body.appendChild(card);
-      });
+      // RPE
+      if (!WORKOUT.selectedRPE) WORKOUT.selectedRPE = ps.rpe_target;
+      renderRPERow();
+
+      // Log button
+      const btn = document.getElementById('log-set-btn');
+      btn.disabled    = false;
+      btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
+
+      renderCompletedSets(item.logs);
+      document.getElementById('focus-body').scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    let _restIntervals = {};
+    function renderRPERow() {
+      const rpes = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+      document.getElementById('rpe-row').innerHTML = rpes.map(r => `
+        <button class="rpe-btn${r === WORKOUT.selectedRPE ? ' rpe-active' : ''}"
+                onclick="selectRPE(${r})">${r}</button>`).join('');
+    }
 
-    async function logSet(plannedSetId, exerciseId, setNumber) {
-      const wt  = parseFloat(document.getElementById(`wt-${plannedSetId}-${setNumber}`).value);
-      const rp  = parseInt(document.getElementById(`rp-${plannedSetId}-${setNumber}`).value);
-      const rpe = parseFloat(document.getElementById(`rpe-${plannedSetId}-${setNumber}`).value);
+    function selectRPE(val) {
+      WORKOUT.selectedRPE = val;
+      document.querySelectorAll('.rpe-btn').forEach(b =>
+        b.classList.toggle('rpe-active', parseFloat(b.textContent) === val));
+    }
 
-      if (isNaN(wt) || isNaN(rp) || isNaN(rpe)) {
-        showToast('Fill in weight, reps, and RPE', 'error'); return;
+    function adjustVal(id, delta) {
+      const inp = document.getElementById(id);
+      const cur = parseFloat(inp.value) || 0;
+      inp.value = Math.max(0, parseFloat((cur + delta).toFixed(1)));
+    }
+
+    function renderCompletedSets(logs) {
+      const el = document.getElementById('focus-history');
+      if (!logs.length) { el.innerHTML = ''; return; }
+      el.innerHTML = `
+        <div class="focus-history-header">Completed</div>
+        ${logs.map(l => `
+          <div class="focus-history-row">
+            <span class="fhr-set">Set ${l.set}</span>
+            <span class="fhr-val">${l.wt} kg &times; ${l.reps}</span>
+            <span class="fhr-rpe">RPE ${l.rpe}</span>
+            <span class="fhr-check">&#x2713;</span>
+          </div>`).join('')}`;
+    }
+
+    async function logFocusSet() {
+      const item = WORKOUT.exercises[WORKOUT.curEx];
+      const { ps } = item;
+      const wt   = parseFloat(document.getElementById('focus-wt').value);
+      const reps = parseInt(document.getElementById('focus-reps').value);
+      const rpe  = WORKOUT.selectedRPE;
+
+      if (isNaN(wt) || isNaN(reps) || !rpe) {
+        showToast('Enter weight, reps and RPE', 'error'); return;
       }
 
+      const btn = document.getElementById('log-set-btn');
+      btn.disabled    = true;
+      btn.textContent = 'Saving…';
+
       const { log, overload, isPR, error } = await ApexTraining.WorkoutSession.logSet({
-        plannedSetId, exerciseId, setNumber, weightKg: wt, reps: rp, rpe,
+        plannedSetId: ps.id, exerciseId: ps.exercise_id,
+        setNumber: WORKOUT.curSet, weightKg: wt, reps, rpe,
       });
 
-      if (error) { showToast(error.message, 'error'); return; }
+      if (error) {
+        showToast(error.message, 'error');
+        btn.disabled    = false;
+        btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
+        return;
+      }
 
-      // Mark set as done
-      const dot = document.getElementById(`dot-${plannedSetId}-${setNumber}`);
-      if (dot) dot.classList.add('done');
+      item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
+      item.setsDone++;
 
-      if (isPR)                       showToast(`🏆 New PR! Est. 1RM: ${ApexCore.Overload.epley1RM(wt, rp)} kg`, 'success');
-      if (overload.flag === 'progress') showToast(`↑ Add ${wt + overload.nextWeightKg - wt} kg next session`);
+      if (isPR) showToast(
+        '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' kg', 'success');
 
-      // Start rest timer
-      const ps = APP.selectedWorkout?.planned_sets?.find(s => s.id === plannedSetId);
-      if (ps?.rest_seconds) startRestTimer(plannedSetId, ps.rest_seconds);
+      showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
     }
 
-    function startRestTimer(setId, seconds) {
-      if (_restIntervals[setId]) clearInterval(_restIntervals[setId]);
-      const el    = document.getElementById(`rest-${setId}`);
-      const count = document.getElementById(`rest-count-${setId}`);
-      if (!el || !count) return;
+    function getNextSetInfo() {
+      const item = WORKOUT.exercises[WORKOUT.curEx];
+      if (WORKOUT.curSet < item.setsTotal)
+        return `Set ${WORKOUT.curSet + 1} of ${item.setsTotal} — ${item.ps.exercises?.name}`;
+      const nIdx = WORKOUT.curEx + 1;
+      if (nIdx < WORKOUT.exercises.length)
+        return WORKOUT.exercises[nIdx].ps.exercises?.name ?? 'Next exercise';
+      return 'Last set — great work!';
+    }
 
-      let remaining = seconds;
-      el.classList.remove('hidden');
-      count.textContent = formatTime(remaining);
+    function advanceWorkout() {
+      const item = WORKOUT.exercises[WORKOUT.curEx];
+      if (WORKOUT.curSet < item.setsTotal) {
+        WORKOUT.curSet++;
+      } else {
+        WORKOUT.curEx++;
+        WORKOUT.curSet      = 1;
+        WORKOUT.selectedRPE = null;
+        if (WORKOUT.curEx >= WORKOUT.exercises.length) {
+          openCompleteModal(); return;
+        }
+      }
+      renderFocusExercise();
+    }
 
-      _restIntervals[setId] = setInterval(() => {
+    function showRestOverlay(totalSec, nextInfo, onComplete) {
+      const ringEl = document.getElementById('rest-ring');
+      const secEl  = document.getElementById('rest-sec');
+      const CIRC   = 2 * Math.PI * 88;           // ≈ 553
+
+      WORKOUT._restCB = onComplete;
+      document.getElementById('rest-next').textContent = nextInfo;
+      secEl.textContent = totalSec;
+
+      // Reset ring without transition, then re-enable
+      ringEl.style.transition      = 'none';
+      ringEl.style.strokeDasharray = `${CIRC}`;
+      ringEl.style.strokeDashoffset = '0';
+      document.getElementById('rest-overlay').classList.remove('fm-hidden');
+
+      requestAnimationFrame(() => {
+        ringEl.style.transition = 'stroke-dashoffset 1s linear';
+      });
+
+      let remaining = totalSec;
+      WORKOUT._restTimer = setInterval(() => {
         remaining--;
-        count.textContent = formatTime(remaining);
-        if (remaining <= 0) { skipRest(setId); }
+        secEl.textContent             = Math.max(0, remaining);
+        ringEl.style.strokeDashoffset = `${CIRC * (1 - remaining / totalSec)}`;
+        if (remaining <= 0) _endRest(true);
       }, 1000);
     }
 
-    function skipRest(setId) {
-      if (_restIntervals[setId]) clearInterval(_restIntervals[setId]);
-      const el = document.getElementById(`rest-${setId}`);
-      if (el) el.classList.add('hidden');
+    function _endRest(vibrate) {
+      clearInterval(WORKOUT._restTimer);
+      WORKOUT._restTimer = null;
+      document.getElementById('rest-overlay').classList.add('fm-hidden');
+      if (vibrate && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      const cb = WORKOUT._restCB;
+      WORKOUT._restCB = null;
+      if (cb) cb();
     }
+
+    function skipRest() { _endRest(false); }
 
     function openCompleteModal() {
       document.getElementById('complete-modal').classList.remove('hidden');
@@ -1062,28 +1235,42 @@
       });
       if (error) { showToast(error.message, 'error'); return; }
 
-      closeSession();
+      closeFocusMode();
       showToast('Session saved! Great work.', 'success');
       APP.loadedTabs.delete('training');
       await loadTab('training');
 
-      if (deloadCheck?.shouldDeload) {
+      if (deloadCheck?.shouldDeload)
         showToast(`Deload recommended: ${deloadCheck.reason}`, 'warning');
+    }
+
+    function confirmAbandon() {
+      const btn = document.querySelector('.focus-abandon-btn');
+      if (btn.dataset.confirm === '1') {
+        ApexTraining.WorkoutSession.abandon('User abandoned');
+        closeFocusMode();
+      } else {
+        btn.dataset.confirm  = '1';
+        btn.textContent      = 'Tap again to end';
+        btn.style.color      = 'var(--danger)';
+        setTimeout(() => {
+          if (btn.dataset.confirm === '1') {
+            btn.dataset.confirm = '0';
+            btn.textContent     = '&#x2715; End';
+            btn.style.color     = '';
+          }
+        }, 3000);
       }
     }
 
-    async function abandonSession() {
-      if (!confirm('Abandon this session? Set logs will not be saved.')) return;
-      await ApexTraining.WorkoutSession.abandon('User abandoned');
-      closeSession();
-    }
-
-    function closeSession() {
+    function closeFocusMode() {
       clearInterval(APP.timerInterval);
-      Object.values(_restIntervals).forEach(clearInterval);
-      _restIntervals = {};
-      document.getElementById('session-overlay').classList.add('hidden');
+      if (WORKOUT._restTimer) { clearInterval(WORKOUT._restTimer); WORKOUT._restTimer = null; }
+      WORKOUT._restCB = null;
+      document.getElementById('focus-mode').classList.add('fm-hidden');
+      document.getElementById('rest-overlay').classList.add('fm-hidden');
       document.getElementById('complete-modal').classList.add('hidden');
+      document.querySelector('.bottom-nav').style.removeProperty('display');
     }
 
     // ═══════════════════════════════════════════════════════
@@ -2302,3 +2489,4 @@
 </body>
 </html>
 
+```
