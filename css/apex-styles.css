@@ -1,2558 +1,1156 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Apex Fitness</title>
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="icon" type="image/png" href="apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Apex">
-  <meta name="theme-color" content="#0C0C0E">
-  <link rel="stylesheet" href="css/apex-styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="js/apex-core.js"></script>
-  <script src="js/training.js"></script>
-  <script src="js/nutrition.js"></script>
-  <script src="js/stats.js"></script>
-  <script src="js/panda.js"></script>
-</head>
-<body>
-
-  <!-- ── Top bar ──────────────────────────────────────────── -->
-  <header id="topbar">
-    <div class="topbar-logo">Apex<span>.</span></div>
-    <div class="row gap-12">
-      <div id="phase-pill" class="pill" style="background:var(--accent-light);color:var(--accent-dark);font-size:0.8rem"></div>
-      <button class="btn-icon btn-ghost" id="weight-log-btn" title="Log weight" onclick="openWeightModal()">⚖️</button>
-      <div id="user-avatar" class="row gap-8" style="cursor:pointer" onclick="toggleUserMenu()">
-        <div id="avatar-circle" style="width:32px;height:32px;border-radius:50%;background:var(--accent-light);color:var(--accent-dark);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:600"></div>
-      </div>
-    </div>
-    <!-- User menu -->
-    <div id="user-menu" class="card" style="position:absolute;top:58px;right:1.5rem;width:180px;z-index:50;display:none;padding:0.5rem">
-      <button class="btn btn-ghost btn-full" style="justify-content:flex-start;font-size:0.875rem" onclick="window.location.href='onboarding.html'">⚙ Profile settings</button>
-      <div class="divider" style="margin:6px 0"></div>
-      <button class="btn btn-ghost btn-full" style="justify-content:flex-start;font-size:0.875rem;color:var(--danger)" onclick="ApexCore.Auth.signOut()">Sign out</button>
-    </div>
-  </header>
-
-  <!-- ── Bottom navigation ───────────────────────────────── -->
-  <nav class="bottom-nav">
-    <button class="nav-btn" data-tab="home" onclick="switchTab('home',this)">
-      <span class="nav-icon">&#x1F3E0;</span>
-      <span class="nav-label">Home</span>
-    </button>
-    <button class="nav-btn active" data-tab="training" onclick="switchTab('training',this)">
-      <span class="nav-icon">&#x1F4AA;</span>
-      <span class="nav-label">Training</span>
-    </button>
-    <button class="nav-plus" onclick="openQuickAdd()" aria-label="Quick add">
-      <span class="nav-plus-inner">+</span>
-    </button>
-    <button class="nav-btn" data-tab="diary" onclick="switchTab('diary',this)">
-      <span class="nav-icon">&#x1F4D4;</span>
-      <span class="nav-label">Diary</span>
-    </button>
-    <button class="nav-btn" data-tab="stats" onclick="switchTab('stats',this)">
-      <span class="nav-icon">&#x1F4C8;</span>
-      <span class="nav-label">Stats</span>
-    </button>
-  </nav>
-
-  <!-- ── Home / Dashboard panel ──────────────────────────── -->
-  <section id="panel-home" class="panel">
-
-    <!-- Greeting -->
-    <div style="margin-bottom:1.25rem">
-      <h2 class="t-heading" id="home-greeting">Good morning</h2>
-      <div class="t-small t-muted" id="home-date-sub"></div>
-    </div>
-
-    <!-- Calorie ring + macro snapshot -->
-    <div class="card" style="margin-bottom:1rem">
-      <div style="display:flex;align-items:center;gap:1.5rem">
-        <!-- Donut ring -->
-        <div style="position:relative;flex-shrink:0">
-          <svg id="home-ring" width="96" height="96" viewBox="0 0 96 96">
-            <circle cx="48" cy="48" r="40" fill="none" stroke="var(--surface-alt)" stroke-width="10"/>
-            <circle id="home-ring-arc" cx="48" cy="48" r="40" fill="none"
-                    stroke="var(--accent)" stroke-width="10" stroke-linecap="round"
-                    stroke-dasharray="0 251" stroke-dashoffset="63"
-                    style="transition:stroke-dasharray .6s cubic-bezier(.4,0,.2,1)"/>
-          </svg>
-          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
-            <div id="home-kcal-rem" style="font-size:1.125rem;font-weight:700;line-height:1">—</div>
-            <div style="font-size:0.625rem;color:var(--text-3);margin-top:1px">kcal left</div>
-          </div>
-        </div>
-        <!-- Macro bars -->
-        <div style="flex:1;display:flex;flex-direction:column;gap:8px">
-          <div>
-            <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px">
-              <span style="color:var(--text-2)">Protein</span>
-              <span id="home-p-txt" style="color:var(--text-3)">—</span>
-            </div>
-            <div style="height:6px;border-radius:3px;background:var(--surface-alt)">
-              <div id="home-p-bar" style="height:100%;border-radius:3px;background:var(--accent);width:0%;transition:width .5s"></div>
-            </div>
-          </div>
-          <div>
-            <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px">
-              <span style="color:var(--text-2)">Carbs</span>
-              <span id="home-c-txt" style="color:var(--text-3)">—</span>
-            </div>
-            <div style="height:6px;border-radius:3px;background:var(--surface-alt)">
-              <div id="home-c-bar" style="height:100%;border-radius:3px;background:#3B82F6;width:0%;transition:width .5s"></div>
-            </div>
-          </div>
-          <div>
-            <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px">
-              <span style="color:var(--text-2)">Fat</span>
-              <span id="home-f-txt" style="color:var(--text-3)">—</span>
-            </div>
-            <div style="height:6px;border-radius:3px;background:var(--surface-alt)">
-              <div id="home-f-bar" style="height:100%;border-radius:3px;background:#F59E0B;width:0%;transition:width .5s"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick-action tiles -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem">
-      <button class="card home-tile" onclick="switchTab('diary',document.querySelector('[data-tab=diary]'))">
-        <span style="font-size:1.75rem">&#x1F4D4;</span>
-        <span style="font-size:0.875rem;font-weight:600;margin-top:4px">Log Food</span>
-        <span id="home-meals-sub" class="t-hint">0 meals today</span>
-      </button>
-      <button class="card home-tile" onclick="switchTab('training',document.querySelector('[data-tab=training]'))">
-        <span style="font-size:1.75rem">&#x1F4AA;</span>
-        <span style="font-size:0.875rem;font-weight:600;margin-top:4px">Training</span>
-        <span id="home-workout-sub" class="t-hint">Tap to view</span>
-      </button>
-      <button class="card home-tile" onclick="openWeightModal()">
-        <span style="font-size:1.75rem">&#x2696;&#xFE0F;</span>
-        <span style="font-size:0.875rem;font-weight:600;margin-top:4px">Log Weight</span>
-        <span id="home-weight-sub" class="t-hint">—</span>
-      </button>
-      <button class="card home-tile" onclick="switchTab('stats',document.querySelector('[data-tab=stats]'))">
-        <span style="font-size:1.75rem">&#x1F4C8;</span>
-        <span style="font-size:0.875rem;font-weight:600;margin-top:4px">Progress</span>
-        <span class="t-hint">View stats</span>
-      </button>
-    </div>
-
-  </section>
-
-  <!-- ── Training panel ───────────────────────────────────── -->
-  <section id="panel-training" class="panel active">
-
-    <!-- Week header -->
-    <div class="row-between" style="margin-bottom:1.25rem">
-      <div>
-        <div class="row gap-8" style="margin-bottom:4px">
-          <h2 class="t-heading" id="week-title">Loading…</h2>
-          <div id="deload-badge" class="badge badge-warning hidden">Deload week</div>
-        </div>
-        <div class="t-small t-muted" id="week-sub"></div>
-      </div>
-      <div class="row gap-8">
-        <div id="next-deload-badge" class="badge badge-neutral hidden"></div>
-      </div>
-    </div>
-
-    <!-- 7-day grid -->
-    <div id="days-grid" class="days-grid"></div>
-
-    <!-- Workout detail -->
-    <div id="workout-detail" class="card hidden">
-      <div class="row-between" style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:0.5px solid var(--border)">
-        <div>
-          <div class="t-subhead" id="detail-workout-name"></div>
-          <div class="t-small t-muted" id="detail-workout-meta"></div>
-        </div>
-        <div class="row gap-8">
-          <div id="detail-deload-note" class="badge badge-warning hidden">Deload — 60% volume</div>
-          <button id="start-workout-btn" class="btn btn-primary btn-sm" onclick="startWorkout()">Start workout</button>
-        </div>
-      </div>
-      <table class="exercise-table" id="exercise-table">
-        <thead>
-          <tr>
-            <th style="width:40%">Exercise</th>
-            <th>Sets</th>
-            <th>Reps</th>
-            <th>RPE</th>
-            <th>Rest</th>
-            <th style="width:32px"></th>
-          </tr>
-        </thead>
-        <tbody id="exercise-tbody"></tbody>
-      </table>
-
-      <!-- Cardio prescription (for cardio days) -->
-      <div id="cardio-detail" class="hidden">
-        <div class="card-flat" id="cardio-prescription"></div>
-      </div>
-    </div>
-
-    <!-- Empty state -->
-    <div id="training-empty" class="card hidden" style="text-align:center;padding:3rem">
-      <div style="font-size:2.5rem;margin-bottom:1rem">🗓️</div>
-      <div class="t-subhead" style="margin-bottom:6px">No active program</div>
-      <div class="t-muted t-small" style="margin-bottom:1.25rem">Generate a program to get started.</div>
-      <button class="btn btn-primary" onclick="generateProgram()">Generate program</button>
-    </div>
-
-  </section>
-
-  <!-- ── Diary / Nutrition panel ─────────────────────────── -->
-  <section id="panel-diary" class="panel">
-
-    <!-- Date navigation header -->
-    <div class="diary-date-nav" style="display:flex;align-items:center;justify-content:center;gap:1rem;margin-bottom:1rem">
-      <button class="btn-icon btn-ghost" onclick="changeDate(-1)" style="font-size:1.1rem">&#x2190;</button>
-      <button onclick="openDatePicker()" style="border:none;background:transparent;font-size:0.9375rem;font-weight:600;cursor:pointer;color:var(--text)" id="diary-date-btn">Today</button>
-      <button class="btn-icon btn-ghost" onclick="changeDate(+1)" id="diary-next-btn" style="font-size:1.1rem">&#x2192;</button>
-    </div>
-
-    <!-- Calorie equation banner -->
-    <div class="card calorie-banner" style="margin-bottom:1rem;padding:0.875rem 1rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
-        <div class="cal-col">
-          <div class="cal-num" id="cal-goal">—</div>
-          <div class="cal-lbl">Goal</div>
-        </div>
-        <div class="cal-op">-</div>
-        <div class="cal-col">
-          <div class="cal-num" id="cal-food">0</div>
-          <div class="cal-lbl">Food</div>
-        </div>
-        <div class="cal-op">+</div>
-        <div class="cal-col">
-          <div class="cal-num" id="cal-exercise">0</div>
-          <div class="cal-lbl">Exercise</div>
-        </div>
-        <div class="cal-op">=</div>
-        <div class="cal-col" style="text-align:center">
-          <div class="cal-num" id="cal-remaining" style="color:var(--accent)">—</div>
-          <div class="cal-lbl">Remaining</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Hidden date input for calendar -->
-    <input type="date" id="diary-date-input" style="display:none" onchange="onDatePickerChange()">
-
-    <!-- Macro bars (collapsible) -->
-    <div class="card" style="margin-bottom:1rem">
-      <div class="row-between" style="margin-bottom:1rem">
-        <div class="t-subhead" id="nutr-date-label">Macros</div>
-        <div class="t-small t-muted" id="nutr-kcal-summary"></div>
-      </div>
-      <div class="macro-bars" id="macro-bars">
-        <div class="macro-row">
-          <div class="macro-label">Protein</div>
-          <div class="macro-track"><div class="macro-fill protein" id="bar-protein" style="width:0%"></div></div>
-          <div class="macro-nums"><strong id="val-protein">0</strong> / <span id="tgt-protein">—</span>g</div>
-        </div>
-        <div class="macro-row">
-          <div class="macro-label">Carbs</div>
-          <div class="macro-track"><div class="macro-fill carbs" id="bar-carbs" style="width:0%"></div></div>
-          <div class="macro-nums"><strong id="val-carbs">0</strong> / <span id="tgt-carbs">—</span>g</div>
-        </div>
-        <div class="macro-row">
-          <div class="macro-label">Fat</div>
-          <div class="macro-track"><div class="macro-fill fat" id="bar-fat" style="width:0%"></div></div>
-          <div class="macro-nums"><strong id="val-fat">0</strong> / <span id="tgt-fat">—</span>g</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Meal slot cards -->
-    <div id="meal-slots-list"></div>
-
-    <!-- Micronutrient tracking section (populated by JS) -->
-    <details id="micro-section" style="margin-top:0.75rem" open>
-      <summary style="list-style:none;cursor:pointer;padding:0.875rem 1rem;
-                      background:var(--surface);border-radius:var(--r-md);
-                      border:0.5px solid var(--border);display:flex;
-                      align-items:center;justify-content:space-between;
-                      font-size:0.875rem;font-weight:600;color:var(--text)">
-        <span>&#x1F52C; Micronutrients</span>
-        <span id="micro-summary-badge" style="font-size:0.75rem;font-weight:400;color:var(--text-3)">Loading...</span>
-      </summary>
-      <div id="micro-content"
-           style="padding:1rem;background:var(--surface);
-                  border:0.5px solid var(--border);border-top:none;
-                  border-radius:0 0 var(--r-md) var(--r-md)">
-        <div class="skeleton skeleton-line"></div>
-        <div class="skeleton skeleton-line"></div>
-        <div class="skeleton skeleton-line-s"></div>
-      </div>
-    </details>
-
-  </section>
-
-  <!-- ── Stats panel ───────────────────────────────────────── -->
-  <section id="panel-stats" class="panel">
-
-    <!-- Metric cards -->
-    <div class="stats-grid" id="stats-cards">
-      <div class="stat-card"><div class="stat-label">Body weight</div><div class="stat-value" id="sc-weight">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-weight-d"></div></div>
-      <div class="stat-card"><div class="stat-label">Avg. daily balance</div><div class="stat-value" id="sc-balance">—<span class="stat-unit">kcal</span></div><div class="stat-delta" id="sc-balance-d"></div></div>
-      <div class="stat-card"><div class="stat-label">Training streak</div><div class="stat-value" id="sc-streak">—<span class="stat-unit">days</span></div><div class="stat-delta" id="sc-streak-d"></div></div>
-      <div class="stat-card"><div class="stat-label">Best squat (est. 1RM)</div><div class="stat-value" id="sc-squat">—<span class="stat-unit">kg</span></div><div class="stat-delta" id="sc-squat-d"></div></div>
-    </div>
-
-    <!-- Charts row -->
-    <div class="charts-grid">
-      <div class="chart-card">
-        <div class="chart-title">Body weight — 90 days</div>
-        <div class="chart-wrap" style="height:160px"><canvas id="chart-weight"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">Calorie balance</div>
-        <div class="chart-wrap" style="height:160px"><canvas id="chart-balance"></canvas></div>
-      </div>
-    </div>
-
-    <!-- Volume + PR row -->
-    <div class="charts-grid">
-      <div class="chart-card">
-        <div class="chart-title">Weekly volume — sets</div>
-        <div class="chart-wrap" style="height:160px"><canvas id="chart-volume"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">Strength PRs</div>
-        <div class="t-small t-muted" style="margin-bottom:1rem" id="pr-empty-hint" hidden>Log some sessions to start tracking PRs</div>
-        <table class="pr-table" id="pr-table">
-          <thead>
-            <tr><th>Exercise</th><th>Best</th><th>Latest</th><th>Gain</th></tr>
-          </thead>
-          <tbody id="pr-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-  </section>
-
-  <!-- ── Active workout session overlay ───────────────────── -->
-  <!-- ── Focus mode ──────────────────────────────────────────── -->
-  <div id="focus-mode" class="fm-hidden">
-
-    <div class="focus-topbar">
-      <button class="focus-abandon-btn" data-confirm="0" onclick="confirmAbandon()">&#x2715; End</button>
-      <div class="focus-topbar-center">
-        <div id="focus-ex-counter" class="focus-ex-counter"></div>
-        <div id="focus-elapsed"    class="focus-elapsed">00:00</div>
-      </div>
-      <button class="focus-done-btn" onclick="openCompleteModal()">Done &#x2713;</button>
-    </div>
-
-    <div class="focus-body" id="focus-body">
-
-      <div class="focus-ex-header">
-        <div id="focus-ex-name" class="focus-ex-name"></div>
-        <div id="focus-ex-meta" class="focus-ex-meta"></div>
-        <div id="focus-set-dots" class="focus-set-dots"></div>
-      </div>
-
-      <div class="focus-inputs">
-        <div>
-          <div class="focus-input-lbl">Weight (kg)</div>
-          <div class="stepper">
-            <button class="stepper-btn" onclick="adjustVal('focus-wt',-2.5)">&#x2212;</button>
-            <input  class="stepper-val" id="focus-wt" type="number" step="2.5" min="0"
-                    inputmode="decimal" placeholder="0">
-            <button class="stepper-btn" onclick="adjustVal('focus-wt',+2.5)">+</button>
-          </div>
-        </div>
-        <div>
-          <div class="focus-input-lbl">Reps</div>
-          <div class="stepper">
-            <button class="stepper-btn" onclick="adjustVal('focus-reps',-1)">&#x2212;</button>
-            <input  class="stepper-val" id="focus-reps" type="number" step="1" min="1"
-                    inputmode="numeric" placeholder="8">
-            <button class="stepper-btn" onclick="adjustVal('focus-reps',+1)">+</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="rpe-section">
-        <div class="focus-input-lbl">Rate of Perceived Exertion (RPE)</div>
-        <div class="rpe-grid" id="rpe-row"></div>
-      </div>
-
-      <button id="log-set-btn" class="btn btn-primary btn-full btn-lg"
-              style="margin-bottom:1rem" onclick="logFocusSet()">Log Set</button>
-
-      <div id="focus-history"></div>
-
-    </div><!-- /focus-body -->
-  </div><!-- /focus-mode -->
-
-  <!-- ── Rest countdown ───────────────────────────────────── -->
-  <div id="rest-overlay" class="fm-hidden">
-    <div class="rest-label">Rest</div>
-    <div class="rest-ring-wrap">
-      <svg width="220" height="220" viewBox="0 0 220 220">
-        <circle cx="110" cy="110" r="88" fill="none"
-                stroke="var(--surface-alt)" stroke-width="10"/>
-        <circle id="rest-ring" cx="110" cy="110" r="88"
-                fill="none" stroke="var(--accent)" stroke-width="10"
-                stroke-linecap="round"
-                stroke-dasharray="553" stroke-dashoffset="0"
-                transform="rotate(-90 110 110)"/>
-      </svg>
-      <div class="rest-ring-center">
-        <div id="rest-sec" class="rest-seconds-big">90</div>
-        <div class="rest-sec-unit">sec</div>
-      </div>
-    </div>
-    <div class="rest-next-wrap">
-      <div class="rest-next-lbl">Up next</div>
-      <div id="rest-next" class="rest-next-val"></div>
-    </div>
-    <button class="btn-skip-rest" onclick="skipRest()">Skip Rest</button>
-  </div>
-
-  <!-- ── Complete session modal ────────────────────────────── -->
-  <div id="complete-modal" class="modal-backdrop hidden">
-    <div class="modal-box">
-      <div class="modal-title">Complete session?</div>
-      <div class="stack gap-14">
-        <div class="form-group">
-          <label for="sess-rpe">Overall session RPE <span class="t-hint">(6–10)</span></label>
-          <input id="sess-rpe" type="number" min="6" max="10" step="0.5" placeholder="8.0">
-        </div>
-        <div class="form-group">
-          <label for="sess-notes">Notes <span class="t-hint">optional</span></label>
-          <input id="sess-notes" type="text" placeholder="Felt strong on squats…">
-        </div>
-        <div class="row gap-10" style="justify-content:flex-end">
-          <button class="btn" onclick="document.getElementById('complete-modal').classList.add('hidden')">Cancel</button>
-          <button class="btn btn-primary" onclick="completeSession()">Save session</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-
-  <!-- Quick Add action sheet -->
-  <div id="quick-add-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeQuickAdd()">
-    <div style="background:var(--surface);border-radius:var(--r-xl) var(--r-xl) 0 0;
-                width:100%;max-width:520px;padding:1.5rem;
-                position:fixed;bottom:0;left:50%;transform:translateX(-50%);
-                box-shadow:0 -8px 40px rgba(0,0,0,.15)">
-      <div style="width:36px;height:4px;border-radius:2px;background:var(--border-strong);margin:0 auto 1.25rem"></div>
-      <div style="font-size:0.75rem;font-weight:600;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:0.875rem">Quick Add</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <button class="quick-add-tile" onclick="closeQuickAdd();switchTab('diary',document.querySelector('[data-tab=diary]'))">
-          <span style="font-size:1.75rem">&#x1F34E;</span>
-          <span>Log Food</span>
-        </button>
-        <button class="quick-add-tile" onclick="closeQuickAdd();openWeightModal()">
-          <span style="font-size:1.75rem">&#x2696;&#xFE0F;</span>
-          <span>Log Weight</span>
-        </button>
-        <button class="quick-add-tile" onclick="closeQuickAdd();switchTab('training',document.querySelector('[data-tab=training]'))">
-          <span style="font-size:1.75rem">&#x1F4AA;</span>
-          <span>Start Workout</span>
-        </button>
-        <button class="quick-add-tile" onclick="closeQuickAdd();switchTab('stats',document.querySelector('[data-tab=stats]'))">
-          <span style="font-size:1.75rem">&#x1F4CA;</span>
-          <span>View Progress</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-
-  <!-- Food picker modal (slide-up sheet) -->
-  <div id="food-picker-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeFoodPicker()">
-    <div style="background:var(--surface);border-radius:var(--r-xl) var(--r-xl) 0 0;width:100%;max-width:520px;
-                max-height:88dvh;display:flex;flex-direction:column;overflow:hidden;
-                position:fixed;bottom:0;left:50%;transform:translateX(-50%);
-                box-shadow:0 -8px 40px rgba(0,0,0,.18)">
-
-      <!-- Header -->
-      <div style="padding:1rem 1.25rem 0;border-bottom:0.5px solid var(--border);flex-shrink:0">
-        <div class="row-between" style="margin-bottom:0.75rem">
-          <div style="font-size:1rem;font-weight:600" id="picker-title">Add food</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <button id="multi-add-toggle" onclick="toggleMultiAdd()"
-                    style="font-size:0.75rem;padding:4px 10px;border-radius:var(--r-sm);
-                           border:0.5px solid var(--border);background:transparent;
-                           color:var(--text-2);cursor:pointer;font-family:inherit">
-              Select
-            </button>
-            <button class="btn-icon btn-ghost" onclick="closeFoodPicker()">&#x2715;</button>
-          </div>
-        </div>
-        <!-- Search + barcode -->
-        <div style="position:relative;margin-bottom:0.75rem;display:flex;gap:8px">
-          <div style="position:relative;flex:1">
-            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
-                         color:var(--text-3);pointer-events:none;font-size:15px">&#x1F50D;</span>
-            <input id="picker-search" type="text" placeholder="Search foods..."
-                   style="padding-left:2.25rem;width:100%"
-                   oninput="filterPickerFoods()" autocomplete="off">
-          </div>
-          <button onclick="startBarcodeScanner()"
-                  style="flex-shrink:0;width:42px;height:42px;border-radius:var(--r-sm);
-                         border:0.5px solid var(--border);background:var(--surface-alt);
-                         font-size:1.25rem;cursor:pointer;display:flex;align-items:center;justify-content:center"
-                  title="Scan barcode">&#x1F4F7;</button>
-        </div>
-        <!-- Source tabs: Recent | Frequent | Library | Search All -->
-        <div style="display:flex;gap:0;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none">
-          <button class="picker-tab active" data-src="recent"   onclick="setPickerSrc(this)">Recent</button>
-          <button class="picker-tab"        data-src="frequent" onclick="setPickerSrc(this)">Frequent</button>
-          <button class="picker-tab"        data-src="library"  onclick="setPickerSrc(this)">My Foods</button>
-          <button class="picker-tab"        data-src="all"      onclick="setPickerSrc(this)">&#x1F30E; All Foods</button>
-        </div>
-      </div>
-
-      <!-- Food list -->
-      <div id="picker-food-list" style="flex:1;overflow-y:auto;padding:0.5rem 0"></div>
-
-      <!-- Multi-add footer -->
-      <div id="multi-add-footer" class="hidden"
-           style="padding:1rem 1.25rem;border-top:0.5px solid var(--border);background:var(--surface);flex-shrink:0">
-        <button class="btn btn-primary btn-full" onclick="addMultiSelected()">
-          Add <span id="multi-count">0</span> items to meal
-        </button>
-      </div>
-
-      <!-- Food detail footer — simplified for speed -->
-      <div id="picker-footer" class="hidden"
-           style="padding:1rem 1.25rem;border-top:0.5px solid var(--border);
-                  background:var(--surface);flex-shrink:0">
-        <div style="margin-bottom:0.625rem">
-          <div style="font-size:0.9375rem;font-weight:600" id="picker-selected-name"></div>
-          <div style="font-size:0.75rem;color:var(--text-3);margin-top:1px" id="picker-selected-brand"></div>
-        </div>
-        <!-- Unit selector -->
-        <div style="display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;
-                    -webkit-overflow-scrolling:touch;margin-bottom:0.625rem;padding-bottom:2px">
-          <button class="unit-btn active" data-unit="g"    onclick="setUnit('g')">g</button>
-          <button class="unit-btn"        data-unit="oz"   onclick="setUnit('oz')">oz</button>
-          <button class="unit-btn"        data-unit="lbs"  onclick="setUnit('lbs')">lbs</button>
-          <button class="unit-btn"        data-unit="ml"   onclick="setUnit('ml')">ml</button>
-          <button class="unit-btn"        data-unit="tbsp" onclick="setUnit('tbsp')">tbsp</button>
-          <button class="unit-btn"        data-unit="tsp"  onclick="setUnit('tsp')">tsp</button>
-          <button class="unit-btn"        data-unit="cups" onclick="setUnit('cups')">cups</button>
-        </div>
-        <!-- Quick presets (rendered by JS, unit-aware) -->
-        <div id="picker-presets" style="display:flex;gap:6px;margin-bottom:0.75rem"></div>
-        <!-- Amount + live kcal on same row -->
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:0.625rem">
-          <div class="input-group" style="flex:1">
-            <input id="picker-qty" type="number" min="0.01" max="5000" step="1" value="100"
-                   inputmode="decimal" oninput="updatePickerPreview()">
-            <span class="input-suffix" id="picker-unit-suffix">g</span>
-          </div>
-          <div id="pp-k" style="font-size:1.0625rem;font-weight:700;
-                                 color:var(--accent);min-width:76px;text-align:right">0 kcal</div>
-        </div>
-        <!-- Macro one-liner -->
-        <div style="font-size:0.8125rem;color:var(--text-3);margin-bottom:0.875rem">
-          P&nbsp;<span id="pp-p" style="color:var(--accent);font-weight:500">0g</span>
-          &nbsp;·&nbsp;
-          C&nbsp;<span id="pp-c" style="color:#3B82F6;font-weight:500">0g</span>
-          &nbsp;·&nbsp;
-          F&nbsp;<span id="pp-f" style="color:#F59E0B;font-weight:500">0g</span>
-        </div>
-        <button class="btn btn-primary btn-full" onclick="addSelectedFood()">
-          Add to meal
-        </button>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ── Exercise swap modal ─────────────────────────────── -->
-  <div id="swap-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeSwapModal()">
-    <div class="modal-box" style="max-width:480px;max-height:75dvh;overflow:hidden;
-                                  display:flex;flex-direction:column;padding:0">
-      <div style="padding:1.25rem 1.25rem 0.875rem;border-bottom:0.5px solid var(--border);flex-shrink:0">
-        <div class="row-between" style="margin-bottom:0.625rem">
-          <div class="modal-title">Swap Exercise</div>
-          <button class="btn-icon btn-ghost" onclick="closeSwapModal()">&#x2715;</button>
-        </div>
-        <div style="font-size:0.8125rem;color:var(--text-3);margin-bottom:0.75rem" id="swap-subtitle"></div>
-        <input type="text" id="swap-search" placeholder="Search alternatives..."
-               oninput="filterSwapList()" style="width:100%">
-      </div>
-      <div id="swap-list" style="overflow-y:auto;flex:1"></div>
-    </div>
-  </div>
-
-  <!-- ── Goal edit modal ──────────────────────────────────── -->
-  <div id="goal-edit-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeGoalModal()">
-    <div class="modal-box" style="max-width:340px">
-      <div class="row-between" style="margin-bottom:1.25rem">
-        <div class="modal-title">Change Goal</div>
-        <button class="btn-icon btn-ghost" onclick="closeGoalModal()">&#x2715;</button>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:10px" id="goal-options">
-        <button class="goal-opt-btn" data-phase="bulk" onclick="selectGoal('bulk')">
-          <span style="font-size:1.5rem">&#x1F4AA;</span>
-          <div>
-            <div style="font-weight:600;text-align:left">Lean Bulk</div>
-            <div style="font-size:0.8125rem;color:var(--text-3);text-align:left">Caloric surplus &middot; Build muscle</div>
-          </div>
-        </button>
-        <button class="goal-opt-btn" data-phase="cut" onclick="selectGoal('cut')">
-          <span style="font-size:1.5rem">&#x1F525;</span>
-          <div>
-            <div style="font-weight:600;text-align:left">Cut</div>
-            <div style="font-size:0.8125rem;color:var(--text-3);text-align:left">Caloric deficit &middot; Lose fat</div>
-          </div>
-        </button>
-        <button class="goal-opt-btn" data-phase="maintain" onclick="selectGoal('maintain')">
-          <span style="font-size:1.5rem">&#x2696;&#xFE0F;</span>
-          <div>
-            <div style="font-weight:600;text-align:left">Maintain</div>
-            <div style="font-size:0.8125rem;color:var(--text-3);text-align:left">At TDEE &middot; Recomposition</div>
-          </div>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Weight log modal ──────────────────────────────────── -->
-  <div id="weight-modal" class="modal-backdrop hidden">
-    <div class="modal-box">
-      <div class="modal-title">Log today's weight</div>
-      <div class="stack gap-14">
-        <div class="form-group">
-          <label for="wt-input">Weight</label>
-          <div class="input-group">
-            <input id="wt-input" type="number" min="30" max="400" step="0.1" placeholder="82.5">
-            <span class="input-suffix">kg</span>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="wt-notes">Notes <span class="t-hint">optional</span></label>
-          <input id="wt-notes" type="text" placeholder="Post-deload, morning…">
-        </div>
-        <div class="row gap-10" style="justify-content:flex-end">
-          <button class="btn" onclick="document.getElementById('weight-modal').classList.add('hidden')">Cancel</button>
-          <button class="btn btn-primary" onclick="logWeight()">Log weight</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Toast container ───────────────────────────────────── -->
-  <div id="toast-container"></div>
-
-  <script>
-    // ═══════════════════════════════════════════════════════
-    // CONFIG — replace with real keys
-    // ═══════════════════════════════════════════════════════
-    const FDC_KEY = '8WgoHcFWJmQoVUN70VhiMKmlWaKSD8tRgh89kZYO';
-
-    // ── Goal-phase display configs ──────────────────────────
-    const GOAL_CONFIGS = {
-      bulk: {
-        label: 'Lean Bulk',       icon: '&#x1F4AA;',
-        accent: '#1D9E75',        bg: '#E1F5EE',
-        heroLabel: 'Protein Target',
-        heroFn: (tot, tgt) => `${Math.round(tot.proteinG||0)}g / ${Math.round(tgt.proteinG)}g`,
-        priorities: [
-          'Hit your protein target across 4+ meals',
-          'Aim for a 200-300 kcal daily surplus',
-          'Progressive overload: add weight or reps each session',
-        ],
-        trainingFocus: 'Volume & Mechanical Tension',
-        trainingDetail: 'Myofibrillar hypertrophy requires 10-20 weekly sets per muscle group at 65-80% 1RM with RPE 7-9.',
-      },
-      cut: {
-        label: 'Fat Loss',        icon: '&#x1F525;',
-        accent: '#EF4444',        bg: '#FEF2F2',
-        heroLabel: 'Calorie Deficit',
-        heroFn: (tot, tgt) => {
-          const rem = (tgt.kcal||0) - Math.round(tot.kcal||0);
-          return (rem >= 0 ? '' : '-') + Math.abs(rem).toLocaleString() + ' kcal';
-        },
-        priorities: [
-          'Maintain a 300-500 kcal daily deficit',
-          'Keep protein high (2.3-3.1 g/kg) to preserve lean mass',
-          'Resistance train 3-4x/week to minimise muscle loss',
-        ],
-        trainingFocus: 'Muscle Preservation',
-        trainingDetail: 'In a deficit, prioritise maintaining training load over adding volume. Reduce sets before reducing intensity.',
-      },
-      maintain: {
-        label: 'Maintenance',     icon: '&#x2696;&#xFE0F;',
-        accent: '#6B7280',        bg: '#F3F4F6',
-        heroLabel: 'Calorie Balance',
-        heroFn: (tot, tgt) => `${Math.round(tot.kcal||0).toLocaleString()} kcal`,
-        priorities: [
-          'Match calorie intake to expenditure consistently',
-          'Optimise macro split for performance',
-          'Monitor body composition monthly, not daily',
-        ],
-        trainingFocus: 'General Health & Performance',
-        trainingDetail: 'Maintenance is ideal for building a training base, peaking for an event, or recovering between phases.',
-      },
-    };
-
-    // ── Animated number counter ─────────────────────────────
-    function animateNum(el, toVal, duration=380,
-                        fmt=v=>Math.round(v).toLocaleString()) {
-      if (!el) return;
-      const from = parseFloat(el._animTarget ?? el.textContent.replace(/[^0-9.\-]/g,'')) || 0;
-      el._animTarget = toVal;
-      const start = performance.now();
-      const tick = now => {
-        const t = Math.min((now - start) / duration, 1);
-        const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
-        el.textContent = fmt(from + (toVal - from) * ease);
-        if (t < 1) requestAnimationFrame(tick);
-        else { el._animTarget = null; el.classList.add('num-updated'); setTimeout(()=>el.classList.remove('num-updated'),520); }
-      };
-      requestAnimationFrame(tick);
-    }
-
-    const APEX_CONFIG = {
-      url:  'https://iedeghnykrigeensamcj.supabase.co',
-      anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImllZGVnaG55a3JpZ2VlbnNhbWNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MzIwMTMsImV4cCI6MjA5NDUwODAxM30.xfSKLPqofpHLSKFieUepFqvbVjHGgGGC6nRn2HvMOz8',
-    };
-
-    // ═══════════════════════════════════════════════════════
-    // APP STATE
-    // ═══════════════════════════════════════════════════════
-    const APP = {
-      profile:         null,
-      activeTab:       'training',
-      loadedTabs:      new Set(),
-      trainingData:    null,   // { week, workouts, program }
-      selectedWorkout: null,   // planned_workout row + planned_sets
-      timerInterval:   null,
-      charts:          {},
-      allFoods:        [],
-      activeMacroFilter: '',
-      mealPlanId:      null,
-    };
-
-    // ═══════════════════════════════════════════════════════
-    // INIT
-    // ═══════════════════════════════════════════════════════
-    document.addEventListener('DOMContentLoaded', async () => {
-      await ApexCore.init(APEX_CONFIG);
-      const user = await ApexCore.Auth.requireAuth();
-      if (!user) return;
-
-      APP.profile = await ApexCore.Profile.getCached();
-      if (!APP.profile?.onboarding_done) {
-        window.location.href = 'onboarding.html'; return;
-      }
-
-      renderTopBar();
-      setupEventBus();
-      await switchTab('training', document.querySelector('.nav-btn[data-tab="training"]'));
-    });
-
-    // ── Event bus listeners ───────────────────────────────
-    function setupEventBus() {
-      ApexCore.on(ApexCore.Events.MACROS_RECALCULATED, () => {
-        APP.loadedTabs.delete('diary');
-        if (APP.activeTab === 'diary') loadTab('diary');
-      });
-      ApexCore.on(ApexCore.Events.DELOAD_TRIGGERED, ({ reason }) => {
-        showToast(`Deload triggered: ${reason}`, 'warning');
-      });
-      ApexCore.on(ApexCore.Events.OVERLOAD_FLAGGED, ({ estimated1RM, delta }) => {
-        showToast(`New PR! Est. 1RM: ${estimated1RM} kg (+${delta} kg)`, 'success');
-      });
-    }
-
-    // ── Top bar ───────────────────────────────────────────
-    function renderTopBar() {
-      const p = APP.profile;
-      const phase = p.phase ?? 'maintain';
-      const pill  = document.getElementById('phase-pill');
-      pill.textContent = `● ${phase.charAt(0).toUpperCase() + phase.slice(1)} phase`;
-      pill.style.background = phase === 'cut' ? '#FAEEDA' : phase === 'bulk' ? '#E1F5EE' : '#E6F1FB';
-      pill.style.color      = phase === 'cut' ? '#633806' : phase === 'bulk' ? '#0F6E56' : '#0C447C';
-
-      const initials = (p.display_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-      document.getElementById('avatar-circle').textContent = initials;
-    }
-
-    function toggleUserMenu() {
-      const menu = document.getElementById('user-menu');
-      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-    }
-    document.addEventListener('click', e => {
-      if (!document.getElementById('user-avatar').contains(e.target))
-        document.getElementById('user-menu').style.display = 'none';
-    });
-
-    // ═══════════════════════════════════════════════════════
-    // TAB SWITCHING
-    // ═══════════════════════════════════════════════════════
-    async function switchTab(name, btn) {
-      // 'nutrition' is the legacy alias — internally everything is 'diary'
-      const tab = (name === 'nutrition') ? 'diary' : name;
-
-      // Update bottom nav active state
-      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-      const navBtn = btn || document.querySelector(`.nav-btn[data-tab="${tab}"]`);
-      if (navBtn) navBtn.classList.add('active');
-
-      APP.activeTab = tab;
-
-      const sceneMap = {
-        training: 'training',
-        diary:    'nutrition',
-        home:     'login',
-        stats:    'stats',
-      };
-      const scene = sceneMap[tab] ?? 'login';
-
-      await Promise.all([
-        PandaLoader.show(scene, 1700),
-        loadTab(tab),
-      ]);
-
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      const panel = document.getElementById('panel-' + tab);
-      if (panel) panel.classList.add('active');
-    }
-
-    async function loadTab(name) {
-      if (APP.loadedTabs.has(name)) return;
-      APP.loadedTabs.add(name);
-      if (name === 'training')           await loadTrainingTab();
-      if (name === 'diary' ||
-          name === 'nutrition')          await loadNutritionTab();
-      if (name === 'stats')              await loadStatsTab();
-      if (name === 'home')               await loadHomeTab();
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // TRAINING TAB
-    // ═══════════════════════════════════════════════════════
-    async function loadTrainingTab() {
-      const { week, workouts, program, error } = await ApexTraining.WeeklyPlan.getCurrent();
-
-      if (error || !program) {
-        document.getElementById('training-empty').classList.remove('hidden');
-        return;
-      }
-
-      APP.trainingData = { week, workouts, program };
-
-      // Week header
-      const phaseLabel = program.phase.charAt(0).toUpperCase() + program.phase.slice(1);
-      document.getElementById('week-title').textContent = `Week ${week.week_number} — ${phaseLabel}`;
-      document.getElementById('week-sub').textContent   =
-        `${program.name} · Calorie target: ${APP.profile.calorie_target?.toLocaleString() ?? '—'} kcal`;
-
-      if (week.is_deload) {
-        document.getElementById('deload-badge').classList.remove('hidden');
-      } else {
-        const weeksLeft = program.deload_interval -
-          ((week.week_number) % program.deload_interval || program.deload_interval);
-        if (weeksLeft === 1) {
-          const nb = document.getElementById('next-deload-badge');
-          nb.textContent = 'Deload next week';
-          nb.classList.remove('hidden');
-        }
-      }
-
-      // Cardio prescription note
-      const cardio = ApexTraining.CardioEngine.prescribe(program.phase, week.is_deload);
-      document.getElementById('week-sub').textContent +=
-        ` · Cardio: ${cardio.liss.sessions}× LISS${cardio.hiit.sessions > 0 ? ' + ' + cardio.hiit.sessions + '× HIIT' : ''}`;
-
-      // 7-day grid
-      renderDaysGrid(workouts, week);
-    }
-
-    function renderDaysGrid(workouts, week) {
-      const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-      const grid = document.getElementById('days-grid');
-      grid.innerHTML = '';
-
-      // Build lookup: day_of_week → workout
-      const byDay = new Map(workouts.map(w => [w.day_of_week, w]));
-      const today = new Date().getDay(); // 0=Sun … 6=Sat
-      const todayDow = today === 0 ? 6 : today - 1; // convert to Mon=0
-
-      for (let i = 0; i < 7; i++) {
-        const wo  = byDay.get(i);
-        const div = document.createElement('div');
-        div.className = 'day-cell' + (!wo || wo.workout_type === null ? ' rest' : '');
-        if (wo?.is_completed) div.classList.add('done');
-        if (i === todayDow && wo) div.classList.add('active');
-
-        div.innerHTML = `
-          <div class="day-name">${DAY_NAMES[i]}</div>
-          <div class="day-type ${!wo || wo.workout_type === null ? 't-hint' : ''}">
-            ${wo ? wo.label : 'Rest'}
-          </div>
-          ${wo && wo.set_count > 0 ? `<div class="day-meta">${wo.set_count} sets</div>` : ''}
-          ${wo?.is_completed ? `<div class="day-done">✓ Done</div>` : ''}
-        `;
-
-        if (wo && wo.workout_type) {
-          div.style.cursor = 'pointer';
-          div.addEventListener('click', () => selectWorkout(wo, div));
-        }
-        grid.appendChild(div);
-      }
-
-      // Auto-select today's workout
-      const todayWo = byDay.get(todayDow);
-      if (todayWo && todayWo.workout_type) {
-        selectWorkout(todayWo, grid.children[todayDow]);
-      }
-    }
-
-    async function selectWorkout(wo, cellEl) {
-      document.querySelectorAll('.day-cell').forEach(c => c.classList.remove('active'));
-      cellEl.classList.add('active');
-
-      const { workout, error } = await ApexTraining.WeeklyPlan.getWorkout(wo.id);
-      if (error) { showToast('Failed to load workout', 'error'); return; }
-      APP.selectedWorkout = workout;
-
-      const detail      = document.getElementById('workout-detail');
-      const emptyEl     = document.getElementById('training-empty');
-      const cardioEl    = document.getElementById('cardio-detail');
-      const tableEl     = document.getElementById('exercise-table');
-      const isDeload    = workout.program_weeks?.is_deload;
-      const phase       = workout.program_weeks?.programs?.phase ?? APP.profile.phase;
-
-      detail.classList.remove('hidden');
-      emptyEl.classList.add('hidden');
-      document.getElementById('detail-workout-name').textContent = workout.label;
-      document.getElementById('detail-deload-note').classList.toggle('hidden', !isDeload);
-
-      if (workout.workout_type === 'cardio') {
-        tableEl.classList.add('hidden');
-        cardioEl.classList.remove('hidden');
-        const c = ApexTraining.CardioEngine.prescribe(phase, isDeload);
-        document.getElementById('cardio-prescription').innerHTML = `
-          <div class="t-label t-muted" style="margin-bottom:8px">Today's cardio</div>
-          <div class="stack gap-8">
-            <div class="row gap-8"><span class="badge badge-accent">LISS</span>
-              <span class="t-small">${c.liss.durationMin} min · ${c.liss.zone} · ${c.liss.notes}</span></div>
-            ${c.hiit.sessions > 0 ? `
-              <div class="row gap-8"><span class="badge badge-warning">HIIT</span>
-                <span class="t-small">${c.hiit.durationMin} min · ${c.hiit.notes}</span></div>` : ''}
-          </div>`;
-        document.getElementById('start-workout-btn').classList.add('hidden');
-        return;
-      }
-
-      // Strength day
-      tableEl.classList.remove('hidden');
-      cardioEl.classList.add('hidden');
-      document.getElementById('start-workout-btn').classList.remove('hidden');
-
-      const rpeLabel = isDeload ? 'RPE ~7 (deload)' :
-        workout.planned_sets?.[0]?.rpe_target ? `RPE target ${workout.planned_sets[0].rpe_target}` : '';
-      document.getElementById('detail-workout-meta').textContent =
-        `${workout.planned_sets?.length ?? 0} exercises · ${rpeLabel}`;
-
-      renderExerciseTable(workout.planned_sets ?? [], isDeload);
-    }
-
-    function renderExerciseTable(sets, isDeload) {
-      const tbody = document.getElementById('exercise-tbody');
-      tbody.innerHTML = '';
-
-      sets.forEach(s => {
-        const ex = s.exercises;
-        const nextWeightNote = s.notes?.startsWith('Target:') ? s.notes : null;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>
-            <div class="ex-name">
-              ${ex?.name ?? 'Unknown'}
-              ${ex?.is_compound ? '<span class="badge badge-accent" style="font-size:0.6rem;padding:1px 5px;margin-left:5px">compound</span>' : ''}
-            </div>
-            <div class="ex-muscle">${ex?.muscle_primary ?? ''}</div>
-            ${nextWeightNote ? `<div class="t-small" style="color:var(--accent);margin-top:2px;font-size:0.7rem">↑ ${nextWeightNote}</div>` : ''}
-          </td>
-          <td>${s.sets}</td>
-          <td>${s.reps_min}–${s.reps_max}</td>
-          <td><span class="rpe-dot"></span>${s.rpe_target}</td>
-          <td style="color:var(--text-3)">${s.rest_seconds >= 60 ? Math.floor(s.rest_seconds/60) + 'm' : s.rest_seconds + 's'}</td>
-          <td>
-            <button class="btn-icon btn-ghost" style="width:28px;height:28px;font-size:13px"
-              title="Swap exercise" onclick="openSwapModal('${s.id}','${ex?.muscle_primary}','${ex?.is_compound}')">⇄</button>
-          </td>`;
-        tbody.appendChild(tr);
-      });
-    }
-
-    async function generateProgram() {
-      showToast('Generating program…');
-      const { error } = await ApexTraining.ProgramBuilder.generate({ totalWeeks: 12 });
-      if (error) { showToast('Failed to generate program', 'error'); return; }
-      APP.loadedTabs.delete('training');
-      await loadTab('training');
-      showToast('Program generated!', 'success');
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // WORKOUT SESSION
-    // ═══════════════════════════════════════════════════════
-    // ── Workout focus mode state ─────────────────────────────
-    const WORKOUT = {
-      exercises:   [],   // [{ps, setsTotal, setsDone, logs:[{set,wt,reps,rpe}]}]
-      curEx:       0,
-      curSet:      1,
-      selectedRPE: null,
-      _restTimer:  null,
-      _restCB:     null,
-    };
-
-    async function startWorkout() {
-      if (!APP.selectedWorkout) return;
-      const { session, error } = await ApexTraining.WorkoutSession.start(APP.selectedWorkout.id);
-      if (error) { showToast(error.message, 'error'); return; }
-
-      WORKOUT.exercises   = session.plannedSets.map(ps => ({
-        ps, setsTotal: ps.sets, setsDone: 0, logs: [],
-      }));
-      WORKOUT.curEx       = 0;
-      WORKOUT.curSet      = 1;
-      WORKOUT.selectedRPE = null;
-
-      // True focus mode — hide bottom nav completely
-      document.querySelector('.bottom-nav').style.setProperty('display','none','important');
-      document.getElementById('focus-mode').classList.remove('fm-hidden');
-      renderFocusExercise();
-
-      APP.timerInterval = setInterval(() => {
-        const s  = ApexTraining.WorkoutSession.getState();
-        const el = document.getElementById('focus-elapsed');
-        if (el) el.textContent = ApexTraining.SessionTimer.format(
-          s.timer ?? ApexTraining.SessionTimer.create()
-        );
-      }, 1000);
-    }
-
-    function renderFocusExercise() {
-      const item = WORKOUT.exercises[WORKOUT.curEx];
-      if (!item) { openCompleteModal(); return; }
-      const { ps } = item;
-      const ex = ps.exercises ?? {};
-
-      // Progress counter
-      document.getElementById('focus-ex-counter').textContent =
-        `Exercise ${WORKOUT.curEx + 1} / ${WORKOUT.exercises.length}`;
-
-      // Exercise name + meta
-      document.getElementById('focus-ex-name').textContent = ex.name ?? 'Exercise';
-      const parts = [ex.muscle_primary, `${ps.reps_min}–${ps.reps_max} reps`,
-                     `RPE ${ps.rpe_target}`,
-                     ps.rest_seconds >= 60
-                       ? `${Math.floor(ps.rest_seconds / 60)}m rest`
-                       : `${ps.rest_seconds}s rest`].filter(Boolean);
-      document.getElementById('focus-ex-meta').textContent = parts.join(' · ');
-
-      // Set dots
-      document.getElementById('focus-set-dots').innerHTML =
-        Array.from({ length: item.setsTotal }, (_, i) => {
-          const c = i < item.setsDone ? 'dot-done' : i === item.setsDone ? 'dot-cur' : '';
-          return `<div class="set-dot ${c}"></div>`;
-        }).join('');
-
-      // Pre-fill inputs from last log or program target
-      const last = item.logs.at(-1);
-      const suggestWt = ps.notes?.match(/Target:\s*([\d.]+)/)?.[1] ?? '';
-      document.getElementById('focus-wt').value   = last?.wt   ?? suggestWt ?? '';
-      document.getElementById('focus-reps').value = last?.reps ?? ps.reps_min ?? '';
-
-      // RPE
-      if (!WORKOUT.selectedRPE) WORKOUT.selectedRPE = ps.rpe_target;
-      renderRPERow();
-
-      // Log button
-      const btn = document.getElementById('log-set-btn');
-      btn.disabled    = false;
-      btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
-
-      renderCompletedSets(item.logs);
-      document.getElementById('focus-body').scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function renderRPERow() {
-      const rpes = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
-      document.getElementById('rpe-row').innerHTML = rpes.map(r => `
-        <button class="rpe-btn${r === WORKOUT.selectedRPE ? ' rpe-active' : ''}"
-                onclick="selectRPE(${r})">${r}</button>`).join('');
-    }
-
-    function selectRPE(val) {
-      WORKOUT.selectedRPE = val;
-      document.querySelectorAll('.rpe-btn').forEach(b =>
-        b.classList.toggle('rpe-active', parseFloat(b.textContent) === val));
-    }
-
-    function adjustVal(id, delta) {
-      const inp = document.getElementById(id);
-      const cur = parseFloat(inp.value) || 0;
-      inp.value = Math.max(0, parseFloat((cur + delta).toFixed(1)));
-    }
-
-    function renderCompletedSets(logs) {
-      const el = document.getElementById('focus-history');
-      if (!logs.length) { el.innerHTML = ''; return; }
-      el.innerHTML = `
-        <div class="focus-history-header">Completed</div>
-        ${logs.map(l => `
-          <div class="focus-history-row">
-            <span class="fhr-set">Set ${l.set}</span>
-            <span class="fhr-val">${l.wt} kg &times; ${l.reps}</span>
-            <span class="fhr-rpe">RPE ${l.rpe}</span>
-            <span class="fhr-check">&#x2713;</span>
-          </div>`).join('')}`;
-    }
-
-    async function logFocusSet() {
-      const item = WORKOUT.exercises[WORKOUT.curEx];
-      const { ps } = item;
-      const wt   = parseFloat(document.getElementById('focus-wt').value);
-      const reps = parseInt(document.getElementById('focus-reps').value);
-      const rpe  = WORKOUT.selectedRPE;
-
-      if (isNaN(wt) || isNaN(reps) || !rpe) {
-        showToast('Enter weight, reps and RPE', 'error'); return;
-      }
-
-      const btn = document.getElementById('log-set-btn');
-      btn.disabled    = true;
-      btn.textContent = 'Saving…';
-
-      const { log, overload, isPR, error } = await ApexTraining.WorkoutSession.logSet({
-        plannedSetId: ps.id, exerciseId: ps.exercise_id,
-        setNumber: WORKOUT.curSet, weightKg: wt, reps, rpe,
-      });
-
-      if (error) {
-        showToast(error.message, 'error');
-        btn.disabled    = false;
-        btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
-        return;
-      }
-
-      item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
-      item.setsDone++;
-
-      if (isPR) showToast(
-        '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' kg', 'success');
-
-      showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
-    }
-
-    function getNextSetInfo() {
-      const item = WORKOUT.exercises[WORKOUT.curEx];
-      if (WORKOUT.curSet < item.setsTotal)
-        return `Set ${WORKOUT.curSet + 1} of ${item.setsTotal} — ${item.ps.exercises?.name}`;
-      const nIdx = WORKOUT.curEx + 1;
-      if (nIdx < WORKOUT.exercises.length)
-        return WORKOUT.exercises[nIdx].ps.exercises?.name ?? 'Next exercise';
-      return 'Last set — great work!';
-    }
-
-    function advanceWorkout() {
-      const item = WORKOUT.exercises[WORKOUT.curEx];
-      if (WORKOUT.curSet < item.setsTotal) {
-        WORKOUT.curSet++;
-      } else {
-        WORKOUT.curEx++;
-        WORKOUT.curSet      = 1;
-        WORKOUT.selectedRPE = null;
-        if (WORKOUT.curEx >= WORKOUT.exercises.length) {
-          openCompleteModal(); return;
-        }
-      }
-      renderFocusExercise();
-    }
-
-    function showRestOverlay(totalSec, nextInfo, onComplete) {
-      const ringEl = document.getElementById('rest-ring');
-      const secEl  = document.getElementById('rest-sec');
-      const CIRC   = 2 * Math.PI * 88;           // ≈ 553
-
-      WORKOUT._restCB = onComplete;
-      document.getElementById('rest-next').textContent = nextInfo;
-      secEl.textContent = totalSec;
-
-      // Reset ring without transition, then re-enable
-      ringEl.style.transition      = 'none';
-      ringEl.style.strokeDasharray = `${CIRC}`;
-      ringEl.style.strokeDashoffset = '0';
-      document.getElementById('rest-overlay').classList.remove('fm-hidden');
-
-      requestAnimationFrame(() => {
-        ringEl.style.transition = 'stroke-dashoffset 1s linear';
-      });
-
-      let remaining = totalSec;
-      WORKOUT._restTimer = setInterval(() => {
-        remaining--;
-        secEl.textContent             = Math.max(0, remaining);
-        ringEl.style.strokeDashoffset = `${CIRC * (1 - remaining / totalSec)}`;
-        if (remaining <= 0) _endRest(true);
-      }, 1000);
-    }
-
-    function _endRest(vibrate) {
-      clearInterval(WORKOUT._restTimer);
-      WORKOUT._restTimer = null;
-      document.getElementById('rest-overlay').classList.add('fm-hidden');
-      if (vibrate && navigator.vibrate) navigator.vibrate([200, 100, 200]);
-      const cb = WORKOUT._restCB;
-      WORKOUT._restCB = null;
-      if (cb) cb();
-    }
-
-    function skipRest() { _endRest(false); }
-
-    function openCompleteModal() {
-      document.getElementById('complete-modal').classList.remove('hidden');
-    }
-
-    async function completeSession() {
-      const rpeVal   = parseFloat(document.getElementById('sess-rpe').value) || null;
-      const notesVal = document.getElementById('sess-notes').value.trim() || null;
-
-      const { deloadCheck, error } = await ApexTraining.WorkoutSession.completeSession({
-        rpeOverall: rpeVal, notes: notesVal,
-      });
-      if (error) { showToast(error.message, 'error'); return; }
-
-      closeFocusMode();
-      showToast('Session saved! Great work.', 'success');
-      APP.loadedTabs.delete('training');
-      await loadTab('training');
-
-      if (deloadCheck?.shouldDeload)
-        showToast(`Deload recommended: ${deloadCheck.reason}`, 'warning');
-    }
-
-    function confirmAbandon() {
-      const btn = document.querySelector('.focus-abandon-btn');
-      if (btn.dataset.confirm === '1') {
-        ApexTraining.WorkoutSession.abandon('User abandoned');
-        closeFocusMode();
-      } else {
-        btn.dataset.confirm  = '1';
-        btn.textContent      = 'Tap again to end';
-        btn.style.color      = 'var(--danger)';
-        setTimeout(() => {
-          if (btn.dataset.confirm === '1') {
-            btn.dataset.confirm = '0';
-            btn.textContent     = '&#x2715; End';
-            btn.style.color     = '';
-          }
-        }, 3000);
-      }
-    }
-
-    function closeFocusMode() {
-      clearInterval(APP.timerInterval);
-      if (WORKOUT._restTimer) { clearInterval(WORKOUT._restTimer); WORKOUT._restTimer = null; }
-      WORKOUT._restCB = null;
-      document.getElementById('focus-mode').classList.add('fm-hidden');
-      document.getElementById('rest-overlay').classList.add('fm-hidden');
-      document.getElementById('complete-modal').classList.add('hidden');
-      document.querySelector('.bottom-nav').style.removeProperty('display');
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // EXERCISE SWAP MODAL (simplified)
-    // ═══════════════════════════════════════════════════════
-    // ── Exercise swap state ──────────────────────────────────
-    const SWAP = { plannedSetId: null, pool: [] };
-
-    async function openSwapModal(plannedSetId, muscle, isCompound) {
-      SWAP.plannedSetId = plannedSetId;
-      document.getElementById('swap-modal').classList.remove('hidden');
-      document.getElementById('swap-subtitle').textContent =
-        `${muscle} · ${isCompound === 'true' ? 'Compound' : 'Isolation'}`;
-      document.getElementById('swap-search').value = '';
-      document.getElementById('swap-list').innerHTML =
-        '<div style="padding:2rem;text-align:center;color:var(--text-3)">Loading alternatives…</div>';
-
-      const allEx = await ApexTraining.ExerciseLibrary.getAll();
-      SWAP.pool   = ApexTraining.ExerciseLibrary.filter(allEx, [muscle], isCompound === 'true');
-      filterSwapList();
-      setTimeout(() => document.getElementById('swap-search').focus(), 80);
-    }
-
-    function closeSwapModal() {
-      document.getElementById('swap-modal').classList.add('hidden');
-    }
-
-    function filterSwapList() {
-      const q    = document.getElementById('swap-search').value.toLowerCase().trim();
-      const list = q
-        ? SWAP.pool.filter(e => e.name.toLowerCase().includes(q) ||
-                                (e.equipment||'').toLowerCase().includes(q))
-        : SWAP.pool;
-      const el   = document.getElementById('swap-list');
-
-      if (!list.length) {
-        el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-3)">No alternatives found</div>';
-        return;
-      }
-      el.innerHTML = list.map(e => `
-        <div onclick="confirmSwap('${e.id}','${e.name.replace(/'/g,"\'")}')"
-             style="display:flex;align-items:center;justify-content:space-between;
-                    gap:10px;padding:0.875rem 1.25rem;cursor:pointer;
-                    border-bottom:0.5px solid var(--border);transition:background 0.1s"
-             onmouseenter="this.style.background='var(--surface-alt)'"
-             onmouseleave="this.style.background=''">
-          <div>
-            <div style="font-size:0.9375rem;font-weight:500">${e.name}</div>
-            <div style="font-size:0.75rem;color:var(--text-3);margin-top:2px">
-              ${e.muscle_primary||''} · ${e.equipment||''}
-            </div>
-          </div>
-          ${e.is_compound ? '<span class="badge badge-accent" style="font-size:0.65rem;flex-shrink:0">compound</span>' : ''}
-        </div>`).join('');
-    }
-
-    async function confirmSwap(exerciseId, exerciseName) {
-      const { error } = await ApexTraining.WeeklyPlan.swapExercise(SWAP.plannedSetId, exerciseId);
-      closeSwapModal();
-      if (error) { showToast('Swap failed: ' + error.message, 'error'); return; }
-      APP.loadedTabs.delete('training');
-      await loadTab('training');
-      showToast(`Swapped to ${exerciseName}`, 'success');
-    }
-
-
-    // ── Goal editing ─────────────────────────────────────────
-    function openGoalModal() {
-      const current = APP.profile?.phase || 'maintain';
-      document.querySelectorAll('.goal-opt-btn').forEach(b => {
-        const match = b.dataset.phase === current;
-        b.style.borderColor  = match ? 'var(--accent)' : '';
-        b.style.background   = match ? 'var(--accent-light)' : '';
-      });
-      document.getElementById('goal-edit-modal').classList.remove('hidden');
-    }
-
-    function closeGoalModal() {
-      document.getElementById('goal-edit-modal').classList.add('hidden');
-    }
-
-    async function selectGoal(phase) {
-      const { error } = await ApexCore.Profile.update({ phase });
-      if (error) { showToast('Could not save goal', 'error'); return; }
-      APP.profile = { ...APP.profile, phase };
-      closeGoalModal();
-      APP.loadedTabs.delete('home');
-      loadTab('home');
-      showToast('Goal updated', 'success');
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // NUTRITION TAB
-    // ═══════════════════════════════════════════════════════
-    // =======================================================
-    // NUTRITION TAB
-    // =======================================================
-
-    // ── Unit conversion system ─────────────────────────────
-    const UNIT_CONFIGS = {
-      g:    { toG: 1,          label: 'g',    step: 1,    presets: [50, 100, 150, 200]           },
-      oz:   { toG: 28.3495,    label: 'oz',   step: 0.5,  presets: [1, 2, 3, 4]                 },
-      lbs:  { toG: 453.592,    label: 'lbs',  step: 0.25, presets: [0.25, 0.5, 0.75, 1]         },
-      ml:   { toG: 1,          label: 'ml',   step: 10,   presets: [100, 200, 250, 500]          },
-      tbsp: { toG: 14.787,     label: 'tbsp', step: 0.5,  presets: [1, 2, 3, 4]                 },
-      tsp:  { toG: 4.929,      label: 'tsp',  step: 0.25, presets: [1, 2, 3, 4]                 },
-      cups: { toG: 236.588,    label: 'cups', step: 0.25, presets: [0.25, 0.5, 0.75, 1]         },
-    };
-
-    function toGrams(val, unit) {
-      return val * (UNIT_CONFIGS[unit]?.toG ?? 1);
-    }
-
-    function fromGrams(g, unit) {
-      const factor = UNIT_CONFIGS[unit]?.toG ?? 1;
-      return parseFloat((g / factor).toFixed(3));
-    }
-
-    function renderPresets() {
-      const cfg = UNIT_CONFIGS[PICKER.unit] ?? UNIT_CONFIGS.g;
-      document.getElementById('picker-presets').innerHTML = cfg.presets.map(v =>
-        `<button onclick="setQuickAmount(${v})" class="gram-preset">
-           ${v}&thinsp;${cfg.label}
-         </button>`).join('');
-    }
-
-    function setUnit(unit) {
-      // Convert current qty to new unit
-      const oldRaw = parseFloat(document.getElementById('picker-qty').value) || 0;
-      const grams  = toGrams(oldRaw, PICKER.unit);
-
-      PICKER.unit  = unit;
-
-      // Update active button
-      document.querySelectorAll('#picker-footer .unit-btn').forEach(b =>
-        b.classList.toggle('active', b.dataset.unit === unit));
-
-      // Update suffix
-      const sfx = document.getElementById('picker-unit-suffix');
-      if (sfx) sfx.textContent = unit;
-
-      // Update input: step + converted value
-      const inp = document.getElementById('picker-qty');
-      if (inp) {
-        const cfg = UNIT_CONFIGS[unit];
-        inp.step  = cfg.step;
-        inp.value = fromGrams(grams, unit);
-      }
-
-      renderPresets();
-      updatePickerPreview();
-    }
-
-    function setQuickAmount(val) {
-      const inp = document.getElementById('picker-qty');
-      if (inp) { inp.value = val; updatePickerPreview(); }
-    }
-
-    // ── State for the food picker
-    const PICKER = {
-      slotId:       null,
-      activeFilter: '',
-      selectedFood: null,
-      source:       'recent',    // 'recent' | 'frequent' | 'library' | 'all'
-      cache:        new Map(),   // temp key -> food object for external results
-      multiMode:    false,
-      multiSel:     new Set(),   // selected food keys in multi-add mode
-      unit:         'g',         // active measurement unit
-    };
-
-    // Debounce handle for external search
-    const XSEARCH = { timer: null, ctrl: null };
-
-
-    // ── Home tab (goal-adaptive) ───────────────────────────────
-    async function loadHomeTab() {
-      const hr       = new Date().getHours();
-      const greeting = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
-      const name     = APP.profile?.full_name?.split(' ')[0] || '';
-      document.getElementById('home-greeting').textContent =
-        name ? `${greeting}, ${name}` : greeting;
-      document.getElementById('home-date-sub').textContent =
-        new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
-
-      // Goal config lookup
-      const phase  = APP.profile?.phase || 'maintain';
-      const cfg    = GOAL_CONFIGS[phase] || GOAL_CONFIGS.maintain;
-
-      // ── Inject goal banner (replaces if already exists) ───
-      let banner = document.getElementById('home-goal-banner');
-      if (!banner) {
-        banner = document.createElement('div');
-        banner.id = 'home-goal-banner';
-        const greetEl = document.getElementById('home-greeting')?.parentElement;
-        if (greetEl) greetEl.parentElement.insertBefore(banner, greetEl.nextSibling);
-      }
-      banner.innerHTML = `
-        <div class="card" style="margin-bottom:1rem;padding:1rem 1.125rem;
-             border-left:3px solid ${cfg.accent};background:${cfg.bg}">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-            <div>
-              <div style="font-size:0.7rem;font-weight:600;letter-spacing:.08em;
-                          text-transform:uppercase;color:${cfg.accent};margin-bottom:3px">
-                Current Phase
-              </div>
-              <div style="display:flex;align-items:center;gap:8px">
-              <div style="font-size:1rem;font-weight:700">${cfg.icon} ${cfg.label}</div>
-              <button onclick="openGoalModal()"
-                      style="font-size:0.7rem;padding:3px 8px;border-radius:4px;
-                             border:0.5px solid ${cfg.accent};color:${cfg.accent};
-                             background:transparent;cursor:pointer;font-family:inherit;
-                             opacity:0.8">Edit</button>
-            </div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:0.7rem;color:var(--text-3);margin-bottom:2px">${cfg.heroLabel}</div>
-              <div id="home-hero-val" style="font-size:1.1rem;font-weight:700;color:${cfg.accent}">...</div>
-            </div>
-          </div>
-        </div>`;
-
-      // ── Inject priorities card ─────────────────────────────
-      let priCard = document.getElementById('home-priorities');
-      if (!priCard) {
-        priCard = document.createElement('div');
-        priCard.id = 'home-priorities';
-        priCard.className = 'card';
-        priCard.style.cssText = 'margin-bottom:1rem;padding:1rem 1.125rem';
-        const tileGrid = document.querySelector('#panel-home [style*="grid-template-columns:1fr 1fr"]');
-        if (tileGrid) tileGrid.parentElement.insertBefore(priCard, tileGrid);
-      }
-      priCard.innerHTML = `
-        <div style="font-size:0.75rem;font-weight:600;letter-spacing:.08em;
-                    text-transform:uppercase;color:var(--text-3);margin-bottom:0.75rem">
-          Today's Priorities
-        </div>
-        ${cfg.priorities.map(p => `
-          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:7px;font-size:0.875rem">
-            <span style="color:${cfg.accent};flex-shrink:0;margin-top:1px">&#x25CF;</span>
-            <span style="color:var(--text-2)">${p}</span>
-          </div>`).join('')}
-        <div style="margin-top:0.875rem;padding-top:0.875rem;border-top:0.5px solid var(--border)">
-          <div style="font-size:0.75rem;font-weight:600;color:var(--text-3);margin-bottom:4px">
-            Training Focus
-          </div>
-          <div style="font-size:0.875rem;font-weight:500;color:${cfg.accent};margin-bottom:4px">
-            ${cfg.trainingFocus}
-          </div>
-          <div style="font-size:0.8125rem;color:var(--text-3);line-height:1.5">
-            ${cfg.trainingDetail}
-          </div>
-        </div>`;
-
-      // ── Load nutrition for ring + bars ─────────────────────
-      try {
-        const { totals, plan } = await ApexNutrition.MealPlan.getOrCreateToday();
-        const kcalTarget = plan?.kcal_target || APP.profile?.calorie_target || 2000;
-        const rem  = kcalTarget - Math.round(totals?.kcal || 0);
-        const pct  = Math.min(100, ((totals?.kcal || 0) / kcalTarget) * 100);
-        const circ = 2 * Math.PI * 40;
-        const tgts = {
-          proteinG: APP.profile?.protein_target_g || 1,
-          carbsG:   APP.profile?.carb_target_g    || 1,
-          fatG:     APP.profile?.fat_target_g     || 1,
-          kcal:     kcalTarget,
-        };
-
-        // Hero value
-        const heroEl = document.getElementById('home-hero-val');
-        if (heroEl) heroEl.textContent = cfg.heroFn(totals||{}, tgts);
-
-        // Animated ring
-        const arc = document.getElementById('home-ring-arc');
-        if (arc) arc.setAttribute('stroke-dasharray', `${(pct/100)*circ} ${circ}`);
-        arc?.setAttribute('stroke', phase==='cut' ? '#EF4444' : 'var(--accent)');
-
-        // Animated counter for remaining kcal
-        const remEl = document.getElementById('home-kcal-rem');
-        animateNum(remEl, Math.max(0, rem));
-
-        // Macro bars + animated text
-        const bars = [
-          { bar:'home-p-bar', txt:'home-p-txt', val:totals?.proteinG||0, tgt:tgts.proteinG, color:'var(--accent)' },
-          { bar:'home-c-bar', txt:'home-c-txt', val:totals?.carbsG||0,   tgt:tgts.carbsG,   color:'#3B82F6' },
-          { bar:'home-f-bar', txt:'home-f-txt', val:totals?.fatG||0,     tgt:tgts.fatG,     color:'#F59E0B' },
-        ];
-        bars.forEach(b => {
-          const barEl = document.getElementById(b.bar);
-          const txtEl = document.getElementById(b.txt);
-          if (barEl) barEl.style.width = Math.min(100, (b.val/b.tgt)*100) + '%';
-          if (txtEl) txtEl.textContent = `${Math.round(b.val)}/${Math.round(b.tgt)}g`;
-        });
-
-        // Quick-action subtitles
-        const mealsSub = document.getElementById('home-meals-sub');
-        if (mealsSub) {
-          const mealCount = (await ApexNutrition.MealPlan.getOrCreateToday()).slots
-            ?.filter(s => s.meal_items?.length > 0).length || 0;
-          mealsSub.textContent = `${mealCount} meal${mealCount===1?'':'s'} logged`;
-        }
-      } catch(e) { console.warn('home nutrition:', e); }
-    }
-
-    // ── Diary date navigation ──────────────────────────────────
-    const DIARY = { date: new Date() };
-
-    function changeDate(delta) {
-      DIARY.date.setDate(DIARY.date.getDate() + delta);
-      updateDiaryDateHeader();
-      APP.loadedTabs.delete('diary');
-      loadNutritionTab();
-    }
-
-    function updateDiaryDateHeader() {
-      const now   = new Date();
-      const isToday = DIARY.date.toDateString() === now.toDateString();
-      const isYest  = new Date(now - 86400000).toDateString() === DIARY.date.toDateString();
-      const label   = isToday ? 'Today' : isYest ? 'Yesterday'
-        : DIARY.date.toLocaleDateString('en-US', { month:'short', day:'numeric' });
-      const btn = document.getElementById('diary-date-btn');
-      if (btn) btn.textContent = label;
-      // Disable next arrow if today
-      const nextBtn = document.getElementById('diary-next-btn');
-      if (nextBtn) nextBtn.style.opacity = isToday ? '.3' : '1';
-      if (nextBtn) nextBtn.style.pointerEvents = isToday ? 'none' : 'auto';
-    }
-
-    function openDatePicker() {
-      const inp = document.getElementById('diary-date-input');
-      inp.value = DIARY.date.toISOString().slice(0,10);
-      inp.showPicker ? inp.showPicker() : inp.click();
-    }
-
-    function onDatePickerChange() {
-      const val = document.getElementById('diary-date-input').value;
-      if (!val) return;
-      DIARY.date = new Date(val + 'T12:00:00');
-      updateDiaryDateHeader();
-      APP.loadedTabs.delete('diary');
-      loadNutritionTab();
-    }
-
-    function updateCalorieBanner(totals, plan) {
-      const goal = plan?.kcal_target || APP.profile?.calorie_target || 0;
-      const food = totals?.kcal || 0;
-      const ex   = 0;
-      const rem  = goal - food + ex;
-
-      animateNum(document.getElementById('cal-goal'),      goal,     320, v=>Math.round(v).toLocaleString());
-      animateNum(document.getElementById('cal-food'),      food,     320, v=>Math.round(v).toLocaleString());
-      animateNum(document.getElementById('cal-exercise'),  ex,       320, v=>Math.round(v).toLocaleString());
-
-      const remEl = document.getElementById('cal-remaining');
-      if (remEl) {
-        animateNum(remEl, Math.abs(rem), 380, v => (rem<0?'-':'') + Math.round(v).toLocaleString());
-        setTimeout(() => { remEl.style.color = rem < 0 ? 'var(--danger)' : 'var(--accent)'; }, 10);
-      }
-    }
-
-    async function loadNutritionTab() {
-      const { plan, slots, totals, error } = await ApexNutrition.MealPlan.getOrCreateToday();
-      if (error) { showToast('Failed to load meal plan', 'error'); return; }
-
-      APP.mealPlanId = plan.id;
-      const targets = {
-        proteinG: plan.protein_target ?? APP.profile.protein_target_g ?? 0,
-        carbsG:   plan.carb_target    ?? APP.profile.carb_target_g    ?? 0,
-        fatG:     plan.fat_target     ?? APP.profile.fat_target_g     ?? 0,
-        kcal:     plan.kcal_target    ?? APP.profile.calorie_target   ?? 0,
-      };
-
-      updateMacroBars(totals, targets);
-      updateCalorieBanner(totals, plan);
-      updateDiaryDateHeader();
-      renderMealSlotCards(slots);
-      requestAnimationFrame(animateMealCards);
-
-      // Render micronutrient section
-      const micros = calculateMicros(slots);
-      renderMicroSection(micros, APP.profile);
-      APP.allFoods = await ApexNutrition.FoodArchive.getAll();
-      // Pre-warm recent foods cache so picker opens instantly
-      loadRecentFoods().then(foods => { APP.recentFoodsCache = foods; });
-    }
-
-    function updateMacroBars(totals, targets) {
-      const pct  = ApexNutrition.MacroAccumulator.progress(totals, targets);
-      const over = ApexNutrition.MacroAccumulator.isOverTarget(totals, targets);
-      setBar('protein', totals.proteinG, targets.proteinG, pct.proteinPct, over.protein);
-      setBar('carbs',   totals.carbsG,   targets.carbsG,   pct.carbsPct,   over.carbs);
-      setBar('fat',     totals.fatG,     targets.fatG,     pct.fatPct,     over.fat);
-      document.getElementById('nutr-kcal-summary').textContent =
-        `${Math.round(totals.kcal).toLocaleString()} / ${targets.kcal.toLocaleString()} kcal`;
-    }
-
-    function setBar(macro, val, target, pct, isOver) {
-      const bar = document.getElementById(`bar-${macro}`);
-      const valEl = document.getElementById(`val-${macro}`);
-      if (bar) { bar.style.width = pct + '%'; bar.classList.toggle('over', isOver); }
-      animateNum(valEl, val, 360, v => ApexNutrition.MealPlanUtils.formatMacro(v));
-      const tgtEl = document.getElementById(`tgt-${macro}`);
-      if (tgtEl) tgtEl.textContent = target ?? '---';
-    }
-
-    // ── Meal slot cards ─────────────────────────────────────
-    function renderMealSlotCards(slots) {
-      const list = document.getElementById('meal-slots-list');
-      list.innerHTML = '';
-      slots.forEach(slot => {
-        const slotTotals = ApexNutrition.MacroAccumulator.fromItems(slot.meal_items ?? []);
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.style.cssText = 'margin-bottom:10px;padding:0;overflow:hidden';
-
-        // Slot header
-        const header = document.createElement('div');
-        header.style.cssText =
-          'display:flex;align-items:center;justify-content:space-between;' +
-          'padding:12px 14px;border-bottom:' +
-          (slot.meal_items?.length ? '0.5px solid var(--border)' : 'none');
-        header.innerHTML = `
-          <div>
-            <div style="font-size:0.875rem;font-weight:600">${slot.label}</div>
-            ${slotTotals.kcal > 0
-              ? `<div style="font-size:0.75rem;color:var(--text-3);margin-top:1px">
-                   ${Math.round(slotTotals.kcal)} kcal &nbsp;·&nbsp;
-                   P:${ApexNutrition.MealPlanUtils.formatMacro(slotTotals.proteinG)}g
-                   C:${ApexNutrition.MealPlanUtils.formatMacro(slotTotals.carbsG)}g
-                   F:${ApexNutrition.MealPlanUtils.formatMacro(slotTotals.fatG)}g
-                 </div>`
-              : ''}
-          </div>
-          <button class="btn btn-sm btn-primary" onclick="openFoodPicker('${slot.id}','${slot.label}')">
-            + Add food
-          </button>`;
-        card.appendChild(header);
-
-        // Logged items
-        (slot.meal_items ?? []).forEach(item => {
-          card.appendChild(buildItemRow(item, slot.id));
-        });
-
-        list.appendChild(card);
-      });
-    }
-
-    function buildItemRow(item, slotId) {
-      const food   = item.foods;
-      const scaled = ApexNutrition.MealPlanUtils.scaleMacros(food, item.quantity_g);
-      const row    = document.createElement('div');
-      row.id = `item-${item.id}`;
-      row.style.cssText =
-        'display:flex;align-items:center;gap:10px;padding:10px 14px;' +
-        'border-bottom:0.5px solid var(--border)';
-      row.innerHTML = `
-        <div style="flex:1;min-width:0">
-          <div style="font-size:0.875rem;font-weight:500;
-                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            ${food?.name ?? 'Food'}
-          </div>
-          <div style="font-size:0.75rem;color:var(--text-3);margin-top:2px">
-            P:${ApexNutrition.MealPlanUtils.formatMacro(scaled.proteinG)}g &nbsp;
-            C:${ApexNutrition.MealPlanUtils.formatMacro(scaled.carbsG)}g &nbsp;
-            F:${ApexNutrition.MealPlanUtils.formatMacro(scaled.fatG)}g &nbsp;&middot;&nbsp;
-            ${Math.round(scaled.kcal)} kcal
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <input type="number" value="${item.quantity_g}" min="1" max="2000" step="5"
-                 style="width:68px;padding:4px 8px;font-size:0.8125rem;
-                        border:0.5px solid var(--border);border-radius:var(--r-sm);
-                        text-align:center;background:var(--surface-alt)"
-                 onchange="updateItemQty('${item.id}','${slotId}',this.value)">
-          <span style="font-size:0.7rem;color:var(--text-3)">g</span>
-          <button onclick="removeItem('${item.id}','${slotId}')"
-                  style="width:26px;height:26px;border-radius:var(--r-sm);border:none;
-                         background:var(--danger-light);color:var(--danger);
-                         cursor:pointer;font-size:13px;display:flex;
-                         align-items:center;justify-content:center">
-            &times;
-          </button>
-        </div>`;
-      return row;
-    }
-
-    async function updateItemQty(itemId, slotId, qty) {
-      const g = parseFloat(qty);
-      if (!g || g < 1) return;
-      const { error } = await ApexNutrition.MealItems.updateQuantity(itemId, g, slotId);
-      if (error) { showToast(error.message, 'error'); return; }
-      APP.loadedTabs.delete('diary');
-      loadTab('diary');
-    }
-
-    async function removeItem(itemId, slotId) {
-      const { error } = await ApexNutrition.MealItems.remove(itemId, slotId);
-      if (error) { showToast(error.message, 'error'); return; }
-      APP.loadedTabs.delete('diary');
-      loadTab('diary');
-    }
-
-
-    // ── Calculate micros from today's slots ─────────────────
-    function calculateMicros(slots) {
-      const m = { sodium:0, potassium:0, calcium:0, iron:0, vit_c:0, vit_d:0 };
-      (slots||[]).forEach(slot => {
-        (slot.meal_items||[]).forEach(item => {
-          const f = item.foods;
-          if (!f) return;
-          const r = (item.quantity_g || 0) / 100;
-          m.sodium    += (f.sodium_mg     || 0) * r;
-          m.potassium += (f.potassium_mg  || 0) * r;
-          m.calcium   += (f.calcium_mg    || 0) * r;
-          m.iron      += (f.iron_mg       || 0) * r;
-          m.vit_c     += (f.vitamin_c_mg  || 0) * r;
-          m.vit_d     += (f.vitamin_d_mcg || 0) * r;
-        });
-      });
-      return m;
-    }
-
-    // ── Render micronutrient section ─────────────────────────
-    function renderMicroSection(micros, profile) {
-      const content = document.getElementById('micro-content');
-      const badge   = document.getElementById('micro-summary-badge');
-      if (!content) return;
-
-      // Sex-adjusted iron target
-      const isMale = (profile?.sex || 'other') === 'male';
-      const rows = [
-        { label:'Sodium',     val:micros.sodium,    tgt:profile?.sodium_target_mg     || 2300, unit:'mg',  isMax:true,  color:'#6B7280' },
-        { label:'Potassium',  val:micros.potassium, tgt:profile?.potassium_target_mg  || 4700, unit:'mg',  isMax:false, color:'#10B981' },
-        { label:'Calcium',    val:micros.calcium,   tgt:profile?.calcium_target_mg    || 1000, unit:'mg',  isMax:false, color:'#3B82F6' },
-        { label:'Iron',       val:micros.iron,      tgt:profile?.iron_target_mg       || (isMale?8:18), unit:'mg', isMax:false, color:'#EF4444' },
-        { label:'Vitamin C',  val:micros.vit_c,     tgt:profile?.vitamin_c_target_mg  || (isMale?90:75), unit:'mg', isMax:false, color:'#F59E0B' },
-        { label:'Vitamin D',  val:micros.vit_d,     tgt:profile?.vitamin_d_target_mcg || 20, unit:'mcg',  isMax:false, color:'#8B5CF6' },
-      ];
-
-      // Count how many are on track (>= 80%)
-      const onTrack = rows.filter(r => {
-        const pct = r.val / r.tgt;
-        return r.isMax ? pct <= 1 : pct >= 0.8;
-      }).length;
-      if (badge) badge.textContent = `${onTrack}/${rows.length} on track`;
-
-      content.innerHTML = rows.map(r => {
-        const pct    = Math.min(110, (r.val / r.tgt) * 100);
-        const isOver = r.isMax && pct > 100;
-        const isLow  = !r.isMax && pct < 50;
-        const barPct = Math.min(100, pct);
-        const dispColor = isOver ? '#EF4444' : isLow ? '#F59E0B' : r.color;
-        const valStr = r.val < 10 ? r.val.toFixed(1) : Math.round(r.val);
-        const tgtStr = r.tgt < 10 ? r.tgt.toFixed(0) : r.tgt.toLocaleString();
-        const flag   = isOver ? ' &#x26A0;&#xFE0F;' : '';
-        return `
-          <div style="margin-bottom:0.75rem">
-            <div style="display:flex;justify-content:space-between;
-                        font-size:0.8125rem;margin-bottom:4px">
-              <span style="color:var(--text-2);font-weight:500">${r.label}</span>
-              <span style="color:${dispColor};font-weight:600">
-                ${valStr} / ${tgtStr} ${r.unit}${flag}
-              </span>
-            </div>
-            <div class="micro-bar-track">
-              <div class="micro-bar-fill"
-                   style="width:${barPct}%;background:${dispColor}"></div>
-            </div>
-          </div>`;
-      }).join('');
-    }
-
-    // ── Staggered meal card animation helper ─────────────────
-    function animateMealCards() {
-      document.querySelectorAll('#meal-slots-list .card').forEach((el, i) => {
-        el.classList.remove('meal-card-anim');
-        void el.offsetWidth; // reflow
-        el.style.animationDelay = `${i * 55}ms`;
-        el.classList.add('meal-card-anim');
-      });
-    }
-
-    // ── Food picker modal ───────────────────────────────────
-    function openFoodPicker(slotId, slotName) {
-      PICKER.slotId       = slotId;
-      PICKER.selectedFood = null;
-      PICKER.activeFilter = '';
-      PICKER.source       = 'recent';
-      PICKER.multiMode    = false;
-      PICKER.multiSel.clear();
-      PICKER._recentCache = null;
-      PICKER._freqCache   = null;
-      document.getElementById('picker-footer').classList.add('hidden');
-      document.getElementById('multi-add-footer').classList.add('hidden');
-      const toggleBtn = document.getElementById('multi-add-toggle');
-      if (toggleBtn) { toggleBtn.textContent='Select'; toggleBtn.style.background=''; toggleBtn.style.color=''; }
-      // Sync unit buttons to current PICKER.unit
-      document.querySelectorAll('#picker-footer .unit-btn').forEach(b =>
-        b.classList.toggle('active', b.dataset.unit === (PICKER.unit || 'g')));
-      const sfx = document.getElementById('picker-unit-suffix');
-      if (sfx) sfx.textContent = PICKER.unit || 'g';
-      document.getElementById('picker-title').textContent = `Add to ${slotName}`;
-      document.getElementById('picker-search').value = '';
-      document.getElementById('picker-footer').classList.add('hidden');
-      document.getElementById('food-picker-modal').classList.remove('hidden');
-      // Reset filter + source buttons
-      document.querySelectorAll('#food-picker-modal .filter-btn')
-        .forEach(b => b.classList.toggle('active', b.dataset.macro === ''));
-      document.querySelectorAll('#food-picker-modal .picker-tab')
-        .forEach(b => b.classList.toggle('active', b.dataset.src === 'recent'));
-      // Pre-populate cache with library foods (keyed by id)
-      APP.allFoods.forEach(f => PICKER.cache.set(String(f.id), f));
-      renderPickerFoods(APP.allFoods);
-      setTimeout(() => document.getElementById('picker-search').focus(), 100);
-    }
-
-    function closeFoodPicker() {
-      PICKER._recentCache = null; // invalidate so next open refreshes
-      PICKER._freqCache   = null;
-      document.getElementById('food-picker-modal').classList.add('hidden');
-    }
-
-    // ── Barcode scanner ─────────────────────────────────────────
-    async function startBarcodeScanner() {
-      if (!('BarcodeDetector' in window)) {
-        showToast('Barcode scanning requires Chrome or Edge on Android', 'info');
-        return;
-      }
-      // Show camera stream for scanning
-      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e'] });
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
-      } catch(e) { showToast('Camera access denied', 'error'); return; }
-
-      const video = document.createElement('video');
-      video.srcObject = stream; video.play();
-      const overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px';
-      overlay.innerHTML = '<div style="font-size:1rem;color:#fff;font-weight:500">Point camera at barcode</div><button style="padding:10px 24px;background:var(--danger);color:#fff;border:none;border-radius:8px;font-size:1rem;cursor:pointer">Cancel</button>';
-      overlay.appendChild(video);
-      video.style.cssText = 'width:min(320px,90vw);border-radius:12px;order:-1';
-      overlay.querySelector('button').onclick = () => { stream.getTracks().forEach(t=>t.stop()); overlay.remove(); };
-      document.body.appendChild(overlay);
-
-      const scanLoop = async () => {
-        if (!document.body.contains(overlay)) return;
-        try {
-          const codes = await detector.detect(video);
-          if (codes.length) {
-            const barcode = codes[0].rawValue;
-            stream.getTracks().forEach(t => t.stop());
-            overlay.remove();
-            // Look up on Open Food Facts
-            const r = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-            const d = await r.json();
-            if (d.status === 1 && d.product?.nutriments?.['energy-kcal_100g'] > 0) {
-              const food = normalizeOFF(d.product);
-              if (food) {
-                document.getElementById('picker-search').value = food.name;
-                renderPickerFoods([food]);
-                selectPickerFood(food._key);
-                return;
-              }
-            }
-            showToast('Barcode not found in database', 'error');
-            return;
-          }
-        } catch(e) {}
-        requestAnimationFrame(scanLoop);
-      };
-      video.onloadedmetadata = () => requestAnimationFrame(scanLoop);
-    }
-
-    function setPickerFilter(btn) {
-      document.querySelectorAll('#food-picker-modal .filter-btn')
-        .forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      PICKER.activeFilter = btn.dataset.macro;
-      filterPickerFoods();
-    }
-
-    // ── Source / tab switcher ──────────────────────────────────────
-    function setPickerSrc(btn) {
-      document.querySelectorAll('#food-picker-modal .picker-tab')
-        .forEach(b => b.classList.toggle('active', b === btn));
-      PICKER.source = btn.dataset.src;
-      PICKER.selectedFood = null;
-      PICKER.multiSel.clear();
-      document.getElementById('picker-footer').classList.add('hidden');
-      document.getElementById('multi-add-footer').classList.add('hidden');
-      filterPickerFoods();
-    }
-
-    // Toggle multi-add mode
-    function toggleMultiAdd() {
-      PICKER.multiMode = !PICKER.multiMode;
-      PICKER.multiSel.clear();
-      PICKER.selectedFood = null;
-      document.getElementById('picker-footer').classList.add('hidden');
-      const btn = document.getElementById('multi-add-toggle');
-      btn.textContent = PICKER.multiMode ? 'Cancel' : 'Select';
-      btn.style.background = PICKER.multiMode ? 'var(--accent-light)' : '';
-      btn.style.color = PICKER.multiMode ? 'var(--accent)' : '';
-      document.getElementById('multi-add-footer').classList.toggle('hidden', !PICKER.multiMode);
-      filterPickerFoods();
-    }
-
-    // ── Library + external search dispatcher ────────────────────
-    function filterPickerFoods() {
-      const q = document.getElementById('picker-search').value.trim();
-
-      if (PICKER.source === 'recent') {
-        loadRecentFoods().then(foods => {
-          const filtered = q ? ApexNutrition.FoodArchive.search(foods, q) : foods;
-          renderPickerFoods(filtered.length ? filtered : APP.allFoods.slice(0, 20));
-        });
-        return;
-      }
-      if (PICKER.source === 'frequent') {
-        loadFrequentFoods().then(foods => {
-          const filtered = q ? ApexNutrition.FoodArchive.search(foods, q) : foods;
-          renderPickerFoods(filtered.length ? filtered : APP.allFoods.slice(0, 20));
-        });
-        return;
-      }
-      if (PICKER.source === 'all') {
-        if (q.length < 2) {
-          document.getElementById('picker-food-list').innerHTML =
-            '<div style="text-align:center;color:var(--text-3);' +
-            'font-size:0.875rem;padding:2.5rem 1rem;line-height:1.7">' +
-            '<div style="font-size:1.5rem;margin-bottom:8px">&#x1F30E;</div>' +
-            'Type to search 3,000,000+ foods<br>' +
-            '<span style="font-size:0.8125rem;opacity:.7">' +
-            'Brands, packaged foods, restaurant items</span></div>';
-          return;
-        }
-        clearTimeout(XSEARCH.timer);
-        XSEARCH.timer = setTimeout(() => searchExternal(q), 200);
-        return;
-      }
-      // Library mode
-      let foods = APP.allFoods;
-      if (PICKER.activeFilter)
-        foods = ApexNutrition.FoodArchive.filter(foods, { macroClass: PICKER.activeFilter });
-      if (q)
-        foods = ApexNutrition.FoodArchive.search(foods, q);
-      renderPickerFoods(foods);
-    }
-
-    // Load recently used foods from DB
-    async function loadRecentFoods() {
-      if (APP.recentFoodsCache) return APP.recentFoodsCache;
-      if (PICKER._recentCache) return PICKER._recentCache;
-      const { data } = await ApexCore.getClient()
-        .from('meal_items')
-        .select('food_id, quantity_g, created_at, foods(*)')
-        .order('created_at', { ascending: false })
-        .limit(150);
-      const seen = new Set();
-      const foods = (data || [])
-        .filter(r => r.foods && !seen.has(r.food_id) && seen.add(r.food_id))
-        .slice(0, 30)
-        .map(r => ({ ...r.foods, _recentQty: r.quantity_g }));
-      // Cache for this picker session
-      PICKER._recentCache = foods;
-      APP.recentFoodsCache  = foods;
-      foods.forEach(f => PICKER.cache.set(String(f.id), f));
-      return foods;
-    }
-
-    // Load frequently used foods from DB
-    async function loadFrequentFoods() {
-      if (PICKER._freqCache) return PICKER._freqCache;
-      const { data } = await ApexCore.getClient()
-        .from('meal_items')
-        .select('food_id, foods(*)')
-        .limit(200);
-      const counts = {};
-      (data || []).forEach(r => {
-        if (!r.foods) return;
-        if (!counts[r.food_id]) counts[r.food_id] = { food: r.foods, n: 0 };
-        counts[r.food_id].n++;
-      });
-      const foods = Object.values(counts)
-        .sort((a, b) => b.n - a.n)
-        .slice(0, 30)
-        .map(c => c.food);
-      PICKER._freqCache = foods;
-      foods.forEach(f => PICKER.cache.set(String(f.id), f));
-      return foods;
-    }
-
-    // ── External search (Open Food Facts + optional USDA FDC) ───
-    async function searchExternal(query) {
-      const list = document.getElementById('picker-food-list');
-      list.innerHTML =
-        '<div style="text-align:center;color:var(--text-3);font-size:0.875rem;padding:2rem">' +
-        'Searching...</div>';
-
-      if (XSEARCH.ctrl) XSEARCH.ctrl.abort();
-      XSEARCH.ctrl = new AbortController();
-      const sig = XSEARCH.ctrl.signal;
-
-      const results = [];
-
-      // -- Open Food Facts (no key needed, 3M+ branded products) --
-      try {
-        const r = await fetch(
-          'https://world.openfoodfacts.org/cgi/search.pl?' +
-          'search_terms=' + encodeURIComponent(query) +
-          '&search_simple=1&action=process&json=1&page_size=20' +
-          '&fields=product_name,product_name_en,brands,nutriments',
-          { signal: sig }
-        );
-        const d = await r.json();
-        (d.products || [])
-          .map(normalizeOFF)
-          .filter(f => f && f.kcal > 0 && f.name && f.name !== 'Unknown')
-          .forEach(f => results.push(f));
-      } catch(e) { if (e.name !== 'AbortError') console.warn('OFF:', e.message); }
-
-      // -- USDA FoodData Central (free key, 400k+ foods inc. branded) --
-      if (typeof FDC_KEY !== 'undefined' && FDC_KEY) {
-        try {
-          const r = await fetch(
-            'https://api.nal.usda.gov/fdc/v1/foods/search?' +
-            'query=' + encodeURIComponent(query) +
-            '&dataType=Branded,Foundation,SR%20Legacy&pageSize=20' +
-            '&api_key=' + FDC_KEY,
-            { signal: sig }
-          );
-          const d = await r.json();
-          (d.foods || [])
-            .map(normalizeFDC)
-            .filter(f => f && f.kcal > 0)
-            .forEach(f => results.unshift(f)); // USDA results first
-        } catch(e) { if (e.name !== 'AbortError') console.warn('USDA:', e.message); }
-      }
-
-      renderPickerFoods(results.slice(0, 40));
-    }
-
-    // ── Normalize Open Food Facts product ───────────────────────
-    function normalizeOFF(p) {
-      if (!p) return null;
-      const n = p.nutriments || {};
-      const kcal    = n['energy-kcal_100g'] || Math.round((n['energy_100g'] || 0) / 4.184);
-      const protein = +(n['proteins_100g']       || 0).toFixed(1);
-      const carbs   = +(n['carbohydrates_100g']  || 0).toFixed(1);
-      const fat     = +(n['fat_100g']            || 0).toFixed(1);
-      const fiber   = +(n['fiber_100g']          || 0).toFixed(1);
-      const sugar   = +(n['sugars_100g']         || 0).toFixed(1);
-      const name    = (p.product_name || p.product_name_en || '').trim();
-      if (!name) return null;
-      const pCal = protein*4, cCal = carbs*4, fCal = fat*9;
-      const macro = fCal>pCal && fCal>cCal ? 'fat' : pCal>=cCal ? 'protein' : 'carb';
-      const _key  = 'off-' + Math.random().toString(36).slice(2);
-      const food  = { _key, name, brand: (p.brands||'').trim()||null,
-                      serving_size_g:100, kcal:Math.round(kcal),
-                      protein_g:protein, carbs_g:carbs, fat_g:fat,
-                      fiber_g:fiber, sugar_g:sugar, macro_class:macro,
-                      is_whole_food:false, tags:[], source:'brands' };
-      PICKER.cache.set(_key, food);
-      return food;
-    }
-
-    // ── Normalize USDA FDC food object ──────────────────────────
-    function normalizeFDC(f) {
-      const get = name => {
-        const n = (f.foodNutrients||[]).find(n=>n.nutrientName===name);
-        return +(n?.value||0);
-      };
-      const kcal    = get('Energy') || get('Energy (Atwater General Factors)');
-      const protein = +get('Protein').toFixed(1);
-      const carbs   = +get('Carbohydrate, by difference').toFixed(1);
-      const fat     = +get('Total lipid (fat)').toFixed(1);
-      const fiber   = +get('Fiber, total dietary').toFixed(1);
-      const sugar   = +(get('Sugars, total including NLEA')||get('Sugars, total')).toFixed(1);
-      const pCal = protein*4, cCal = carbs*4, fCal = fat*9;
-      const macro = fCal>pCal && fCal>cCal ? 'fat' : pCal>=cCal ? 'protein' : 'carb';
-      const _key  = 'fdc-' + f.fdcId;
-      const food  = { _key, name: f.description||'Unknown',
-                      brand: f.brandOwner||f.brandName||null,
-                      serving_size_g:100, kcal:Math.round(kcal),
-                      protein_g:protein, carbs_g:carbs, fat_g:fat,
-                      fiber_g:fiber, sugar_g:sugar, macro_class:macro,
-                      is_whole_food:!f.brandOwner&&!f.brandName,
-                      tags:[], source:'usda' };
-      PICKER.cache.set(_key, food);
-      return food;
-    }
-
-    // ── Save an external food to user's library (foods table) ───
-    async function saveExternalFood(food) {
-      const user = await ApexCore.Auth.getUser();
-      if (!user) return { data:null, error:new Error('Not authenticated') };
-      const { data, error } = await ApexCore.getClient()
-        .from('foods')
-        .insert({
-          name:          food.name,
-          brand:         food.brand || null,
-          serving_size_g:100,
-          kcal:          food.kcal,
-          protein_g:     food.protein_g,
-          carbs_g:       food.carbs_g,
-          fat_g:         food.fat_g,
-          fiber_g:       food.fiber_g || 0,
-          sugar_g:       food.sugar_g || 0,
-          macro_class:   food.macro_class,
-          is_whole_food: food.is_whole_food || false,
-          tags:          food.tags || [],
-          created_by:    user.id,
-        })
-        .select()
-        .single();
-      return { data, error };
-    }
-
-    // ── Render food list (library + external + multi-add) ───────
-    function renderPickerFoods(foods) {
-      const list = document.getElementById('picker-food-list');
-      if (!foods.length) {
-        list.innerHTML =
-          '<div style="text-align:center;color:var(--text-3);font-size:0.8125rem;padding:2rem">' +
-          'No foods found</div>';
-        return;
-      }
-
-      const tagColors = {
-        protein: { bg:'var(--accent-light)',  text:'var(--accent-dark)' },
-        carb:    { bg:'var(--info-light)',     text:'var(--info)' },
-        fat:     { bg:'var(--warning-light)',  text:'var(--warning)' },
-      };
-      const macroKey = { protein:'protein_g', carb:'carbs_g', fat:'fat_g' };
-      const macroLbl = { protein:'P', carb:'C', fat:'F' };
-
-      const srcBadge = s =>
-        s === 'usda'   ? '<span style="font-size:0.65rem;font-weight:600;padding:1px 5px;border-radius:3px;background:#EEF2FF;color:#4F46E5;margin-left:5px">USDA</span>' :
-        s === 'brands' ? '<span style="font-size:0.65rem;font-weight:600;padding:1px 5px;border-radius:3px;background:#FDF4FF;color:#9333EA;margin-left:5px">Brand</span>' : '';
-
-      list.innerHTML = foods.map(f => {
-        const tc      = tagColors[f.macro_class] ?? tagColors.protein;
-        const mKey    = macroKey[f.macro_class];
-        const mLbl    = macroLbl[f.macro_class];
-        const selKey  = String(f._key || f.id);
-        const isSel   = PICKER.selectedFood &&
-                        String(PICKER.selectedFood._key || PICKER.selectedFood.id) === selKey;
-        const isMulti = PICKER.multiSel.has(selKey);
-        const recentHint = f._recentQty
-          ? `<span style="color:var(--accent);font-size:0.7rem"> (last: ${f._recentQty}g)</span>` : '';
-        const brandRow = f.brand
-          ? `<div style="font-size:0.72rem;color:var(--text-3);margin-top:1px">${f.brand}</div>` : '';
-        const checkEl = PICKER.multiMode
-          ? `<div style="width:22px;height:22px;border-radius:6px;border:1.5px solid ${isMulti?'var(--accent)':'var(--border)'};
-                         background:${isMulti?'var(--accent)':'transparent'};flex-shrink:0;
-                         display:flex;align-items:center;justify-content:center;
-                         color:white;font-size:14px">${isMulti?'&#x2713;':''}</div>` : '';
-        return `
-          <div onclick="selectPickerFood('${selKey.replace(/'/g,"\'")}')"
-               style="display:flex;align-items:center;gap:10px;padding:11px 14px;
-                      cursor:pointer;border-bottom:0.5px solid var(--border);
-                      background:${isSel||isMulti?'var(--accent-light)':'transparent'};
-                      transition:background 0.1s">
-            ${checkEl}
-            <div style="flex:1;min-width:0">
-              <div style="font-size:0.875rem;font-weight:500;display:flex;align-items:center;flex-wrap:wrap">
-                ${f.name}${srcBadge(f.source)}${recentHint}
-              </div>
-              ${brandRow}
-              <div style="font-size:0.72rem;color:var(--text-3);margin-top:2px">
-                per 100 g &middot; ${Math.round(f.kcal)} kcal
-                &middot; P:${f.protein_g}g C:${f.carbs_g}g F:${f.fat_g}g
-              </div>
-            </div>
-            <span style="font-size:0.75rem;font-weight:500;padding:3px 8px;
-                         border-radius:4px;white-space:nowrap;flex-shrink:0;
-                         background:${tc.bg};color:${tc.text}">
-              ${mLbl}: ${f[mKey]}g
-            </span>
-          </div>`;
-      }).join('');
-    }
-
-    // ── Select a food from the list ─────────────────────────────
-    function selectPickerFood(key) {
-      const food = PICKER.cache.get(key)
-                || PICKER.cache.get(Number(key))
-                || APP.allFoods.find(f => String(f.id) === String(key));
-      if (!food) return;
-
-      if (PICKER.multiMode) {
-        if (PICKER.multiSel.has(key)) PICKER.multiSel.delete(key);
-        else                          PICKER.multiSel.add(key);
-        document.getElementById('multi-count').textContent = PICKER.multiSel.size;
-        filterPickerFoods();
-        return;
-      }
-
-      PICKER.selectedFood = food;
-      document.getElementById('picker-selected-name').textContent = food.name;
-      document.getElementById('picker-selected-brand').textContent = food.brand || '';
-      // Pre-fill with last used qty converted to current unit
-      const recentG = food._recentQty || 100;
-      document.getElementById('picker-qty').value = fromGrams(recentG, PICKER.unit);
-      renderPresets();
-      document.getElementById('picker-footer').classList.remove('hidden');
-      updatePickerPreview();
-      document.getElementById('picker-footer')
-        .scrollIntoView({ behavior:'smooth', block:'nearest' });
-    }
-
-    // Servings ± stepper
-    function changeServings(delta) {
-      const inp = document.getElementById('picker-servings');
-      const val = Math.max(0.25, Math.round((parseFloat(inp.value) + delta) * 4) / 4);
-      inp.value = val;
-      onServingsChange();
-    }
-
-    function onServingsChange() {
-      // servings changes qty readout but keeps grams-per-serving intact
-      updatePickerPreview();
-    }
-
-    function onGramsChange() {
-      updatePickerPreview();
-    }
-
-    function updatePickerPreview() {
-      const food = PICKER.selectedFood;
-      if (!food) return;
-      const raw = parseFloat(document.getElementById('picker-qty').value) || 0;
-      const g   = toGrams(raw, PICKER.unit);   // always grams internally
-      const r   = g / 100;
-      const el  = id => document.getElementById(id);
-      el('pp-p').textContent = (food.protein_g * r).toFixed(1) + 'g';
-      el('pp-c').textContent = (food.carbs_g   * r).toFixed(1) + 'g';
-      el('pp-f').textContent = (food.fat_g     * r).toFixed(1) + 'g';
-      el('pp-k').textContent = Math.round(food.kcal * r) + ' kcal';
-    }
-
-    // ── Bulk add (multi-add mode) ───────────────────────────────
-    async function addMultiSelected() {
-      if (!PICKER.multiSel.size) return;
-      const btn = document.querySelector('#multi-add-footer .btn-primary');
-      btn.textContent = 'Adding...'; btn.disabled = true;
-
-      for (const key of PICKER.multiSel) {
-        const food = PICKER.cache.get(key)
-                   || APP.allFoods.find(f => String(f.id) === String(key));
-        if (!food) continue;
-        let foodId = food.id;
-        if (!foodId) {
-          const { data } = await saveExternalFood(food);
-          if (data) { foodId = data.id; APP.allFoods.push({...food, id:data.id}); }
-        }
-        if (foodId) await ApexNutrition.MealItems.add(foodId, PICKER.slotId, food._recentQty || 100);
-      }
-
-      btn.textContent = 'Add items'; btn.disabled = false;
-      closeFoodPicker();
-      showToast(`${PICKER.multiSel.size} items added`, 'success');
-      APP.loadedTabs.delete('diary');
-      loadTab('diary');
-    }
-
-    // ── Add selected food to meal ────────────────────────────────
-    async function addSelectedFood() {
-      const food   = PICKER.selectedFood;
-      const rawAmt = parseFloat(document.getElementById('picker-qty').value) || 0;
-      const g      = Math.round(toGrams(rawAmt, PICKER.unit));
-      if (!food || g < 1) { showToast('Enter a valid amount', 'error'); return; }
-
-      const btn = document.querySelector('#picker-footer .btn-primary');
-      btn.textContent = 'Adding...';
-      btn.disabled    = true;
-
-      // External food (no DB id) — save to library first
-      let foodId = food.id;
-      if (!foodId) {
-        const { data, error: saveErr } = await saveExternalFood(food);
-        if (saveErr && saveErr.code !== '23505') {
-          showToast('Could not save food: ' + saveErr.message, 'error');
-          btn.textContent = 'Add to meal';
-          btn.disabled    = false;
-          return;
-        }
-        if (data) {
-          foodId = data.id;
-          APP.allFoods.push({ ...food, id: data.id }); // cache locally
-        } else {
-          // Duplicate — find the existing row
-          const user = await ApexCore.Auth.getUser();
-          const { data: existing } = await ApexCore.getClient()
-            .from('foods').select('id')
-            .eq('name', food.name).eq('created_by', user.id).maybeSingle();
-          if (existing) foodId = existing.id;
-        }
-        if (!foodId) {
-          showToast('Could not resolve food id', 'error');
-          btn.textContent = 'Add to meal';
-          btn.disabled    = false;
-          return;
-        }
-      }
-
-      const { error } = await ApexNutrition.MealItems.add(foodId, PICKER.slotId, g);
-      btn.textContent = 'Add to meal';
-      btn.disabled    = false;
-
-      if (error) { showToast(error.message, 'error'); return; }
-
-      closeFoodPicker();
-      showToast(`${food.name} added`, 'success');
-      APP.loadedTabs.delete('diary');
-      loadTab('diary');
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // STATS TAB
-    // ═══════════════════════════════════════════════════════
-    async function loadStatsTab() {
-      const data = await ApexStats.Dashboard.getSummary(90);
-
-      renderStatCards(data);
-      renderCharts(data);
-      renderPRTable(data.strength.summary);
-    }
-
-    function renderStatCards(data) {
-      // Weight
-      const wt = data.weight.latest;
-      const wTrends = data.weight.trends;
-      document.getElementById('sc-weight').innerHTML =
-        `${wt?.weight_kg ?? '—'}<span class="stat-unit">kg</span>`;
-      if (wTrends.weeklyRateKg !== null) {
-        const d = document.getElementById('sc-weight-d');
-        const sign = wTrends.weeklyRateKg >= 0 ? '+' : '';
-        d.textContent   = `${sign}${wTrends.weeklyRateKg} kg/week`;
-        d.className     = `stat-delta ${wTrends.direction === 'up' ? 'up' : wTrends.direction === 'down' ? 'down' : 'flat'}`;
-      }
-
-      // Balance
-      const bs = data.balance.summary;
-      const bEl = document.getElementById('sc-balance');
-      const sign = bs.avgDailyBalance >= 0 ? '+' : '';
-      bEl.innerHTML = `${sign}${bs.avgDailyBalance}<span class="stat-unit">kcal</span>`;
-      document.getElementById('sc-balance-d').textContent   = `${bs.adherencePct}% on target`;
-      document.getElementById('sc-balance-d').className     = 'stat-delta flat';
-
-      // Streak
-      document.getElementById('sc-streak').innerHTML =
-        `${data.training.streak}<span class="stat-unit">days</span>`;
-      document.getElementById('sc-streak-d').textContent = 'Current streak';
-      document.getElementById('sc-streak-d').className   = 'stat-delta up';
-
-      // Best squat PR
-      const squatPR = data.strength.summary.find(s => s.name?.toLowerCase().includes('squat'));
-      if (squatPR) {
-        document.getElementById('sc-squat').innerHTML =
-          `${squatPR.bestKg}<span class="stat-unit">kg</span>`;
-        const dEl  = document.getElementById('sc-squat-d');
-        dEl.textContent = squatPR.deltaKg >= 0 ? `+${squatPR.deltaKg} kg gained` : `${squatPR.deltaKg} kg`;
-        dEl.className   = `stat-delta ${squatPR.deltaKg >= 0 ? 'up' : 'down'}`;
-      }
-    }
-
-    function renderCharts(data) {
-      const OPTS = {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { font: { size: 10 }, maxTicksLimit: 7 }, grid: { display: false } },
-          y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
-        },
-      };
-
-      // Weight trend
-      if (APP.charts.weight) APP.charts.weight.destroy();
-      const wData = ApexStats.ChartHelpers.weightTrendDataset(data.weight.logs);
-      if (wData.labels.length) {
-        APP.charts.weight = new Chart(document.getElementById('chart-weight'), {
-          type: 'line', data: wData,
-          options: { ...OPTS, plugins: { legend: { display: true, labels: { font: { size: 11 } } } } },
-        });
-      }
-
-      // Calorie balance
-      if (APP.charts.balance) APP.charts.balance.destroy();
-      const bData = ApexStats.ChartHelpers.calorieBalanceDataset(data.balance.daily);
-      if (bData.labels.length) {
-        APP.charts.balance = new Chart(document.getElementById('chart-balance'), {
-          type: 'bar', data: bData, options: OPTS,
-        });
-      }
-
-      // Weekly volume
-      if (APP.charts.volume) APP.charts.volume.destroy();
-      const vData = ApexStats.ChartHelpers.weeklyVolumeDataset(data.training.weeklyVolume);
-      if (vData.labels.length) {
-        APP.charts.volume = new Chart(document.getElementById('chart-volume'), {
-          type: 'bar', data: vData,
-          options: {
-            ...OPTS,
-            plugins: { legend: { display: true, labels: { font: { size: 10 }, boxWidth: 10 } } },
-            scales: {
-              ...OPTS.scales,
-              x: { ...OPTS.scales.x, stacked: true },
-              y: { ...OPTS.scales.y, stacked: true },
-            },
-          },
-        });
-      }
-    }
-
-    function renderPRTable(summary) {
-      const tbody = document.getElementById('pr-tbody');
-      tbody.innerHTML = '';
-      if (!summary?.length) {
-        document.getElementById('pr-empty-hint').hidden = false; return;
-      }
-
-      ApexStats.StrengthStats.topMovers(summary, 8).forEach(ex => {
-        const tr = document.createElement('tr');
-        const isUp = ex.deltaKg > 0;
-        tr.innerHTML = `
-          <td><strong>${ex.name}</strong><br><span class="t-hint" style="font-size:0.75rem">${ex.muscle ?? ''}</span></td>
-          <td>${ex.bestKg ?? '—'} kg</td>
-          <td>${ex.latestKg ?? '—'} kg</td>
-          <td class="${isUp ? 'pr-delta-up' : 'pr-delta-flat'}">
-            ${ex.deltaKg !== null ? (isUp ? '+' : '') + ex.deltaKg + ' kg' : '—'}
-          </td>`;
-        tbody.appendChild(tr);
-      });
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // WEIGHT LOG MODAL
-    // ═══════════════════════════════════════════════════════
-    function openWeightModal() {
-      document.getElementById('weight-modal').classList.remove('hidden');
-      document.getElementById('wt-input').focus();
-    }
-
-    async function logWeight() {
-      const kg    = parseFloat(document.getElementById('wt-input').value);
-      const notes = document.getElementById('wt-notes').value.trim() || null;
-      if (isNaN(kg)) { showToast('Enter a valid weight', 'error'); return; }
-
-      const { error } = await ApexStats.WeightStats.log(kg, notes);
-      if (error) { showToast(error.message, 'error'); return; }
-
-      document.getElementById('weight-modal').classList.add('hidden');
-      document.getElementById('wt-input').value  = '';
-      document.getElementById('wt-notes').value  = '';
-      showToast('Weight logged ✓', 'success');
-
-      if (APP.activeTab === 'stats') {
-        APP.loadedTabs.delete('stats');
-        loadTab('stats');
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // UTILITIES
-    // ═══════════════════════════════════════════════════════
-    function formatTime(seconds) {
-      const m = Math.floor(seconds / 60);
-      const s = seconds % 60;
-      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    }
-
-    function showToast(msg, type = '') {
-      const t = document.createElement('div');
-      t.className = `toast ${type}`;
-      t.textContent = msg;
-      document.getElementById('toast-container').appendChild(t);
-      setTimeout(() => t.remove(), 4000);
-    }
-  </script>
-</body>
-</html>
+/* =========================================================
+   apex-styles.css
+   Apex Fitness — Shared Design System
+   Aesthetic: Clinical Luxury
+   ========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
+
+/* ── Design tokens ───────────────────────────────────────── */
+:root {
+  --font:            'Outfit', 'Segoe UI', system-ui, sans-serif;
+
+  --bg:              #F7F7F4;
+  --surface:         #FFFFFF;
+  --surface-alt:     #F2F2EF;
+  --border:          rgba(20, 20, 18, 0.08);
+  --border-strong:   rgba(20, 20, 18, 0.16);
+
+  --text:            #18181A;
+  --text-2:          #5A5A58;
+  --text-3:          #9A9A98;
+
+  --accent:          #1D9E75;
+  --accent-hover:    #198A65;
+  --accent-light:    #E1F5EE;
+  --accent-dark:     #0F6E56;
+
+  --danger:          #E24B4A;
+  --danger-light:    #FEECEC;
+  --warning:         #BA7517;
+  --warning-light:   #FEF3E2;
+  --info:            #378ADD;
+  --info-light:      #EAF2FC;
+  --success:         #1D9E75;
+  --success-light:   #E1F5EE;
+
+  --r-sm:   6px;
+  --r-md:   10px;
+  --r-lg:   14px;
+  --r-xl:   22px;
+  --r-full: 9999px;
+
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 18px rgba(0,0,0,0.09);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.12);
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur:  160ms;
+}
+
+/* ── Reset ───────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100dvh;
+}
+img, svg { display: block; max-width: 100%; }
+button { font-family: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Typography ──────────────────────────────────────────── */
+.t-display  { font-size: 2.75rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; }
+.t-heading  { font-size: 1.375rem; font-weight: 500; letter-spacing: -0.02em; }
+.t-subhead  { font-size: 1rem;     font-weight: 500; letter-spacing: -0.01em; }
+.t-body     { font-size: 0.9375rem; font-weight: 400; }
+.t-small    { font-size: 0.8125rem; font-weight: 400; }
+.t-label    { font-size: 0.75rem;   font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+.t-muted    { color: var(--text-2); }
+.t-hint     { color: var(--text-3); }
+.t-accent   { color: var(--accent); }
+.t-danger   { color: var(--danger); }
+
+/* ── Layout ──────────────────────────────────────────────── */
+.container   { max-width: 1120px; margin-inline: auto; padding-inline: 1.5rem; }
+.split       { display: grid; grid-template-columns: 1fr 1fr; min-height: 100dvh; }
+.stack       { display: flex; flex-direction: column; }
+.row         { display: flex; align-items: center; }
+.row-between { display: flex; align-items: center; justify-content: space-between; }
+.gap-4  { gap: 4px; }
+.gap-8  { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.gap-24 { gap: 24px; }
+
+/* ── Card ────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.25rem;
+}
+.card-sm { padding: 0.875rem 1rem; border-radius: var(--r-md); }
+.card-flat {
+  background: var(--surface-alt);
+  border: none;
+  border-radius: var(--r-md);
+  padding: 1rem;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.5625rem 1.125rem;
+  border-radius: var(--r-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 0.5px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
+  white-space: nowrap;
+  user-select: none;
+}
+.btn:hover  { background: var(--surface-alt); }
+.btn:active { transform: scale(0.98); }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn-ghost { border-color: transparent; }
+.btn-ghost:hover { background: var(--surface-alt); border-color: transparent; }
+
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger-light); }
+
+.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.8125rem; border-radius: var(--r-sm); }
+.btn-lg { padding: 0.75rem 1.5rem;   font-size: 1rem; }
+
+.btn-icon {
+  width: 36px; height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  border: 0.5px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  transition: all var(--dur);
+}
+.btn-icon:hover { background: var(--surface-alt); color: var(--text); }
+
+.btn-full { width: 100%; justify-content: center; }
+
+/* ── Form elements ───────────────────────────────────────── */
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+
+label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: 0.01em;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+select,
+textarea {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--surface);
+  transition: border-color var(--dur);
+  outline: none;
+  appearance: none;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+input::placeholder, textarea::placeholder { color: var(--text-3); }
+input[type="number"] { -moz-appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+.input-group {
+  display: flex;
+  align-items: stretch;
+}
+.input-group input { border-radius: var(--r-md) 0 0 var(--r-md); border-right: none; flex: 1; }
+.input-group .input-suffix {
+  display: flex; align-items: center; padding: 0 0.75rem;
+  background: var(--surface-alt);
+  border: 0.5px solid var(--border-strong);
+  border-left: none;
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  font-size: 0.8125rem; color: var(--text-3); white-space: nowrap;
+}
+
+.form-hint { font-size: 0.75rem; color: var(--text-3); margin-top: 2px; }
+.form-error { font-size: 0.75rem; color: var(--danger); margin-top: 2px; }
+
+/* ── Badges & Pills ──────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--r-sm);
+  font-size: 0.75rem; font-weight: 500;
+  border: 0.5px solid transparent;
+}
+.badge-accent   { background: var(--accent-light);   color: var(--accent-dark);  border-color: #9FE1CB; }
+.badge-warning  { background: var(--warning-light);  color: var(--warning);      border-color: #FAC775; }
+.badge-danger   { background: var(--danger-light);   color: var(--danger);       border-color: #F09595; }
+.badge-info     { background: var(--info-light);     color: var(--info);         border-color: #B5D4F4; }
+.badge-neutral  { background: var(--surface-alt);    color: var(--text-2);       border-color: var(--border); }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--r-full);
+  font-size: 0.8125rem; font-weight: 500;
+}
+
+/* ── Divider ─────────────────────────────────────────────── */
+.divider { height: 0.5px; background: var(--border); margin-block: 1rem; }
+.divider-label {
+  display: flex; align-items: center; gap: 1rem;
+  font-size: 0.75rem; color: var(--text-3);
+}
+.divider-label::before, .divider-label::after {
+  content: ''; flex: 1; height: 0.5px; background: var(--border);
+}
+
+/* ── App chrome ──────────────────────────────────────────── */
+#topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--surface);
+  border-bottom: 0.5px solid var(--border);
+  height: 54px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding-inline: 1.5rem;
+}
+.topbar-logo {
+  font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.025em;
+  color: var(--text);
+}
+.topbar-logo span { color: var(--accent); }
+
+#tab-nav {
+  background: var(--surface);
+  border-bottom: 0.5px solid var(--border);
+  display: flex;
+  padding-inline: 1.5rem;
+}
+.tab-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem; font-weight: 400;
+  color: var(--text-2);
+  background: transparent; border: none;
+  border-bottom: 2px solid transparent;
+  transition: color var(--dur), border-color var(--dur);
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+.tab-btn svg, .tab-btn i { font-size: 15px; }
+
+/* ── Panels ──────────────────────────────────────────────── */
+.panel { display: none; padding: 1.5rem; max-width: 1120px; margin-inline: auto; }
+.panel.active { display: block; }
+
+/* ── Training: 7-day grid ────────────────────────────────── */
+.days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 1.25rem;
+}
+@media (max-width: 720px) { .days-grid { grid-template-columns: repeat(4, 1fr); } }
+
+.day-cell {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 10px 9px;
+  cursor: pointer;
+  min-height: 88px;
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+.day-cell:hover { border-color: var(--accent); }
+.day-cell.active {
+  border-color: var(--accent);
+  border-width: 1.5px;
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+.day-cell.rest  { background: var(--surface-alt); cursor: default; }
+.day-cell.done  { opacity: 0.7; }
+.day-cell .day-name  { font-size: 0.6875rem; color: var(--text-3); font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 5px; }
+.day-cell .day-type  { font-size: 0.8125rem; font-weight: 500; line-height: 1.3; margin-bottom: 6px; }
+.day-cell .day-meta  { font-size: 0.6875rem; color: var(--accent); font-weight: 500; }
+.day-cell .day-done  { font-size: 0.6875rem; color: var(--text-3); }
+
+/* ── Training: exercise table ────────────────────────────── */
+.exercise-table { width: 100%; border-collapse: collapse; }
+.exercise-table th {
+  font-size: 0.6875rem; font-weight: 500; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 0 8px 10px; text-align: left;
+  border-bottom: 0.5px solid var(--border);
+}
+.exercise-table th:not(:first-child) { text-align: center; }
+.exercise-table td {
+  padding: 12px 8px; font-size: 0.875rem;
+  border-bottom: 0.5px solid var(--border);
+  vertical-align: middle;
+}
+.exercise-table tr:last-child td { border-bottom: none; }
+.exercise-table td:not(:first-child) { text-align: center; color: var(--text-2); }
+.ex-name   { font-weight: 500; margin-bottom: 2px; }
+.ex-muscle { font-size: 0.75rem; color: var(--text-3); }
+.rpe-dot   { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 3px; vertical-align: middle; }
+
+/* ── Macro bars ──────────────────────────────────────────── */
+.macro-bars { display: flex; flex-direction: column; gap: 10px; }
+.macro-row  { display: flex; align-items: center; gap: 12px; }
+.macro-row .macro-label { font-size: 0.75rem; color: var(--text-2); width: 52px; flex-shrink: 0; }
+.macro-track { flex: 1; height: 6px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; }
+.macro-fill  { height: 100%; border-radius: 3px; transition: width 0.4s var(--ease); }
+.macro-fill.protein { background: var(--accent); }
+.macro-fill.carbs   { background: var(--info); }
+.macro-fill.fat     { background: var(--warning); }
+.macro-fill.over    { background: var(--danger); }
+.macro-nums { font-size: 0.75rem; color: var(--text-2); width: 88px; text-align: right; flex-shrink: 0; }
+.macro-nums strong { color: var(--text); font-weight: 500; }
+
+/* ── Nutrition: layout ───────────────────────────────────── */
+.nutr-layout {
+  display: grid;
+  grid-template-columns: 1fr 230px;
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 840px) { .nutr-layout { grid-template-columns: 1fr; } }
+
+/* ── Meal slots ──────────────────────────────────────────── */
+.meal-slot {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px;
+  min-height: 76px;
+  transition: border-color var(--dur);
+  margin-bottom: 10px;
+}
+.meal-slot.drag-over {
+  border-color: var(--accent);
+  border-style: dashed;
+  background: var(--accent-light);
+}
+.meal-slot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.meal-slot-name   { font-size: 0.6875rem; font-weight: 500; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; }
+.meal-slot-kcal   { font-size: 0.6875rem; color: var(--text-3); }
+.meal-items-list  { display: flex; flex-direction: column; gap: 5px; }
+.drop-hint {
+  font-size: 0.75rem; color: var(--text-3);
+  text-align: center; padding: 10px;
+  border: 0.5px dashed var(--border);
+  border-radius: var(--r-sm);
+}
+
+.meal-item {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface-alt);
+  border-radius: var(--r-sm);
+  font-size: 0.8125rem;
+  cursor: grab;
+}
+.meal-item:active { cursor: grabbing; opacity: 0.7; }
+.meal-item.dragging { opacity: 0.5; }
+.meal-item-left  { flex: 1; min-width: 0; }
+.meal-item-name  { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meal-item-macros{ font-size: 0.7rem; color: var(--text-3); margin-top: 1px; }
+.meal-item-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.qty-input {
+  width: 58px; padding: 3px 6px; font-size: 0.75rem;
+  border: 0.5px solid var(--border); border-radius: var(--r-sm);
+  text-align: center; background: var(--surface);
+}
+
+/* ── Food archive ────────────────────────────────────────── */
+.archive-panel {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px;
+  position: sticky; top: 112px;
+  max-height: calc(100dvh - 128px);
+  overflow-y: auto;
+}
+.archive-panel::-webkit-scrollbar { width: 4px; }
+.archive-panel::-webkit-scrollbar-track { background: transparent; }
+.archive-panel::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+.archive-search {
+  position: relative; margin-bottom: 10px;
+}
+.archive-search input { padding-left: 2.25rem; }
+.archive-search .search-icon {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--text-3); font-size: 15px; pointer-events: none;
+}
+.macro-filters { display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; }
+.filter-btn {
+  font-size: 0.6875rem; padding: 3px 10px;
+  border-radius: var(--r-full);
+  border: 0.5px solid var(--border-strong);
+  background: transparent; color: var(--text-2);
+  transition: all var(--dur);
+}
+.filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.filter-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
+.food-card {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 10px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-bottom: 6px;
+  cursor: grab;
+  transition: border-color var(--dur), background var(--dur);
+  user-select: none;
+}
+.food-card:hover { border-color: var(--accent); background: var(--accent-light); }
+.food-card:active { opacity: 0.7; cursor: grabbing; }
+.food-card.dragging { opacity: 0.4; }
+.food-name  { font-size: 0.8125rem; font-weight: 500; }
+.food-meta  { font-size: 0.6875rem; color: var(--text-3); margin-top: 1px; }
+.food-macro-tag {
+  font-size: 0.6875rem; font-weight: 500;
+  padding: 2px 7px; border-radius: 4px; flex-shrink: 0;
+}
+.tag-protein { background: var(--accent-light);  color: var(--accent-dark); }
+.tag-carb    { background: var(--info-light);     color: var(--info); }
+.tag-fat     { background: var(--warning-light);  color: var(--warning); }
+
+/* ── Stats: metric cards ─────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+@media (max-width: 720px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.stat-card {
+  background: var(--surface-alt);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+}
+.stat-label { font-size: 0.6875rem; color: var(--text-3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.stat-value { font-size: 1.5rem; font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
+.stat-unit  { font-size: 0.875rem; font-weight: 400; color: var(--text-2); margin-left: 2px; }
+.stat-delta { font-size: 0.75rem; margin-top: 5px; }
+.stat-delta.up   { color: var(--accent); }
+.stat-delta.down { color: var(--danger); }
+.stat-delta.flat { color: var(--text-3); }
+
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 720px) { .charts-grid { grid-template-columns: 1fr; } }
+.chart-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); padding: 1.125rem; }
+.chart-title { font-size: 0.75rem; font-weight: 500; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; }
+.chart-wrap  { position: relative; }
+
+/* PR table */
+.pr-table { width: 100%; border-collapse: collapse; }
+.pr-table th { font-size: 0.6875rem; font-weight: 500; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; padding: 0 8px 10px; border-bottom: 0.5px solid var(--border); text-align: left; }
+.pr-table td { padding: 11px 8px; font-size: 0.875rem; border-bottom: 0.5px solid var(--border); }
+.pr-table tr:last-child td { border-bottom: none; }
+.pr-delta-up   { color: var(--accent); font-weight: 500; font-size: 0.8125rem; }
+.pr-delta-flat { color: var(--text-3); font-size: 0.8125rem; }
+
+/* ── Session overlay ─────────────────────────────────────── */
+#session-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+#session-overlay.hidden { display: none; }
+.session-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 1.5rem; height: 54px;
+  background: var(--surface);
+  border-bottom: 0.5px solid var(--border);
+  flex-shrink: 0;
+}
+.session-title { font-size: 0.9375rem; font-weight: 500; }
+.session-timer { font-size: 0.875rem; color: var(--accent); font-weight: 500; font-variant-numeric: tabular-nums; }
+.session-body  { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; }
+
+.set-logger {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.set-logger-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--border);
+}
+.set-logger-body  { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.set-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.set-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--surface-alt); border: 0.5px solid var(--border);
+  font-size: 0.75rem; font-weight: 500; color: var(--text-2);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.set-num.done { background: var(--accent-light); border-color: var(--accent); color: var(--accent-dark); }
+.set-input { width: 72px; }
+.set-sep   { font-size: 0.75rem; color: var(--text-3); flex-shrink: 0; }
+.set-rpe   { width: 60px; }
+
+.rest-timer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--accent-light);
+  border-radius: var(--r-md);
+  font-size: 0.875rem;
+}
+.rest-timer.hidden { display: none; }
+.rest-count { font-size: 1.125rem; font-weight: 600; color: var(--accent-dark); font-variant-numeric: tabular-nums; }
+
+/* ── Onboarding: steps ───────────────────────────────────── */
+.step-indicators {
+  display: flex; gap: 6px; margin-bottom: 2.5rem;
+}
+.step-dot {
+  height: 4px; flex: 1; border-radius: 2px;
+  background: var(--border-strong);
+  transition: background 0.3s;
+}
+.step-dot.active    { background: var(--accent); }
+.step-dot.completed { background: var(--accent-dark); }
+
+.step-panel { display: none; animation: fadeSlide 0.2s var(--ease); }
+.step-panel.active { display: block; }
+
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Auth pages ──────────────────────────────────────────── */
+.auth-brand {
+  background: var(--text);
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 3rem;
+  color: #fff;
+}
+.auth-brand-logo { font-size: 1.375rem; font-weight: 600; letter-spacing: -0.03em; margin-bottom: 3rem; }
+.auth-brand-logo span { color: var(--accent); }
+.auth-tagline { font-size: 2.5rem; font-weight: 600; line-height: 1.1; letter-spacing: -0.03em; }
+.auth-tagline em { font-style: normal; color: var(--accent); }
+.auth-form-col {
+  display: flex; align-items: center; justify-content: center;
+  padding: 3rem;
+  background: var(--surface);
+}
+.auth-form-box { width: 100%; max-width: 380px; }
+.auth-logo-sm  { font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.025em; margin-bottom: 2.5rem; }
+.auth-logo-sm span { color: var(--accent); }
+
+/* ── Overlay / modal ─────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.modal-backdrop.hidden { display: none; }
+.modal-box {
+  background: var(--surface);
+  border-radius: var(--r-xl);
+  padding: 1.5rem;
+  width: 100%; max-width: 440px;
+  max-height: 80dvh; overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+.modal-title { font-size: 1.0625rem; font-weight: 500; margin-bottom: 1rem; }
+
+/* ── Toast notifications ─────────────────────────────────── */
+#toast-container {
+  position: fixed; bottom: 1.5rem; right: 1.5rem;
+  z-index: 999; display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: var(--text); color: #fff;
+  border-radius: var(--r-md);
+  font-size: 0.875rem;
+  box-shadow: var(--shadow-md);
+  animation: toastIn 0.2s var(--ease);
+  pointer-events: auto;
+  max-width: 320px;
+}
+.toast.success { background: var(--accent); }
+.toast.error   { background: var(--danger); }
+.toast.warning { background: var(--warning); }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Utility ─────────────────────────────────────────────── */
+.hidden { display: none !important; }
+.loading { opacity: 0.5; pointer-events: none; }
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-alt) 25%, var(--border) 50%, var(--surface-alt) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: var(--r-sm);
+}
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+.scroll-y { overflow-y: auto; }
+.scroll-y::-webkit-scrollbar       { width: 4px; }
+.scroll-y::-webkit-scrollbar-track { background: transparent; }
+.scroll-y::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+@media (max-width: 600px) {
+  .panel { padding: 1rem; }
+  #topbar { padding-inline: 1rem; }
+  #tab-nav { padding-inline: 0.5rem; overflow-x: auto; }
+  .auth-form-col { padding: 1.5rem; }
+  .auth-brand { display: none; }
+  .split { grid-template-columns: 1fr; }
+}
+
+
+/* ============================================================
+   BOTTOM NAVIGATION
+   ============================================================ */
+#tab-nav { display: none; } /* hide old top nav */
+
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: 68px;
+  background: var(--surface);
+  border-top: 0.5px solid var(--border);
+  display: flex; align-items: stretch;
+  z-index: 200;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-shadow: 0 -4px 20px rgba(0,0,0,.06);
+}
+
+.nav-btn {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px;
+  border: none; background: transparent; cursor: pointer;
+  color: var(--text-3); font-family: inherit; padding: 0;
+  transition: color 0.15s;
+}
+.nav-btn:active { opacity: .7; }
+.nav-btn.active { color: var(--accent); }
+.nav-icon  { font-size: 22px; line-height: 1; }
+.nav-label { font-size: 10px; font-weight: 500; letter-spacing: .02em; }
+
+.nav-plus {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; cursor: pointer;
+  padding: 0; padding-bottom: 8px;
+}
+.nav-plus-inner {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 300; line-height: 1;
+  box-shadow: 0 4px 18px rgba(29,158,117,.45);
+  transition: transform .15s, box-shadow .15s;
+}
+.nav-plus:active .nav-plus-inner {
+  transform: scale(.93);
+  box-shadow: 0 2px 10px rgba(29,158,117,.35);
+}
+
+/* Main content: clear bottom nav height */
+body { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+
+/* ============================================================
+   HOME TAB
+   ============================================================ */
+.home-tile {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px;
+  min-height: 100px; cursor: pointer;
+  border: none; font-family: inherit; text-align: center;
+  transition: transform .15s;
+}
+.home-tile:active { transform: scale(.97); }
+.t-hint { font-size: 0.75rem; color: var(--text-3); font-weight: 400; }
+
+/* ============================================================
+   DIARY / CALORIE BANNER
+   ============================================================ */
+.calorie-banner { background: var(--surface); }
+.cal-col  { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+.cal-num  { font-size: 1.125rem; font-weight: 700; line-height: 1; }
+.cal-lbl  { font-size: 0.65rem; color: var(--text-3); font-weight: 400; letter-spacing: .03em; text-transform: uppercase; }
+.cal-op   { font-size: 1rem; color: var(--text-3); font-weight: 300; padding: 0 2px; align-self: center; }
+
+/* ============================================================
+   QUICK ADD SHEET
+   ============================================================ */
+.quick-add-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 1rem; border: 0.5px solid var(--border);
+  border-radius: var(--r-md); background: var(--surface-alt);
+  cursor: pointer; font-family: inherit;
+  font-size: 0.9rem; font-weight: 500; color: var(--text);
+  transition: background .15s;
+}
+.quick-add-tile:active { background: var(--accent-light); }
+
+/* ============================================================
+   FOOD PICKER TABS (Recent / Frequent / My Foods / All)
+   ============================================================ */
+.picker-tab {
+  flex-shrink: 0; padding: 10px 14px;
+  border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 0.8125rem; font-weight: 400;
+  color: var(--text-3); border-bottom: 2px solid transparent;
+  white-space: nowrap; transition: color .15s, border-color .15s;
+}
+.picker-tab.active {
+  color: var(--accent); border-bottom-color: var(--accent); font-weight: 500;
+}
+
+
+/* ============================================================
+   UI MICRO-INTERACTIONS & POLISH
+   Applied globally — zero extra JS needed for these rules.
+   ============================================================ */
+
+/* ── Global transition defaults ─────────────────────────── */
+*, *::before, *::after {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Button press states ─────────────────────────────────── */
+.btn {
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s,
+              transform 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.15s;
+}
+.btn:active:not(:disabled) { transform: scale(0.96); }
+.btn:disabled               { opacity: 0.45; cursor: not-allowed; }
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 16px rgba(29,158,117,.28);
+}
+
+/* ── Card hover lift ─────────────────────────────────────── */
+.card {
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+/* ── Icon buttons ────────────────────────────────────────── */
+.btn-icon {
+  transition: background 0.15s, color 0.15s, transform 0.12s;
+}
+.btn-icon:active { transform: scale(0.88); }
+
+/* ── Option cards (onboarding) ───────────────────────────── */
+.option-card {
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+.option-card:active { transform: scale(0.98); }
+
+/* ── Panel fade-in animation ─────────────────────────────── */
+@keyframes apexPanelIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.panel.active {
+  display: block;
+  animation: apexPanelIn 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ── Number update flash ─────────────────────────────────── */
+@keyframes numFlash {
+  0%   { color: inherit; }
+  30%  { color: var(--accent); }
+  100% { color: inherit; }
+}
+.num-updated { animation: numFlash 0.5s ease; }
+
+/* ── Skeleton loading ────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--surface-alt) 25%,
+    var(--border) 50%,
+    var(--surface-alt) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: var(--r-sm);
+  color: transparent !important;
+  pointer-events: none;
+}
+.skeleton-line   { height: 14px; width: 70%; margin: 6px 0; }
+.skeleton-line-s { height: 10px; width: 45%; margin: 4px 0; }
+.skeleton-block  { height: 80px; width: 100%; margin: 8px 0; }
+
+/* ── Macro fill bar transition ───────────────────────────── */
+.macro-fill {
+  transition: width 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Calorie banner numbers ─────────────────────────────── */
+.cal-num {
+  transition: color 0.25s;
+}
+
+/* ── Modal slide-up ─────────────────────────────────────── */
+#food-picker-modal > div,
+#quick-add-modal > div,
+#weight-modal .modal-box {
+  animation: slideUp 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes slideUp {
+  from { transform: translateX(-50%) translateY(32px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+}
+
+/* ── Picker tab underline slide ──────────────────────────── */
+.picker-tab {
+  position: relative;
+  transition: color 0.15s;
+}
+.picker-tab::after {
+  content: '';
+  position: absolute; bottom: -1px; left: 0; right: 0;
+  height: 2px; background: var(--accent);
+  transform: scaleX(0); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.picker-tab.active::after { transform: scaleX(1); }
+
+/* ── Filter button ripple feel ───────────────────────────── */
+.filter-btn, .source-btn {
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.filter-btn:active, .source-btn:active { transform: scale(0.95); }
+
+/* ── Home tiles ──────────────────────────────────────────── */
+.home-tile {
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+.home-tile:hover  { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.home-tile:active { transform: scale(0.96); }
+
+/* ── Bottom nav transitions ─────────────────────────────── */
+.nav-btn .nav-icon,
+.nav-btn .nav-label {
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.15s;
+}
+.nav-btn.active .nav-icon  { transform: scale(1.15); }
+.nav-btn.active .nav-label { font-weight: 600; }
+
+/* ── Goal phase color tokens ─────────────────────────────── */
+.goal-bulk     { --goal-color: var(--accent);  --goal-bg: var(--accent-light); }
+.goal-cut      { --goal-color: #EF4444;        --goal-bg: #FEF2F2; }
+.goal-maintain { --goal-color: #6B7280;        --goal-bg: #F3F4F6; }
+
+/* ── Micronutrient bars ──────────────────────────────────── */
+.micro-bar-track {
+  height: 5px; border-radius: 3px; background: var(--surface-alt);
+  overflow: hidden;
+}
+.micro-bar-fill {
+  height: 100%; border-radius: 3px;
+  transition: width 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Food item row hover ─────────────────────────────────── */
+#picker-food-list > div {
+  transition: background 0.1s;
+}
+#picker-food-list > div:active { background: var(--surface-alt) !important; }
+
+/* ── Meal slot card items ────────────────────────────────── */
+#meal-slots-list .card {
+  transition: box-shadow 0.2s;
+}
+
+/* ── Staggered meal card animation ──────────────────────── */
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.meal-card-anim {
+  animation: cardSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ── Input focus ring ────────────────────────────────────── */
+input:focus, select:focus, textarea:focus {
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+/* ── Toast slide-in ──────────────────────────────────────── */
+.toast {
+  animation: toastIn 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+
+/* ── Gram presets (food picker) ──────────────────────────── */
+.gram-preset {
+  flex: 1; padding: 6px 0;
+  border: 0.5px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface-alt); color: var(--text-2);
+  font-family: inherit; font-size: 0.8125rem; font-weight: 500;
+  cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.gram-preset:hover  { border-color: var(--accent); color: var(--accent); }
+.gram-preset:active { background: var(--accent-light); transform: scale(0.96); }
+
+/* ── Goal option buttons (goal edit modal) ───────────────── */
+.goal-opt-btn {
+  width: 100%; padding: 0.875rem 1rem;
+  display: flex; align-items: center; gap: 12px;
+  border: 1.5px solid var(--border); border-radius: var(--r-md);
+  background: transparent; cursor: pointer; font-family: inherit;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  text-align: left;
+}
+.goal-opt-btn:hover  { background: var(--surface-alt); }
+.goal-opt-btn:active { transform: scale(0.98); }
+.goal-opt-btn.selected {
+  border-color: var(--accent); background: var(--accent-light);
+}
+
+
+/* ============================================================
+   FOCUS MODE & REST OVERLAY
+   ============================================================ */
+.fm-hidden { display: none !important; }
+
+/* ── Focus mode shell ────────────────────────────────────── */
+#focus-mode {
+  position: fixed; inset: 0; z-index: 500;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  overscroll-behavior: contain;
+}
+
+.focus-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 0.75rem 1rem;
+  border-bottom: 0.5px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.focus-topbar-center { text-align: center; flex: 1; min-width: 0; }
+.focus-ex-counter {
+  font-size: 0.6875rem; color: var(--text-3); margin-bottom: 1px;
+}
+.focus-elapsed {
+  font-size: 1.0625rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
+.focus-abandon-btn {
+  border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 0.875rem; color: var(--text-3);
+  padding: 6px 10px; border-radius: var(--r-sm);
+  transition: color 0.15s, background 0.15s; white-space: nowrap;
+}
+.focus-abandon-btn:hover { color: var(--danger); }
+.focus-done-btn {
+  border: none; background: var(--accent); color: white; cursor: pointer;
+  font-family: inherit; font-size: 0.875rem; font-weight: 500;
+  padding: 6px 14px; border-radius: var(--r-sm);
+  transition: opacity 0.15s, transform 0.12s; white-space: nowrap;
+}
+.focus-done-btn:active { transform: scale(0.95); }
+
+.focus-body {
+  flex: 1; overflow-y: auto;
+  padding: 1.5rem 1.25rem 4rem;
+  overscroll-behavior: contain;
+}
+
+/* ── Exercise header ─────────────────────────────────────── */
+.focus-ex-header { text-align: center; margin-bottom: 1.75rem; }
+.focus-ex-name {
+  font-size: 1.375rem; font-weight: 800; line-height: 1.2; margin-bottom: 0.375rem;
+}
+.focus-ex-meta { font-size: 0.8125rem; color: var(--text-3); margin-bottom: 1rem; }
+.focus-set-dots { display: flex; justify-content: center; gap: 8px; }
+.set-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--border);
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+.dot-done { background: var(--accent); border-color: var(--accent); }
+.dot-cur  { border-color: var(--accent); background: var(--accent-light); transform: scale(1.3); }
+
+/* ── Weight / Reps steppers ──────────────────────────────── */
+.focus-inputs {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px; margin-bottom: 1.25rem;
+}
+.focus-input-lbl {
+  font-size: 0.75rem; color: var(--text-3); font-weight: 500;
+  text-align: center; margin-bottom: 6px;
+}
+.stepper {
+  display: flex; align-items: center;
+  border: 1.5px solid var(--border); border-radius: var(--r-md);
+  overflow: hidden; height: 64px;
+}
+.stepper-btn {
+  width: 50px; height: 100%; border: none;
+  background: var(--surface-alt); font-size: 1.5rem;
+  cursor: pointer; color: var(--text-2); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.1s, color 0.1s;
+}
+.stepper-btn:active { background: var(--accent-light); color: var(--accent); }
+.stepper-val {
+  flex: 1; border: none; text-align: center;
+  font-size: 1.875rem; font-weight: 700;
+  background: transparent; min-width: 0; padding: 0; color: var(--text);
+}
+.stepper-val:focus { outline: none; }
+
+/* ── RPE row ─────────────────────────────────────────────── */
+.rpe-section { margin-bottom: 1.25rem; text-align: center; }
+.rpe-grid {
+  display: flex; gap: 5px; flex-wrap: wrap;
+  justify-content: center; margin-top: 8px;
+}
+.rpe-btn {
+  min-width: 46px; padding: 9px 10px;
+  border: 1.5px solid var(--border); border-radius: var(--r-sm);
+  background: transparent; font-family: inherit;
+  font-size: 0.875rem; cursor: pointer;
+  transition: all 0.12s;
+}
+.rpe-btn:active  { transform: scale(0.93); }
+.rpe-active {
+  background: var(--accent); border-color: var(--accent);
+  color: white; font-weight: 600;
+  box-shadow: 0 2px 10px rgba(29,158,117,.35);
+}
+
+/* ── Log set button ──────────────────────────────────────── */
+.btn-lg { padding: 1rem; font-size: 1.0625rem; font-weight: 600; border-radius: var(--r-md); }
+
+/* ── Completed sets history ──────────────────────────────── */
+.focus-history-header {
+  font-size: 0.7rem; font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-3);
+  padding-top: 1.25rem; border-top: 0.5px solid var(--border);
+  margin-bottom: 0.625rem;
+}
+.focus-history-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 0.5px solid var(--surface-alt);
+  font-size: 0.875rem;
+}
+.fhr-set   { color: var(--text-3); min-width: 44px; }
+.fhr-val   { font-weight: 600; flex: 1; text-align: center; }
+.fhr-rpe   { color: var(--text-3); }
+.fhr-check { color: var(--accent); margin-left: 8px; }
+
+/* ── Rest overlay ────────────────────────────────────────── */
+#rest-overlay {
+  position: fixed; inset: 0; z-index: 600;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 2rem;
+  transition: opacity 0.2s;
+}
+.rest-label {
+  font-size: 0.75rem; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--text-3);
+}
+.rest-ring-wrap { position: relative; flex-shrink: 0; }
+.rest-ring-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.rest-seconds-big {
+  font-size: 4rem; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em; line-height: 1;
+}
+.rest-sec-unit { font-size: 0.875rem; color: var(--text-3); margin-top: 4px; }
+.rest-next-wrap { text-align: center; }
+.rest-next-lbl  { font-size: 0.75rem; color: var(--text-3); margin-bottom: 4px; }
+.rest-next-val  { font-size: 1rem; font-weight: 600; }
+.btn-skip-rest {
+  font-size: 0.9375rem; color: var(--text-2);
+  background: transparent; border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 10px 28px;
+  cursor: pointer; font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.btn-skip-rest:hover { background: var(--surface-alt); }
+
+
+/* ── Unit selector buttons (food picker) ─────────────────── */
+.unit-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: transparent;
+  font-family: inherit; font-size: 0.8125rem; font-weight: 400;
+  color: var(--text-3); cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.unit-btn:active  { transform: scale(0.95); }
+.unit-btn.active  {
+  background: var(--accent); border-color: var(--accent);
+  color: white; font-weight: 600;
+}
