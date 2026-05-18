@@ -273,8 +273,28 @@
       </div>
     </div>
 
-    <!-- Meal slot cards — tap + to add foods -->
+    <!-- Meal slot cards -->
     <div id="meal-slots-list"></div>
+
+    <!-- Micronutrient tracking section (populated by JS) -->
+    <details id="micro-section" style="margin-top:0.75rem" open>
+      <summary style="list-style:none;cursor:pointer;padding:0.875rem 1rem;
+                      background:var(--surface);border-radius:var(--r-md);
+                      border:0.5px solid var(--border);display:flex;
+                      align-items:center;justify-content:space-between;
+                      font-size:0.875rem;font-weight:600;color:var(--text)">
+        <span>&#x1F52C; Micronutrients</span>
+        <span id="micro-summary-badge" style="font-size:0.75rem;font-weight:400;color:var(--text-3)">Loading...</span>
+      </summary>
+      <div id="micro-content"
+           style="padding:1rem;background:var(--surface);
+                  border:0.5px solid var(--border);border-top:none;
+                  border-radius:0 0 var(--r-md) var(--r-md)">
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line-s"></div>
+      </div>
+    </details>
 
   </section>
 
@@ -532,6 +552,69 @@
     // CONFIG — replace with real keys
     // ═══════════════════════════════════════════════════════
     const FDC_KEY = '8WgoHcFWJmQoVUN70VhiMKmlWaKSD8tRgh89kZYO';
+
+    // ── Goal-phase display configs ──────────────────────────
+    const GOAL_CONFIGS = {
+      bulk: {
+        label: 'Lean Bulk',       icon: '&#x1F4AA;',
+        accent: '#1D9E75',        bg: '#E1F5EE',
+        heroLabel: 'Protein Target',
+        heroFn: (tot, tgt) => `${Math.round(tot.proteinG||0)}g / ${Math.round(tgt.proteinG)}g`,
+        priorities: [
+          'Hit your protein target across 4+ meals',
+          'Aim for a 200-300 kcal daily surplus',
+          'Progressive overload: add weight or reps each session',
+        ],
+        trainingFocus: 'Volume & Mechanical Tension',
+        trainingDetail: 'Myofibrillar hypertrophy requires 10-20 weekly sets per muscle group at 65-80% 1RM with RPE 7-9.',
+      },
+      cut: {
+        label: 'Fat Loss',        icon: '&#x1F525;',
+        accent: '#EF4444',        bg: '#FEF2F2',
+        heroLabel: 'Calorie Deficit',
+        heroFn: (tot, tgt) => {
+          const rem = (tgt.kcal||0) - Math.round(tot.kcal||0);
+          return (rem >= 0 ? '' : '-') + Math.abs(rem).toLocaleString() + ' kcal';
+        },
+        priorities: [
+          'Maintain a 300-500 kcal daily deficit',
+          'Keep protein high (2.3-3.1 g/kg) to preserve lean mass',
+          'Resistance train 3-4x/week to minimise muscle loss',
+        ],
+        trainingFocus: 'Muscle Preservation',
+        trainingDetail: 'In a deficit, prioritise maintaining training load over adding volume. Reduce sets before reducing intensity.',
+      },
+      maintain: {
+        label: 'Maintenance',     icon: '&#x2696;&#xFE0F;',
+        accent: '#6B7280',        bg: '#F3F4F6',
+        heroLabel: 'Calorie Balance',
+        heroFn: (tot, tgt) => `${Math.round(tot.kcal||0).toLocaleString()} kcal`,
+        priorities: [
+          'Match calorie intake to expenditure consistently',
+          'Optimise macro split for performance',
+          'Monitor body composition monthly, not daily',
+        ],
+        trainingFocus: 'General Health & Performance',
+        trainingDetail: 'Maintenance is ideal for building a training base, peaking for an event, or recovering between phases.',
+      },
+    };
+
+    // ── Animated number counter ─────────────────────────────
+    function animateNum(el, toVal, duration=380,
+                        fmt=v=>Math.round(v).toLocaleString()) {
+      if (!el) return;
+      const from = parseFloat(el._animTarget ?? el.textContent.replace(/[^0-9.\-]/g,'')) || 0;
+      el._animTarget = toVal;
+      const start = performance.now();
+      const tick = now => {
+        const t = Math.min((now - start) / duration, 1);
+        const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+        el.textContent = fmt(from + (toVal - from) * ease);
+        if (t < 1) requestAnimationFrame(tick);
+        else { el._animTarget = null; el.classList.add('num-updated'); setTimeout(()=>el.classList.remove('num-updated'),520); }
+      };
+      requestAnimationFrame(tick);
+    }
 
     const APEX_CONFIG = {
       url:  'https://iedeghnykrigeensamcj.supabase.co',
@@ -1004,45 +1087,126 @@
     const XSEARCH = { timer: null, ctrl: null };
 
 
-    // ── Home tab ───────────────────────────────────────────────
+    // ── Home tab (goal-adaptive) ───────────────────────────────
     async function loadHomeTab() {
-      // Greeting
-      const hr = new Date().getHours();
+      const hr       = new Date().getHours();
       const greeting = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+      const name     = APP.profile?.full_name?.split(' ')[0] || '';
       document.getElementById('home-greeting').textContent =
-        greeting + (APP.profile?.full_name ? ', ' + APP.profile.full_name.split(' ')[0] : '');
+        name ? `${greeting}, ${name}` : greeting;
       document.getElementById('home-date-sub').textContent =
         new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
 
-      // Load today nutrition for ring/bars
+      // Goal config lookup
+      const phase  = APP.profile?.phase || 'maintain';
+      const cfg    = GOAL_CONFIGS[phase] || GOAL_CONFIGS.maintain;
+
+      // ── Inject goal banner (replaces if already exists) ───
+      let banner = document.getElementById('home-goal-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'home-goal-banner';
+        const greetEl = document.getElementById('home-greeting')?.parentElement;
+        if (greetEl) greetEl.parentElement.insertBefore(banner, greetEl.nextSibling);
+      }
+      banner.innerHTML = `
+        <div class="card" style="margin-bottom:1rem;padding:1rem 1.125rem;
+             border-left:3px solid ${cfg.accent};background:${cfg.bg}">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div>
+              <div style="font-size:0.7rem;font-weight:600;letter-spacing:.08em;
+                          text-transform:uppercase;color:${cfg.accent};margin-bottom:3px">
+                Current Phase
+              </div>
+              <div style="font-size:1rem;font-weight:700">${cfg.icon} ${cfg.label}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:0.7rem;color:var(--text-3);margin-bottom:2px">${cfg.heroLabel}</div>
+              <div id="home-hero-val" style="font-size:1.1rem;font-weight:700;color:${cfg.accent}">...</div>
+            </div>
+          </div>
+        </div>`;
+
+      // ── Inject priorities card ─────────────────────────────
+      let priCard = document.getElementById('home-priorities');
+      if (!priCard) {
+        priCard = document.createElement('div');
+        priCard.id = 'home-priorities';
+        priCard.className = 'card';
+        priCard.style.cssText = 'margin-bottom:1rem;padding:1rem 1.125rem';
+        const tileGrid = document.querySelector('#panel-home [style*="grid-template-columns:1fr 1fr"]');
+        if (tileGrid) tileGrid.parentElement.insertBefore(priCard, tileGrid);
+      }
+      priCard.innerHTML = `
+        <div style="font-size:0.75rem;font-weight:600;letter-spacing:.08em;
+                    text-transform:uppercase;color:var(--text-3);margin-bottom:0.75rem">
+          Today's Priorities
+        </div>
+        ${cfg.priorities.map(p => `
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:7px;font-size:0.875rem">
+            <span style="color:${cfg.accent};flex-shrink:0;margin-top:1px">&#x25CF;</span>
+            <span style="color:var(--text-2)">${p}</span>
+          </div>`).join('')}
+        <div style="margin-top:0.875rem;padding-top:0.875rem;border-top:0.5px solid var(--border)">
+          <div style="font-size:0.75rem;font-weight:600;color:var(--text-3);margin-bottom:4px">
+            Training Focus
+          </div>
+          <div style="font-size:0.875rem;font-weight:500;color:${cfg.accent};margin-bottom:4px">
+            ${cfg.trainingFocus}
+          </div>
+          <div style="font-size:0.8125rem;color:var(--text-3);line-height:1.5">
+            ${cfg.trainingDetail}
+          </div>
+        </div>`;
+
+      // ── Load nutrition for ring + bars ─────────────────────
       try {
         const { totals, plan } = await ApexNutrition.MealPlan.getOrCreateToday();
-        const goal = plan?.kcal_target || APP.profile?.calorie_target || 2000;
-        const rem  = Math.max(0, goal - (totals?.kcal || 0));
-        const pct  = Math.min(100, ((totals?.kcal || 0) / goal) * 100);
+        const kcalTarget = plan?.kcal_target || APP.profile?.calorie_target || 2000;
+        const rem  = kcalTarget - Math.round(totals?.kcal || 0);
+        const pct  = Math.min(100, ((totals?.kcal || 0) / kcalTarget) * 100);
         const circ = 2 * Math.PI * 40;
+        const tgts = {
+          proteinG: APP.profile?.protein_target_g || 1,
+          carbsG:   APP.profile?.carb_target_g    || 1,
+          fatG:     APP.profile?.fat_target_g     || 1,
+          kcal:     kcalTarget,
+        };
 
-        document.getElementById('home-kcal-rem').textContent = Math.round(rem).toLocaleString();
-        document.getElementById('home-ring-arc').setAttribute('stroke-dasharray',
-          `${(pct/100)*circ} ${circ}`);
+        // Hero value
+        const heroEl = document.getElementById('home-hero-val');
+        if (heroEl) heroEl.textContent = cfg.heroFn(totals||{}, tgts);
 
-        const tP = APP.profile?.protein_target_g || 1;
-        const tC = APP.profile?.carb_target_g    || 1;
-        const tF = APP.profile?.fat_target_g     || 1;
-        const pctP = Math.min(100, ((totals?.proteinG||0)/tP)*100);
-        const pctC = Math.min(100, ((totals?.carbsG  ||0)/tC)*100);
-        const pctF = Math.min(100, ((totals?.fatG    ||0)/tF)*100);
+        // Animated ring
+        const arc = document.getElementById('home-ring-arc');
+        if (arc) arc.setAttribute('stroke-dasharray', `${(pct/100)*circ} ${circ}`);
+        arc?.setAttribute('stroke', phase==='cut' ? '#EF4444' : 'var(--accent)');
 
-        document.getElementById('home-p-bar').style.width = pctP + '%';
-        document.getElementById('home-c-bar').style.width = pctC + '%';
-        document.getElementById('home-f-bar').style.width = pctF + '%';
-        document.getElementById('home-p-txt').textContent =
-          `${Math.round(totals?.proteinG||0)}/${Math.round(tP)}g`;
-        document.getElementById('home-c-txt').textContent =
-          `${Math.round(totals?.carbsG||0)}/${Math.round(tC)}g`;
-        document.getElementById('home-f-txt').textContent =
-          `${Math.round(totals?.fatG||0)}/${Math.round(tF)}g`;
-      } catch(e) { console.warn('home nutrition load', e); }
+        // Animated counter for remaining kcal
+        const remEl = document.getElementById('home-kcal-rem');
+        animateNum(remEl, Math.max(0, rem));
+
+        // Macro bars + animated text
+        const bars = [
+          { bar:'home-p-bar', txt:'home-p-txt', val:totals?.proteinG||0, tgt:tgts.proteinG, color:'var(--accent)' },
+          { bar:'home-c-bar', txt:'home-c-txt', val:totals?.carbsG||0,   tgt:tgts.carbsG,   color:'#3B82F6' },
+          { bar:'home-f-bar', txt:'home-f-txt', val:totals?.fatG||0,     tgt:tgts.fatG,     color:'#F59E0B' },
+        ];
+        bars.forEach(b => {
+          const barEl = document.getElementById(b.bar);
+          const txtEl = document.getElementById(b.txt);
+          if (barEl) barEl.style.width = Math.min(100, (b.val/b.tgt)*100) + '%';
+          if (txtEl) txtEl.textContent = `${Math.round(b.val)}/${Math.round(b.tgt)}g`;
+        });
+
+        // Quick-action subtitles
+        const mealsSub = document.getElementById('home-meals-sub');
+        if (mealsSub) {
+          const mealCount = (await ApexNutrition.MealPlan.getOrCreateToday()).slots
+            ?.filter(s => s.meal_items?.length > 0).length || 0;
+          mealsSub.textContent = `${mealCount} meal${mealCount===1?'':'s'} logged`;
+        }
+      } catch(e) { console.warn('home nutrition:', e); }
     }
 
     // ── Diary date navigation ──────────────────────────────────
@@ -1086,19 +1250,18 @@
 
     function updateCalorieBanner(totals, plan) {
       const goal = plan?.kcal_target || APP.profile?.calorie_target || 0;
-      const food = Math.round(totals?.kcal || 0);
-      const ex   = 0; // exercise calories (future)
+      const food = totals?.kcal || 0;
+      const ex   = 0;
       const rem  = goal - food + ex;
-      const fmt  = n => Math.abs(Math.round(n)).toLocaleString();
 
-      const goalEl = document.getElementById('cal-goal');
-      const foodEl = document.getElementById('cal-food');
-      const remEl  = document.getElementById('cal-remaining');
-      if (goalEl) goalEl.textContent = fmt(goal);
-      if (foodEl) foodEl.textContent = fmt(food);
-      if (remEl)  {
-        remEl.textContent = (rem < 0 ? '-' : '') + fmt(rem);
-        remEl.style.color = rem < 0 ? 'var(--danger)' : 'var(--accent)';
+      animateNum(document.getElementById('cal-goal'),      goal,     320, v=>Math.round(v).toLocaleString());
+      animateNum(document.getElementById('cal-food'),      food,     320, v=>Math.round(v).toLocaleString());
+      animateNum(document.getElementById('cal-exercise'),  ex,       320, v=>Math.round(v).toLocaleString());
+
+      const remEl = document.getElementById('cal-remaining');
+      if (remEl) {
+        animateNum(remEl, Math.abs(rem), 380, v => (rem<0?'-':'') + Math.round(v).toLocaleString());
+        setTimeout(() => { remEl.style.color = rem < 0 ? 'var(--danger)' : 'var(--accent)'; }, 10);
       }
     }
 
@@ -1118,6 +1281,11 @@
       updateCalorieBanner(totals, plan);
       updateDiaryDateHeader();
       renderMealSlotCards(slots);
+      requestAnimationFrame(animateMealCards);
+
+      // Render micronutrient section
+      const micros = calculateMicros(slots);
+      renderMicroSection(micros, APP.profile);
       APP.allFoods = await ApexNutrition.FoodArchive.getAll();
     }
 
@@ -1133,11 +1301,11 @@
 
     function setBar(macro, val, target, pct, isOver) {
       const bar = document.getElementById(`bar-${macro}`);
-      bar.style.width = pct + '%';
-      bar.classList.toggle('over', isOver);
-      document.getElementById(`val-${macro}`).textContent =
-        ApexNutrition.MealPlanUtils.formatMacro(val);
-      document.getElementById(`tgt-${macro}`).textContent = target ?? '---';
+      const valEl = document.getElementById(`val-${macro}`);
+      if (bar) { bar.style.width = pct + '%'; bar.classList.toggle('over', isOver); }
+      animateNum(valEl, val, 360, v => ApexNutrition.MealPlanUtils.formatMacro(v));
+      const tgtEl = document.getElementById(`tgt-${macro}`);
+      if (tgtEl) tgtEl.textContent = target ?? '---';
     }
 
     // ── Meal slot cards ─────────────────────────────────────
@@ -1235,6 +1403,86 @@
       if (error) { showToast(error.message, 'error'); return; }
       APP.loadedTabs.delete('diary');
       loadTab('diary');
+    }
+
+
+    // ── Calculate micros from today's slots ─────────────────
+    function calculateMicros(slots) {
+      const m = { sodium:0, potassium:0, calcium:0, iron:0, vit_c:0, vit_d:0 };
+      (slots||[]).forEach(slot => {
+        (slot.meal_items||[]).forEach(item => {
+          const f = item.foods;
+          if (!f) return;
+          const r = (item.quantity_g || 0) / 100;
+          m.sodium    += (f.sodium_mg     || 0) * r;
+          m.potassium += (f.potassium_mg  || 0) * r;
+          m.calcium   += (f.calcium_mg    || 0) * r;
+          m.iron      += (f.iron_mg       || 0) * r;
+          m.vit_c     += (f.vitamin_c_mg  || 0) * r;
+          m.vit_d     += (f.vitamin_d_mcg || 0) * r;
+        });
+      });
+      return m;
+    }
+
+    // ── Render micronutrient section ─────────────────────────
+    function renderMicroSection(micros, profile) {
+      const content = document.getElementById('micro-content');
+      const badge   = document.getElementById('micro-summary-badge');
+      if (!content) return;
+
+      // Sex-adjusted iron target
+      const isMale = (profile?.sex || 'other') === 'male';
+      const rows = [
+        { label:'Sodium',     val:micros.sodium,    tgt:profile?.sodium_target_mg     || 2300, unit:'mg',  isMax:true,  color:'#6B7280' },
+        { label:'Potassium',  val:micros.potassium, tgt:profile?.potassium_target_mg  || 4700, unit:'mg',  isMax:false, color:'#10B981' },
+        { label:'Calcium',    val:micros.calcium,   tgt:profile?.calcium_target_mg    || 1000, unit:'mg',  isMax:false, color:'#3B82F6' },
+        { label:'Iron',       val:micros.iron,      tgt:profile?.iron_target_mg       || (isMale?8:18), unit:'mg', isMax:false, color:'#EF4444' },
+        { label:'Vitamin C',  val:micros.vit_c,     tgt:profile?.vitamin_c_target_mg  || (isMale?90:75), unit:'mg', isMax:false, color:'#F59E0B' },
+        { label:'Vitamin D',  val:micros.vit_d,     tgt:profile?.vitamin_d_target_mcg || 20, unit:'mcg',  isMax:false, color:'#8B5CF6' },
+      ];
+
+      // Count how many are on track (>= 80%)
+      const onTrack = rows.filter(r => {
+        const pct = r.val / r.tgt;
+        return r.isMax ? pct <= 1 : pct >= 0.8;
+      }).length;
+      if (badge) badge.textContent = `${onTrack}/${rows.length} on track`;
+
+      content.innerHTML = rows.map(r => {
+        const pct    = Math.min(110, (r.val / r.tgt) * 100);
+        const isOver = r.isMax && pct > 100;
+        const isLow  = !r.isMax && pct < 50;
+        const barPct = Math.min(100, pct);
+        const dispColor = isOver ? '#EF4444' : isLow ? '#F59E0B' : r.color;
+        const valStr = r.val < 10 ? r.val.toFixed(1) : Math.round(r.val);
+        const tgtStr = r.tgt < 10 ? r.tgt.toFixed(0) : r.tgt.toLocaleString();
+        const flag   = isOver ? ' &#x26A0;&#xFE0F;' : '';
+        return `
+          <div style="margin-bottom:0.75rem">
+            <div style="display:flex;justify-content:space-between;
+                        font-size:0.8125rem;margin-bottom:4px">
+              <span style="color:var(--text-2);font-weight:500">${r.label}</span>
+              <span style="color:${dispColor};font-weight:600">
+                ${valStr} / ${tgtStr} ${r.unit}${flag}
+              </span>
+            </div>
+            <div class="micro-bar-track">
+              <div class="micro-bar-fill"
+                   style="width:${barPct}%;background:${dispColor}"></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // ── Staggered meal card animation helper ─────────────────
+    function animateMealCards() {
+      document.querySelectorAll('#meal-slots-list .card').forEach((el, i) => {
+        el.classList.remove('meal-card-anim');
+        void el.offsetWidth; // reflow
+        el.style.animationDelay = `${i * 55}ms`;
+        el.classList.add('meal-card-anim');
+      });
     }
 
     // ── Food picker modal ───────────────────────────────────
