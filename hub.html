@@ -540,19 +540,25 @@
           <div style="font-size:0.9375rem;font-weight:600" id="picker-selected-name"></div>
           <div style="font-size:0.75rem;color:var(--text-3);margin-top:1px" id="picker-selected-brand"></div>
         </div>
-        <!-- Quick gram presets -->
-        <div style="display:flex;gap:6px;margin-bottom:0.75rem">
-          <button onclick="setQuickGrams(50)"  class="gram-preset">50g</button>
-          <button onclick="setQuickGrams(100)" class="gram-preset">100g</button>
-          <button onclick="setQuickGrams(150)" class="gram-preset">150g</button>
-          <button onclick="setQuickGrams(200)" class="gram-preset">200g</button>
+        <!-- Unit selector -->
+        <div style="display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;
+                    -webkit-overflow-scrolling:touch;margin-bottom:0.625rem;padding-bottom:2px">
+          <button class="unit-btn active" data-unit="g"    onclick="setUnit('g')">g</button>
+          <button class="unit-btn"        data-unit="oz"   onclick="setUnit('oz')">oz</button>
+          <button class="unit-btn"        data-unit="lbs"  onclick="setUnit('lbs')">lbs</button>
+          <button class="unit-btn"        data-unit="ml"   onclick="setUnit('ml')">ml</button>
+          <button class="unit-btn"        data-unit="tbsp" onclick="setUnit('tbsp')">tbsp</button>
+          <button class="unit-btn"        data-unit="tsp"  onclick="setUnit('tsp')">tsp</button>
+          <button class="unit-btn"        data-unit="cups" onclick="setUnit('cups')">cups</button>
         </div>
+        <!-- Quick presets (rendered by JS, unit-aware) -->
+        <div id="picker-presets" style="display:flex;gap:6px;margin-bottom:0.75rem"></div>
         <!-- Amount + live kcal on same row -->
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:0.625rem">
           <div class="input-group" style="flex:1">
-            <input id="picker-qty" type="number" min="1" max="2000" step="5" value="100"
-                   oninput="updatePickerPreview()">
-            <span class="input-suffix">g</span>
+            <input id="picker-qty" type="number" min="0.01" max="5000" step="1" value="100"
+                   inputmode="decimal" oninput="updatePickerPreview()">
+            <span class="input-suffix" id="picker-unit-suffix">g</span>
           </div>
           <div id="pp-k" style="font-size:1.0625rem;font-weight:700;
                                  color:var(--accent);min-width:76px;text-align:right">0 kcal</div>
@@ -1369,7 +1375,67 @@
     // NUTRITION TAB
     // =======================================================
 
-    // State for the food picker
+    // ── Unit conversion system ─────────────────────────────
+    const UNIT_CONFIGS = {
+      g:    { toG: 1,          label: 'g',    step: 1,    presets: [50, 100, 150, 200]           },
+      oz:   { toG: 28.3495,    label: 'oz',   step: 0.5,  presets: [1, 2, 3, 4]                 },
+      lbs:  { toG: 453.592,    label: 'lbs',  step: 0.25, presets: [0.25, 0.5, 0.75, 1]         },
+      ml:   { toG: 1,          label: 'ml',   step: 10,   presets: [100, 200, 250, 500]          },
+      tbsp: { toG: 14.787,     label: 'tbsp', step: 0.5,  presets: [1, 2, 3, 4]                 },
+      tsp:  { toG: 4.929,      label: 'tsp',  step: 0.25, presets: [1, 2, 3, 4]                 },
+      cups: { toG: 236.588,    label: 'cups', step: 0.25, presets: [0.25, 0.5, 0.75, 1]         },
+    };
+
+    function toGrams(val, unit) {
+      return val * (UNIT_CONFIGS[unit]?.toG ?? 1);
+    }
+
+    function fromGrams(g, unit) {
+      const factor = UNIT_CONFIGS[unit]?.toG ?? 1;
+      return parseFloat((g / factor).toFixed(3));
+    }
+
+    function renderPresets() {
+      const cfg = UNIT_CONFIGS[PICKER.unit] ?? UNIT_CONFIGS.g;
+      document.getElementById('picker-presets').innerHTML = cfg.presets.map(v =>
+        `<button onclick="setQuickAmount(${v})" class="gram-preset">
+           ${v}&thinsp;${cfg.label}
+         </button>`).join('');
+    }
+
+    function setUnit(unit) {
+      // Convert current qty to new unit
+      const oldRaw = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const grams  = toGrams(oldRaw, PICKER.unit);
+
+      PICKER.unit  = unit;
+
+      // Update active button
+      document.querySelectorAll('#picker-footer .unit-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.unit === unit));
+
+      // Update suffix
+      const sfx = document.getElementById('picker-unit-suffix');
+      if (sfx) sfx.textContent = unit;
+
+      // Update input: step + converted value
+      const inp = document.getElementById('picker-qty');
+      if (inp) {
+        const cfg = UNIT_CONFIGS[unit];
+        inp.step  = cfg.step;
+        inp.value = fromGrams(grams, unit);
+      }
+
+      renderPresets();
+      updatePickerPreview();
+    }
+
+    function setQuickAmount(val) {
+      const inp = document.getElementById('picker-qty');
+      if (inp) { inp.value = val; updatePickerPreview(); }
+    }
+
+    // ── State for the food picker
     const PICKER = {
       slotId:       null,
       activeFilter: '',
@@ -1378,6 +1444,7 @@
       cache:        new Map(),   // temp key -> food object for external results
       multiMode:    false,
       multiSel:     new Set(),   // selected food keys in multi-add mode
+      unit:         'g',         // active measurement unit
     };
 
     // Debounce handle for external search
@@ -1805,6 +1872,11 @@
       document.getElementById('multi-add-footer').classList.add('hidden');
       const toggleBtn = document.getElementById('multi-add-toggle');
       if (toggleBtn) { toggleBtn.textContent='Select'; toggleBtn.style.background=''; toggleBtn.style.color=''; }
+      // Sync unit buttons to current PICKER.unit
+      document.querySelectorAll('#picker-footer .unit-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.unit === (PICKER.unit || 'g')));
+      const sfx = document.getElementById('picker-unit-suffix');
+      if (sfx) sfx.textContent = PICKER.unit || 'g';
       document.getElementById('picker-title').textContent = `Add to ${slotName}`;
       document.getElementById('picker-search').value = '';
       document.getElementById('picker-footer').classList.add('hidden');
@@ -2206,8 +2278,10 @@
       PICKER.selectedFood = food;
       document.getElementById('picker-selected-name').textContent = food.name;
       document.getElementById('picker-selected-brand').textContent = food.brand || '';
-      // Pre-fill with last used qty (shows what they actually ate last time)
-      document.getElementById('picker-qty').value = food._recentQty || 100;
+      // Pre-fill with last used qty converted to current unit
+      const recentG = food._recentQty || 100;
+      document.getElementById('picker-qty').value = fromGrams(recentG, PICKER.unit);
+      renderPresets();
       document.getElementById('picker-footer').classList.remove('hidden');
       updatePickerPreview();
       document.getElementById('picker-footer')
@@ -2234,18 +2308,14 @@
     function updatePickerPreview() {
       const food = PICKER.selectedFood;
       if (!food) return;
-      const g = parseFloat(document.getElementById('picker-qty').value) || 0;
-      const r = g / 100;
-      const el = id => document.getElementById(id);
+      const raw = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const g   = toGrams(raw, PICKER.unit);   // always grams internally
+      const r   = g / 100;
+      const el  = id => document.getElementById(id);
       el('pp-p').textContent = (food.protein_g * r).toFixed(1) + 'g';
       el('pp-c').textContent = (food.carbs_g   * r).toFixed(1) + 'g';
       el('pp-f').textContent = (food.fat_g     * r).toFixed(1) + 'g';
       el('pp-k').textContent = Math.round(food.kcal * r) + ' kcal';
-    }
-
-    function setQuickGrams(g) {
-      const inp = document.getElementById('picker-qty');
-      if (inp) { inp.value = g; updatePickerPreview(); }
     }
 
     // ── Bulk add (multi-add mode) ───────────────────────────────
@@ -2275,8 +2345,9 @@
 
     // ── Add selected food to meal ────────────────────────────────
     async function addSelectedFood() {
-      const food = PICKER.selectedFood;
-      const g    = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const food   = PICKER.selectedFood;
+      const rawAmt = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const g      = Math.round(toGrams(rawAmt, PICKER.unit));
       if (!food || g < 1) { showToast('Enter a valid amount', 'error'); return; }
 
       const btn = document.querySelector('#picker-footer .btn-primary');
