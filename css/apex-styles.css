@@ -1436,3 +1436,17 @@ body {
 .food-page:not(.fp-open) {
   pointer-events: none;
 }
+
+/* ── Meal card add button ────────────────────────────────── */
+.meal-add-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  background: transparent; color: var(--accent);
+  font-size: 1.25rem; font-weight: 300; line-height: 1;
+  cursor: pointer; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, transform 0.1s;
+  -webkit-user-select: none; user-select: none;
+}
+.meal-add-btn:hover  { background: var(--accent); color: #fff; }
+.meal-add-btn:active { transform: scale(0.9); }
