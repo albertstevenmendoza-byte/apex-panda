@@ -163,6 +163,12 @@
       </div>
       <div class="row gap-8">
         <div id="next-deload-badge" class="badge badge-neutral hidden"></div>
+        <button onclick="openSplitModal()"
+                style="font-size:0.75rem;padding:4px 10px;border-radius:var(--r-sm);
+                       border:0.5px solid var(--border);background:transparent;
+                       color:var(--text-2);cursor:pointer;font-family:inherit">
+          &#x2299; Split
+        </button>
       </div>
     </div>
 
@@ -616,6 +622,28 @@
       <div id="swap-list" style="overflow-y:auto;flex:1"></div>
     </div>
   </div>
+
+  <!-- ── Training split selector ───────────────────────────── -->
+  <div id="split-modal" class="modal-backdrop hidden"
+       onclick="if(event.target===this)closeSplitModal()">
+    <div class="modal-box"
+         style="max-width:500px;max-height:82dvh;overflow:hidden;
+                display:flex;flex-direction:column;padding:0">
+
+      <div style="padding:1.25rem;border-bottom:0.5px solid var(--border);flex-shrink:0">
+        <div class="row-between" style="margin-bottom:4px">
+          <div class="modal-title">Training Split</div>
+          <button class="btn-icon btn-ghost" onclick="closeSplitModal()">&#x2715;</button>
+        </div>
+        <div style="font-size:0.8125rem;color:var(--text-3)">
+          Selecting a new split regenerates your program from Week 1.
+        </div>
+      </div>
+
+      <div id="split-options-list" style="overflow-y:auto;flex:1;padding:0.5rem 0"></div>
+    </div>
+  </div>
+
 
   <!-- ── Goal edit modal ──────────────────────────────────── -->
   <div id="goal-edit-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeGoalModal()">
@@ -1401,6 +1429,75 @@
       showToast('Goal updated', 'success');
     }
 
+
+    // ── Training split selector ──────────────────────────────
+    const SPLIT_META = {
+      beginner:   { icon:'&#x1F7E2;', days:'3 days/week',  freq:'3×/muscle/week',  level:'Beginner'     },
+      full_body_4:{ icon:'&#x1F535;', days:'4 days/week',  freq:'4×/muscle/week',  level:'Intermediate' },
+      intermediate:{ icon:'&#x1F7E1;',days:'4 days/week',  freq:'2×/muscle/week',  level:'Intermediate' },
+      strength:   { icon:'&#x1F7E3;', days:'4 days/week',  freq:'2×/muscle/week',  level:'Intermediate+'},
+      ppl_3:      { icon:'&#x26AA;',  days:'3 days/week',  freq:'1×/muscle/week',  level:'Any'          },
+      advanced:   { icon:'&#x1F534;', days:'6 days/week',  freq:'2×/muscle/week',  level:'Advanced'     },
+      body_part:  { icon:'&#x1F7E0;', days:'5 days/week',  freq:'1×/muscle/week',  level:'Intermediate+'},
+    };
+
+    function openSplitModal() {
+      const current = APP.profile?.preferred_split
+                   || APP.profile?.experience
+                   || 'intermediate';
+      const splits  = ApexTraining.ProgramBuilder.getSplits();
+
+      document.getElementById('split-options-list').innerHTML = Object.entries(splits).map(([key, split]) => {
+        const meta    = SPLIT_META[key] ?? { icon:'&#x26AA;', days:'', freq:'', level:'' };
+        const isCur   = key === current;
+        return `
+          <div onclick="selectSplit('${key}')"
+               style="padding:1rem 1.25rem;border-bottom:0.5px solid var(--border);
+                      cursor:pointer;transition:background 0.1s;
+                      background:${isCur ? 'var(--accent-light)' : 'transparent'}"
+               onmouseenter="this.style.background='var(--surface-alt)'"
+               onmouseleave="this.style.background='${isCur ? 'var(--accent-light)' : 'transparent'}'">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <div style="font-size:0.9375rem;font-weight:600">
+                ${meta.icon} ${split.name}
+              </div>
+              ${isCur ? '<span style="font-size:0.7rem;background:var(--accent);color:#fff;padding:2px 8px;border-radius:99px">Current</span>' : ''}
+            </div>
+            <div style="display:flex;gap:12px;margin-bottom:5px">
+              <span style="font-size:0.75rem;color:var(--accent);font-weight:500">${meta.days}</span>
+              <span style="font-size:0.75rem;color:var(--text-3)">&middot; ${meta.freq}</span>
+              <span style="font-size:0.75rem;color:var(--text-3)">&middot; ${meta.level}</span>
+            </div>
+            <div style="font-size:0.8125rem;color:var(--text-3);line-height:1.5">
+              ${split.science || ''}
+            </div>
+          </div>`;
+      }).join('');
+
+      document.getElementById('split-modal').classList.remove('hidden');
+    }
+
+    function closeSplitModal() {
+      document.getElementById('split-modal').classList.add('hidden');
+    }
+
+    async function selectSplit(splitKey) {
+      closeSplitModal();
+
+      const { error } = await ApexCore.Profile.update({ preferred_split: splitKey });
+      if (error) { showToast('Could not save split', 'error'); return; }
+
+      APP.profile = { ...APP.profile, preferred_split: splitKey };
+      showToast('Regenerating program…', 'info');
+
+      const { error: genErr } = await ApexTraining.ProgramBuilder.generate({ totalWeeks: 12 });
+      if (genErr) { showToast('Program generation failed: ' + genErr.message, 'error'); return; }
+
+      APP.loadedTabs.delete('training');
+      await loadTab('training');
+      showToast('New program ready!', 'success');
+    }
+
     // ═══════════════════════════════════════════════════════
     // NUTRITION TAB
     // ═══════════════════════════════════════════════════════
@@ -1715,46 +1812,73 @@
       if (tgtEl) tgtEl.textContent = target ?? '---';
     }
 
-    // ── Meal slot cards ─────────────────────────────────────
+    // ── Meal slot cards (collapsible) ───────────────────────
     function renderMealSlotCards(slots) {
       const list = document.getElementById('meal-slots-list');
       list.innerHTML = '';
       slots.forEach(slot => {
-        const slotTotals = ApexNutrition.MacroAccumulator.fromItems(slot.meal_items ?? []);
+        const items    = slot.meal_items ?? [];
+        const totals   = ApexNutrition.MacroAccumulator.fromItems(items);
+        const hasItems = items.length > 0;
+
         const card = document.createElement('div');
         card.className = 'card';
         card.style.cssText = 'margin-bottom:10px;padding:0;overflow:hidden';
 
-        // Slot header
+        // ── Header (tap to collapse/expand) ─────────────────
         const header = document.createElement('div');
+        header.id    = `hdr-${slot.id}`;
         header.style.cssText =
-          'display:flex;align-items:center;justify-content:space-between;' +
-          'padding:12px 14px;border-bottom:' +
-          (slot.meal_items?.length ? '0.5px solid var(--border)' : 'none');
+          'display:flex;align-items:center;gap:10px;padding:12px 14px;' +
+          'cursor:pointer;user-select:none;-webkit-user-select:none;' +
+          'border-bottom:' + (hasItems ? '0.5px solid var(--border)' : 'none');
+        header.onclick = () => toggleMealCard(slot.id);
+
         header.innerHTML = `
-          <div>
+          <span id="chev-${slot.id}"
+                style="font-size:0.75rem;color:${hasItems ? 'var(--accent)' : 'var(--border)'};
+                       transition:transform 0.2s;flex-shrink:0;display:inline-block">
+            &#x25BC;
+          </span>
+          <div style="flex:1;min-width:0">
             <div style="font-size:0.875rem;font-weight:600">${slot.label}</div>
-            ${slotTotals.kcal > 0
-              ? `<div style="font-size:0.75rem;color:var(--text-3);margin-top:1px">
-                   ${Math.round(slotTotals.kcal)} kcal &nbsp;·&nbsp;
-                   P:${ApexNutrition.MealPlanUtils.formatMacro(slotTotals.proteinG)}g
-                   C:${ApexNutrition.MealPlanUtils.formatMacro(slotTotals.carbsG)}g
-                   F:${ApexNutrition.MealPlanUtils.formatMacro(slotTotals.fatG)}g
-                 </div>`
-              : ''}
+            <div id="summary-${slot.id}"
+                 style="font-size:0.75rem;color:var(--text-3);margin-top:1px">
+              ${totals.kcal > 0
+                ? `${Math.round(totals.kcal)} kcal &nbsp;·&nbsp;`
+                + `P:${ApexNutrition.MealPlanUtils.formatMacro(totals.proteinG)}g `
+                + `C:${ApexNutrition.MealPlanUtils.formatMacro(totals.carbsG)}g `
+                + `F:${ApexNutrition.MealPlanUtils.formatMacro(totals.fatG)}g`
+                : ''}
+            </div>
           </div>
-          <button class="btn btn-sm btn-primary" onclick="openFoodSearch('${slot.id}','${slot.label}')">
-            + Add food
-          </button>`;
+          <button class="meal-add-btn"
+                  onclick="event.stopPropagation();openFoodSearch('${slot.id}','${slot.label}')"
+                  aria-label="Add food to ${slot.label}">+</button>`;
         card.appendChild(header);
 
-        // Logged items
-        (slot.meal_items ?? []).forEach(item => {
-          card.appendChild(buildItemRow(item, slot.id));
-        });
+        // ── Items container ──────────────────────────────────
+        const body = document.createElement('div');
+        body.id = `body-${slot.id}`;
+        // Start collapsed if no items
+        if (!hasItems) body.style.display = 'none';
 
+        items.forEach(item => body.appendChild(buildItemRow(item, slot.id)));
+        card.appendChild(body);
         list.appendChild(card);
       });
+    }
+
+    function toggleMealCard(slotId) {
+      const body   = document.getElementById(`body-${slotId}`);
+      const chev   = document.getElementById(`chev-${slotId}`);
+      const hdr    = document.getElementById(`hdr-${slotId}`);
+      if (!body) return;
+      const open = body.style.display !== 'none';
+      body.style.display  = open ? 'none' : '';
+      if (chev) chev.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+      if (hdr)  hdr.style.borderBottom = (!open && body.children.length)
+        ? '0.5px solid var(--border)' : 'none';
     }
 
     function buildItemRow(item, slotId) {
