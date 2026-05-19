@@ -503,10 +503,10 @@
 
     <!-- Source tabs -->
     <div class="fp-tabs" id="fsp-tabs">
-      <button class="fp-tab active" data-src="recent"   onclick="setFspSrc(this)">Recent</button>
+      <button class="fp-tab"        data-src="recent"   onclick="setFspSrc(this)">Recent</button>
       <button class="fp-tab"        data-src="frequent" onclick="setFspSrc(this)">Frequent</button>
       <button class="fp-tab"        data-src="library"  onclick="setFspSrc(this)">My Foods</button>
-      <button class="fp-tab"        data-src="all"      onclick="setFspSrc(this)">&#x1F30E; All Foods</button>
+      <button class="fp-tab active" data-src="all"      onclick="setFspSrc(this)">&#x1F30E; All Foods</button>
     </div>
 
     <!-- Food list -->
@@ -1473,7 +1473,7 @@
       slotId:       null,
       activeFilter: '',
       selectedFood: null,
-      source:       'recent',    // 'recent' | 'frequent' | 'library' | 'all'
+      source:       'all',       // 'recent' | 'frequent' | 'library' | 'all'
       cache:        new Map(),   // temp key -> food object for external results
       multiMode:    false,
       multiSel:     new Set(),   // selected food keys in multi-add mode
@@ -1904,7 +1904,7 @@
       PICKER.slotId       = slotId;
       PICKER.slotName     = slotName;
       PICKER.selectedFood = null;
-      PICKER.source       = 'recent';
+      PICKER.source       = 'all';
       APP.allFoods.forEach(f => PICKER.cache.set(String(f.id), f));
 
       document.getElementById('fsp-meal-name').textContent = slotName || 'Meal';
@@ -1912,7 +1912,7 @@
       document.getElementById('fsp-clear').classList.add('fp-hidden');
       // Reset tabs to Recent
       document.querySelectorAll('#fsp-tabs .fp-tab')
-        .forEach(b => b.classList.toggle('active', b.dataset.src === 'recent'));
+        .forEach(b => b.classList.toggle('active', b.dataset.src === 'all'));
 
       document.getElementById('food-search-page').classList.add('fp-open');
       fspLoad();
