@@ -43,11 +43,11 @@
 
   <!-- ── Bottom navigation ───────────────────────────────── -->
   <nav class="bottom-nav">
-    <button class="nav-btn" data-tab="home" onclick="switchTab('home',this)">
+    <button class="nav-btn active" data-tab="home" onclick="switchTab('home',this)">
       <span class="nav-icon">&#x1F3E0;</span>
       <span class="nav-label">Home</span>
     </button>
-    <button class="nav-btn active" data-tab="training" onclick="switchTab('training',this)">
+    <button class="nav-btn" data-tab="training" onclick="switchTab('training',this)">
       <span class="nav-icon">&#x1F4AA;</span>
       <span class="nav-label">Training</span>
     </button>
@@ -817,7 +817,7 @@
 
       renderTopBar();
       setupEventBus();
-      await switchTab('training', document.querySelector('.nav-btn[data-tab="training"]'));
+      await switchTab('home', document.querySelector('.nav-btn[data-tab="home"]'));
     });
 
     // ── Event bus listeners ───────────────────────────────
