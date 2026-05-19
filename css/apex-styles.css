@@ -1424,23 +1424,9 @@ body {
 }
 
 /* ── Standalone mode only ──────────────────────────────────── */
-/* When running as saved app (no browser chrome), ensure no gap
-   appears between the status bar and the nav bar background    */
 @media (display-mode: standalone) {
-  body::before {
-    content: '';
-    display: block;
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    height: env(safe-area-inset-top, 0px);
-    background: var(--surface);
-    z-index: 999;
-  }
-
-  /* The floating status bar background shouldn't show on full-screen overlays */
-  #focus-mode::before,
-  .food-page::before,
-  #rest-overlay::before {
-    display: none;
+  /* Subtle status bar background for the safe-area strip */
+  .bottom-nav {
+    border-top: 0.5px solid var(--border);
   }
 }
