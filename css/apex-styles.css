@@ -1309,3 +1309,138 @@ input:focus, select:focus, textarea:focus {
   font-size: 1rem; color: var(--text-3); font-weight: 500;
   flex-shrink: 0; min-width: 36px;
 }
+
+
+/* ================================================================
+   iOS / PWA — NATIVE HOME SCREEN FEEL
+   Applied when running as a saved web app on iPhone.
+   ================================================================ */
+
+/* 1. Kill the grey tap flash on every element */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* 2. Remove 300ms tap delay — makes every button feel instant */
+button, a, label, [onclick], [role="button"] {
+  touch-action: manipulation;
+}
+
+/* 3. Smooth font rendering (native app quality) */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* 4. No rubber-band on the document — only allow scroll inside
+      designated containers */
+body {
+  overscroll-behavior: none;
+}
+
+/* 5. Momentum (inertia) scrolling inside scroll containers */
+.fp-list,
+.focus-body,
+.fp-detail-body,
+.panel.active {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 6. Prevent iOS from zooming on input focus.
+      Any input with font-size < 16px triggers a zoom animation.
+      We lock everything at 16px and restore display sizes individually. */
+input, select, textarea {
+  font-size: 1rem;           /* 16px — iOS zoom threshold */
+}
+
+/* Restore the large stepper numbers (they're display-only, no keyboard) */
+.stepper-val {
+  font-size: 1.875rem !important;
+}
+
+/* 7. Suppress long-press callout (copy/paste bubble) on interactive UI */
+button, a, nav, .bottom-nav, .fp-header, .focus-topbar {
+  -webkit-touch-callout: none;
+}
+
+/* 8. No text selection on chrome elements */
+button, nav, .bottom-nav, .fp-header, .focus-topbar,
+.fp-tabs, .fp-tab, .unit-btn, .gram-preset,
+.rpe-btn, .stepper-btn, .picker-tab, .nav-btn, .nav-label {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── Safe area insets ──────────────────────────────────────── */
+/*
+   viewport-fit=cover lets the app fill the whole screen including
+   the notch / Dynamic Island. We then push content back into the
+   safe zone using env(safe-area-inset-*).
+*/
+
+/* Body: push ALL page content below the status bar */
+body {
+  padding-top: env(safe-area-inset-top, 0px);
+  /* padding-bottom (bottom nav) is already handled above */
+}
+
+/* Fixed full-screen overlays — their top header must clear the notch */
+.food-page .fp-header {
+  padding-top: calc(0.875rem + env(safe-area-inset-top, 0px));
+  min-height: calc(56px + env(safe-area-inset-top, 0px));
+}
+#focus-mode .focus-topbar {
+  padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  min-height: calc(52px + env(safe-area-inset-top, 0px));
+}
+#rest-overlay {
+  /* Ring + content should start below the notch */
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Quick-add & modals that slide up from bottom — clear home bar */
+#quick-add-modal > div {
+  padding-bottom: max(1.5rem, calc(1rem + env(safe-area-inset-bottom, 0px)));
+}
+.modal-box {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Reinforce bottom nav safe area with a guaranteed minimum */
+.bottom-nav {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  height: calc(68px + max(env(safe-area-inset-bottom, 0px), 8px));
+}
+body {
+  padding-bottom: calc(68px + max(env(safe-area-inset-bottom, 0px), 8px));
+}
+
+/* ── Scroll feel ───────────────────────────────────────────── */
+
+/* Horizontal pill-button rows scroll naturally with swipe */
+.fp-unit-row, .fp-tabs, .fp-presets-row {
+  scroll-snap-type: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Standalone mode only ──────────────────────────────────── */
+/* When running as saved app (no browser chrome), ensure no gap
+   appears between the status bar and the nav bar background    */
+@media (display-mode: standalone) {
+  body::before {
+    content: '';
+    display: block;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: env(safe-area-inset-top, 0px);
+    background: var(--surface);
+    z-index: 999;
+  }
+
+  /* The floating status bar background shouldn't show on full-screen overlays */
+  #focus-mode::before,
+  .food-page::before,
+  #rest-overlay::before {
+    display: none;
+  }
+}
