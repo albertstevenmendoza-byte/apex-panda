@@ -1919,11 +1919,23 @@
       setTimeout(() => document.getElementById('fsp-query').focus(), 320);
     }
 
+    // Briefly block all touches after a page slide-out to prevent
+    // ghost taps landing on the newly-revealed content underneath.
+    function preventGhostTaps(ms = 380) {
+      document.body.style.pointerEvents = 'none';
+      setTimeout(() => { document.body.style.pointerEvents = ''; }, ms);
+    }
+
     function closeFoodSearch() {
       document.getElementById('food-search-page').classList.remove('fp-open');
-      // Refresh diary to show newly added items
-      APP.loadedTabs.delete('diary');
-      loadTab('diary');
+      preventGhostTaps();
+      // Defer diary refresh until AFTER the slide animation (320ms) completes.
+      // Firing it immediately makes the network request compete with the animation,
+      // causing both to feel sluggish.
+      setTimeout(() => {
+        APP.loadedTabs.delete('diary');
+        loadTab('diary');
+      }, 340);
     }
 
     function setFspSrc(btn) {
@@ -2072,6 +2084,7 @@
     function closeFoodDetail() {
       document.getElementById('food-detail-page').classList.remove('fp-open');
       PICKER.selectedFood = null;
+      preventGhostTaps();
     }
 
     function fdpSetUnit(unit) {
