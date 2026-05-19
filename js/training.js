@@ -1023,10 +1023,26 @@ window.ApexTraining = (function () {
       const { workout, error } = await WeeklyPlan.getWorkout(plannedWorkoutId);
       if (error || !workout) return { session: null, error: error ?? new Error('Workout not found') };
 
+      // Create the workout_log row immediately so every set can be
+      // persisted in real-time — no data lost if the app is closed mid-workout.
+      const user = await Core.Auth.getUser();
+      const { data: wlRow, error: wlErr } = await Core.getClient()
+        .from('workout_logs')
+        .insert({
+          user_id:            user.id,
+          planned_workout_id: plannedWorkoutId,
+          log_date:           Core.utils.isoToday(),
+          duration_min:       0,
+          notes:              null,
+        })
+        .select('id')
+        .single();
+      if (wlErr) return { session: null, error: wlErr };
+
       _state = {
         status:           _STATES.ACTIVE,
         plannedWorkoutId,
-        workoutLogId:     null,   // set on completeSession()
+        workoutLogId:     wlRow.id,   // available immediately for logSet()
         plannedSets:      workout.planned_sets ?? [],
         setLogs:          [],
         skipped:          new Set(),
@@ -1062,9 +1078,23 @@ window.ApexTraining = (function () {
       const validationError = _validateSetLog({ weightKg, reps, rpe, setNumber });
       if (validationError) return { log: null, overload: null, isPR: false, error: validationError };
 
-      // Build log entry (persisted later in completeSession batch)
+      // Persist to DB immediately — no data lost if the app closes mid-workout
+      const { error: slErr } = await Core.getClient()
+        .from('set_logs')
+        .insert({
+          workout_log_id: _state.workoutLogId,
+          exercise_id:    exerciseId,
+          set_number:     setNumber,
+          weight_kg:      weightKg,
+          reps,
+          rpe,
+          is_warmup:      isWarmup,
+        });
+      if (slErr) return { log: null, overload: null, isPR: false, error: slErr };
+
+      // Keep a local copy for snapshot / UI state
       const logEntry = {
-        planned_set_id: plannedSetId,   // stored in memory; NOT a DB column — used for local tracking
+        planned_set_id: plannedSetId,   // local-only reference for UI tracking
         exercise_id:    exerciseId,
         set_number:     setNumber,
         weight_kg:      weightKg,
@@ -1119,34 +1149,20 @@ window.ApexTraining = (function () {
 
       SessionTimer.stop(_state.timer);
       const durationMin = Math.round(SessionTimer.elapsedSeconds(_state.timer) / 60);
-      const user        = await Core.Auth.getUser();
 
-      // Write workout_log header
-      const { data: workoutLog, error: wlErr } = await Core.getClient()
+      // workout_log was created at session start — just update with final stats
+      const workoutLogId = _state.workoutLogId;
+      const { error: wlErr } = await Core.getClient()
         .from('workout_logs')
-        .insert({
-          user_id:              user.id,
-          planned_workout_id:   _state.plannedWorkoutId,
-          log_date:             Core.utils.isoToday(),
-          duration_min:         durationMin,
-          rpe_overall:          meta.rpeOverall ?? null,
-          notes:                meta.notes ?? null,
+        .update({
+          duration_min: durationMin,
+          rpe_overall:  meta.rpeOverall ?? null,
+          notes:        meta.notes ?? null,
         })
-        .select('id')
-        .single();
+        .eq('id', workoutLogId);
 
       if (wlErr) return { workoutLogId: null, deloadCheck: null, error: wlErr };
-      const workoutLogId = workoutLog.id;
-
-      // Write set_logs (batch insert, stripping the local-only planned_set_id field)
-      if (_state.setLogs.length > 0) {
-        const rows = _state.setLogs.map(({ planned_set_id: _ignored, logged_at: _t, ...row }) => ({
-          ...row,
-          workout_log_id: workoutLogId,
-        }));
-        const { error: slErr } = await Core.getClient().from('set_logs').insert(rows);
-        if (slErr) console.error('[ApexTraining] set_logs insert failed:', slErr);
-      }
+      // set_logs were already written in real-time by logSet() — nothing to batch here
 
       // Fetch active program for deload check
       const { data: program } = await Core.getClient()
@@ -1191,15 +1207,12 @@ window.ApexTraining = (function () {
       const durationMin = Math.round(SessionTimer.elapsedSeconds(_state.timer) / 60);
       const user        = await Core.Auth.getUser();
 
+      // Delete the in-progress workout_log (and its set_logs via cascade)
+      // so abandoned sessions don't pollute stats
       const { error } = await Core.getClient()
         .from('workout_logs')
-        .insert({
-          user_id:            user.id,
-          planned_workout_id: _state.plannedWorkoutId,
-          log_date:           Core.utils.isoToday(),
-          duration_min:       durationMin,
-          notes:              `${CONFIG_T.INCOMPLETE_FLAG}${reason ? ': ' + reason : ''}`,
-        });
+        .delete()
+        .eq('id', _state.workoutLogId);
 
       _state.status = _STATES.ABANDONED;
       return { error };
