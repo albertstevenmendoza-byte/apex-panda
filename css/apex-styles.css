@@ -1430,3 +1430,9 @@ body {
     border-top: 0.5px solid var(--border);
   }
 }
+
+
+/* Off-screen food pages must never intercept touches */
+.food-page:not(.fp-open) {
+  pointer-events: none;
+}
