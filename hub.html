@@ -2147,7 +2147,7 @@
         }
       }
 
-      const { error } = await ApexNutrition.MealItems.add(foodId, PICKER.slotId, g);
+      const { error } = await ApexNutrition.MealItems.add(PICKER.slotId, foodId, g);
       btn.disabled = false; btn.textContent = `Add to ${PICKER.slotName}`;
 
       if (error) { showToast(error.message, 'error'); return; }
@@ -2598,7 +2598,7 @@
           const { data } = await saveExternalFood(food);
           if (data) { foodId = data.id; APP.allFoods.push({...food, id:data.id}); }
         }
-        if (foodId) await ApexNutrition.MealItems.add(foodId, PICKER.slotId, food._recentQty || 100);
+        if (foodId) await ApexNutrition.MealItems.add(PICKER.slotId, foodId, food._recentQty || 100);
       }
 
       btn.textContent = 'Add items'; btn.disabled = false;
@@ -2648,7 +2648,7 @@
         }
       }
 
-      const { error } = await ApexNutrition.MealItems.add(foodId, PICKER.slotId, g);
+      const { error } = await ApexNutrition.MealItems.add(PICKER.slotId, foodId, g);
       btn.textContent = 'Add to meal';
       btn.disabled    = false;
 
