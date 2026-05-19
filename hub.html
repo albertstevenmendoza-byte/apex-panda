@@ -282,6 +282,7 @@
 
     <!-- Meal slot cards -->
     <div id="meal-slots-list"></div>
+    <div id="macro-suggestions"></div>
 
     <!-- Micronutrient tracking section (populated by JS) -->
     <details id="micro-section" style="margin-top:0.75rem" open>
@@ -1799,6 +1800,9 @@
       APP.allFoods = await ApexNutrition.FoodArchive.getAll();
       // Pre-warm recent foods cache so picker opens instantly
       loadRecentFoods().then(foods => { APP.recentFoodsCache = foods; });
+
+      // Macro-based food suggestions
+      renderMacroSuggestions(totals, targets, slots);
     }
 
     function updateMacroBars(totals, targets) {
@@ -2015,6 +2019,106 @@
     }
 
     // ── Staggered meal card animation helper ─────────────────
+    // ── Macro-based food suggestions ─────────────────────────
+    function renderMacroSuggestions(totals, targets, slots) {
+      const el = document.getElementById('macro-suggestions');
+      if (!el) return;
+
+      const remP = Math.max(0, (targets.proteinG || 0) - (totals.proteinG || 0));
+      const remC = Math.max(0, (targets.carbsG   || 0) - (totals.carbsG   || 0));
+      const remF = Math.max(0, (targets.fatG     || 0) - (totals.fatG     || 0));
+      const remK = Math.max(0, (targets.kcal     || 0) - (totals.kcal     || 0));
+
+      // Hide suggestions once within 10% of all targets
+      const pctDone = targets.kcal > 0 ? (totals.kcal / targets.kcal) : 0;
+      if (pctDone >= 0.90) { el.innerHTML = ''; return; }
+
+      // Find primary deficit
+      const pctP = targets.proteinG > 0 ? remP / targets.proteinG : 0;
+      const pctC = targets.carbsG   > 0 ? remC / targets.carbsG   : 0;
+      const pctF = targets.fatG     > 0 ? remF / targets.fatG     : 0;
+      const primary = pctP >= pctC && pctP >= pctF ? 'protein'
+                    : pctC >= pctF                  ? 'carbs' : 'fat';
+
+      // Score each food by how well a 100g portion fills the primary deficit
+      // without massively overshooting other macros
+      const pool = (APP.allFoods || []).filter(f =>
+        f.kcal > 0 && f.protein_g != null && f.carbs_g != null && f.fat_g != null
+      );
+
+      const scored = pool.map(f => {
+        const pScore = primary === 'protein' ? f.protein_g / (remP || 1)
+                     : primary === 'carbs'   ? f.carbs_g   / (remC || 1)
+                     :                         f.fat_g     / (remF || 1);
+        // Penalise foods that massively overshoot calories
+        const kcalFit  = remK > 0 ? Math.min(1, f.kcal / remK) : 0.5;
+        const score    = pScore * 0.65 + kcalFit * 0.35;
+        return { ...f, _score: score };
+      });
+
+      scored.sort((a, b) => b._score - a._score);
+      const picks = scored.slice(0, 5);
+      if (!picks.length) { el.innerHTML = ''; return; }
+
+      const primaryLabel = primary === 'protein' ? `${Math.round(remP)}g protein`
+                         : primary === 'carbs'   ? `${Math.round(remC)}g carbs`
+                         :                         `${Math.round(remF)}g fat`;
+
+      // Find the last slot id for quick-add (default: last slot)
+      const lastSlot = slots[slots.length - 1];
+
+      el.innerHTML = `
+        <div style="margin-top:1rem">
+          <div style="font-size:0.75rem;font-weight:600;color:var(--text-3);
+                      letter-spacing:.08em;text-transform:uppercase;margin-bottom:0.625rem">
+            Suggested · still need ${primaryLabel}
+          </div>
+          <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;
+                      scrollbar-width:none;-webkit-overflow-scrolling:touch">
+            ${picks.map(f => {
+              const key = f.id ?? f._key ?? f.name;
+              return `
+              <div onclick="openFoodDetailFromSuggestion(${JSON.stringify(key)}, ${JSON.stringify(lastSlot?.id)}, ${JSON.stringify(lastSlot?.label)})"
+                   style="flex:0 0 130px;background:var(--surface);border:1px solid var(--border);
+                          border-radius:var(--r-md);padding:10px 12px;cursor:pointer;
+                          box-shadow:var(--shadow-sm);transition:box-shadow .15s">
+                <div style="font-size:0.8125rem;font-weight:600;line-height:1.3;
+                             margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;
+                             -webkit-box-orient:vertical;overflow:hidden">
+                  ${f.name}
+                </div>
+                ${f.brand ? `<div style="font-size:0.6875rem;color:var(--text-3);margin-bottom:5px;
+                               white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.brand}</div>` : ''}
+                <div style="font-size:0.75rem;font-weight:700;color:var(--accent)">
+                  ${Math.round(f.kcal)} kcal
+                </div>
+                <div style="font-size:0.6875rem;color:var(--text-3);margin-top:2px">
+                  P:${Math.round(f.protein_g)}g C:${Math.round(f.carbs_g)}g F:${Math.round(f.fat_g)}g
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }
+
+    function openFoodDetailFromSuggestion(key, slotId, slotName) {
+      if (!slotId) { showToast('No meal slot available', 'error'); return; }
+      PICKER.slotId   = slotId;
+      PICKER.slotName = slotName || 'Meal';
+      openFoodSearch(slotId, slotName || 'Meal');
+      // Small delay to let food search open, then jump to detail
+      setTimeout(() => {
+        const food = (APP.allFoods || []).find(f =>
+          String(f.id) === String(key) || f._key === key || f.name === key
+        );
+        if (food) {
+          PICKER.selectedFood = food;
+          PICKER.cache.set(String(food.id ?? food._key), food);
+          openFoodDetail(String(food.id ?? food._key));
+        }
+      }, 80);
+    }
+
     function animateMealCards() {
       document.querySelectorAll('#meal-slots-list .card').forEach((el, i) => {
         el.classList.remove('meal-card-anim');
