@@ -174,6 +174,211 @@ window.ApexTraining = (function () {
       ],
     },
 
+    // ── Full-body 4×/week ────────────────────────────────────────────────
+    full_body_4: {
+      name: 'Full-body 4×/week',
+      science: '4× weekly frequency maximises protein synthesis events without exceeding recovery. '
+             + 'Optimal for intermediate lifters on 4-day schedules (Schoenfeld, 2016).',
+      training_days_per_week: 4,
+      days: [
+        {
+          day_of_week: 0, label: 'Full body A', workout_type: 'strength',
+          slots: [
+            { muscles: ['quads','glutes'],    is_compound: true,  count: 1 },
+            { muscles: ['chest'],             is_compound: true,  count: 1 },
+            { muscles: ['back'],              is_compound: true,  count: 1 },
+            { muscles: ['shoulders'],         is_compound: false, count: 1 },
+            { muscles: ['core'],              is_compound: false, count: 1 },
+          ],
+        },
+        {
+          day_of_week: 1, label: 'Full body B', workout_type: 'strength',
+          slots: [
+            { muscles: ['hamstrings','glutes'], is_compound: true,  count: 1 },
+            { muscles: ['back'],               is_compound: true,  count: 1 },
+            { muscles: ['chest'],              is_compound: false, count: 1 },
+            { muscles: ['biceps'],             is_compound: false, count: 1 },
+            { muscles: ['triceps'],            is_compound: false, count: 1 },
+          ],
+        },
+        { day_of_week: 2, label: 'Rest / walk', workout_type: 'cardio', slots: [] },
+        {
+          day_of_week: 3, label: 'Full body C', workout_type: 'strength',
+          slots: [
+            { muscles: ['quads','hamstrings'], is_compound: true,  count: 1 },
+            { muscles: ['shoulders'],          is_compound: true,  count: 1 },
+            { muscles: ['back'],               is_compound: false, count: 1 },
+            { muscles: ['chest'],              is_compound: false, count: 1 },
+            { muscles: ['core'],               is_compound: false, count: 1 },
+          ],
+        },
+        {
+          day_of_week: 4, label: 'Full body D', workout_type: 'strength',
+          slots: [
+            { muscles: ['glutes','hamstrings'], is_compound: true,  count: 1 },
+            { muscles: ['chest'],               is_compound: true,  count: 1 },
+            { muscles: ['back'],                is_compound: true,  count: 1 },
+            { muscles: ['triceps'],             is_compound: false, count: 1 },
+            { muscles: ['calves'],              is_compound: false, count: 1 },
+          ],
+        },
+        { day_of_week: 5, label: 'Rest', workout_type: null, slots: [] },
+        { day_of_week: 6, label: 'Rest', workout_type: null, slots: [] },
+      ],
+    },
+
+    // ── Strength / Powerbuilding 4×/week ──────────────────────────────────
+    strength: {
+      name: 'Strength 4×/week',
+      science: 'Low-rep (3-5), high-intensity (85-95% 1RM) loading drives myofibrillar hypertrophy '
+             + 'and CNS adaptation. Basis: Zatsiorsky & Kraemer maximal effort method.',
+      training_days_per_week: 4,
+      days: [
+        {
+          day_of_week: 0, label: 'Squat + Push', workout_type: 'strength',
+          slots: [
+            { muscles: ['quads','glutes'],  is_compound: true,  count: 1, rep_scheme: 'strength' },
+            { muscles: ['chest'],           is_compound: true,  count: 1, rep_scheme: 'strength' },
+            { muscles: ['quads'],           is_compound: false, count: 1 },
+            { muscles: ['triceps'],         is_compound: false, count: 1 },
+          ],
+        },
+        {
+          day_of_week: 1, label: 'Hinge + Pull', workout_type: 'strength',
+          slots: [
+            { muscles: ['hamstrings','back'], is_compound: true, count: 1, rep_scheme: 'strength' },
+            { muscles: ['back'],              is_compound: true, count: 1, rep_scheme: 'strength' },
+            { muscles: ['hamstrings'],        is_compound: false, count: 1 },
+            { muscles: ['biceps'],            is_compound: false, count: 1 },
+          ],
+        },
+        { day_of_week: 2, label: 'Rest / LISS', workout_type: 'cardio', slots: [] },
+        {
+          day_of_week: 3, label: 'Bench + Row', workout_type: 'strength',
+          slots: [
+            { muscles: ['chest'],  is_compound: true,  count: 1, rep_scheme: 'strength' },
+            { muscles: ['back'],   is_compound: true,  count: 1, rep_scheme: 'strength' },
+            { muscles: ['chest'],  is_compound: false, count: 1 },
+            { muscles: ['triceps'],is_compound: false, count: 1 },
+          ],
+        },
+        {
+          day_of_week: 4, label: 'Press + Squat', workout_type: 'strength',
+          slots: [
+            { muscles: ['shoulders'],          is_compound: true, count: 1, rep_scheme: 'strength' },
+            { muscles: ['quads','hamstrings'], is_compound: true, count: 1, rep_scheme: 'strength' },
+            { muscles: ['shoulders'],          is_compound: false, count: 1 },
+            { muscles: ['biceps'],             is_compound: false, count: 1 },
+          ],
+        },
+        { day_of_week: 5, label: 'Rest', workout_type: null, slots: [] },
+        { day_of_week: 6, label: 'Rest', workout_type: null, slots: [] },
+      ],
+    },
+
+    // ── Push/Pull/Legs 3×/week ────────────────────────────────────────────
+    ppl_3: {
+      name: 'Push / Pull / Legs 3×/week',
+      science: 'Volume-equated once-per-week frequency produces comparable hypertrophy to higher '
+             + 'frequencies when weekly sets are matched (Ralston et al., 2017).',
+      training_days_per_week: 3,
+      days: [
+        {
+          day_of_week: 0, label: 'Push', workout_type: 'strength',
+          slots: [
+            { muscles: ['chest'],     is_compound: true,  count: 1 },
+            { muscles: ['shoulders'], is_compound: true,  count: 1 },
+            { muscles: ['chest'],     is_compound: false, count: 1 },
+            { muscles: ['shoulders'], is_compound: false, count: 1 },
+            { muscles: ['triceps'],   is_compound: false, count: 2 },
+          ],
+        },
+        { day_of_week: 1, label: 'Rest', workout_type: null, slots: [] },
+        {
+          day_of_week: 2, label: 'Pull', workout_type: 'strength',
+          slots: [
+            { muscles: ['back'],   is_compound: true,  count: 1 },
+            { muscles: ['back'],   is_compound: true,  count: 1 },
+            { muscles: ['back'],   is_compound: false, count: 1 },
+            { muscles: ['biceps'], is_compound: false, count: 2 },
+          ],
+        },
+        { day_of_week: 3, label: 'Rest', workout_type: null, slots: [] },
+        {
+          day_of_week: 4, label: 'Legs', workout_type: 'strength',
+          slots: [
+            { muscles: ['quads','glutes'], is_compound: true,  count: 1 },
+            { muscles: ['hamstrings'],     is_compound: true,  count: 1 },
+            { muscles: ['quads'],          is_compound: false, count: 1 },
+            { muscles: ['hamstrings'],     is_compound: false, count: 1 },
+            { muscles: ['calves'],         is_compound: false, count: 2 },
+          ],
+        },
+        { day_of_week: 5, label: 'Rest', workout_type: null, slots: [] },
+        { day_of_week: 6, label: 'Rest', workout_type: null, slots: [] },
+      ],
+    },
+
+    // ── Body Part / Bro Split 5×/week ─────────────────────────────────────
+    body_part: {
+      name: 'Body Part Split 5×/week',
+      science: 'High intra-session volume per muscle. When weekly volume is equated, '
+             + 'once-per-week frequency produces similar hypertrophy (Schoenfeld et al., 2016).',
+      training_days_per_week: 5,
+      days: [
+        {
+          day_of_week: 0, label: 'Chest', workout_type: 'strength',
+          slots: [
+            { muscles: ['chest'],   is_compound: true,  count: 1 },
+            { muscles: ['chest'],   is_compound: true,  count: 1 },
+            { muscles: ['chest'],   is_compound: false, count: 1 },
+            { muscles: ['chest'],   is_compound: false, count: 1 },
+            { muscles: ['triceps'], is_compound: false, count: 1 },
+          ],
+        },
+        {
+          day_of_week: 1, label: 'Back', workout_type: 'strength',
+          slots: [
+            { muscles: ['back'],   is_compound: true,  count: 1 },
+            { muscles: ['back'],   is_compound: true,  count: 1 },
+            { muscles: ['back'],   is_compound: false, count: 1 },
+            { muscles: ['back'],   is_compound: false, count: 1 },
+            { muscles: ['biceps'], is_compound: false, count: 1 },
+          ],
+        },
+        {
+          day_of_week: 2, label: 'Shoulders', workout_type: 'strength',
+          slots: [
+            { muscles: ['shoulders'], is_compound: true,  count: 1 },
+            { muscles: ['shoulders'], is_compound: false, count: 1 },
+            { muscles: ['shoulders'], is_compound: false, count: 1 },
+            { muscles: ['triceps'],   is_compound: false, count: 1 },
+            { muscles: ['core'],      is_compound: false, count: 1 },
+          ],
+        },
+        {
+          day_of_week: 3, label: 'Arms', workout_type: 'strength',
+          slots: [
+            { muscles: ['biceps'],  is_compound: false, count: 2 },
+            { muscles: ['triceps'], is_compound: false, count: 2 },
+            { muscles: ['core'],    is_compound: false, count: 1 },
+          ],
+        },
+        {
+          day_of_week: 4, label: 'Legs', workout_type: 'strength',
+          slots: [
+            { muscles: ['quads','glutes'], is_compound: true,  count: 1 },
+            { muscles: ['hamstrings'],     is_compound: true,  count: 1 },
+            { muscles: ['quads'],          is_compound: false, count: 1 },
+            { muscles: ['hamstrings'],     is_compound: false, count: 1 },
+            { muscles: ['calves'],         is_compound: false, count: 2 },
+          ],
+        },
+        { day_of_week: 5, label: 'Rest', workout_type: null, slots: [] },
+        { day_of_week: 6, label: 'Rest', workout_type: null, slots: [] },
+      ],
+    },
+
     // ── Advanced: 6-day push/pull/legs ────────────────────────────────────
     advanced: {
       name: 'Push/pull/legs 6×/week',
@@ -251,7 +456,13 @@ window.ApexTraining = (function () {
   // ─────────────────────────────────────────────────────────────────────────
 
   const _REP_SCHEMES = {
-    // Compound movements — heavier, longer rest
+    // Heavy compounds — strength / powerbuilding focus (3-5 rep range)
+    strength: {
+      bulk:     { sets: 5, reps_min: 3, reps_max: 5, rpe: 8.5, rest_seconds: 300 },
+      cut:      { sets: 4, reps_min: 3, reps_max: 5, rpe: 8.0, rest_seconds: 240 },
+      maintain: { sets: 4, reps_min: 4, reps_max: 6, rpe: 8.0, rest_seconds: 300 },
+    },
+    // Compound movements — hypertrophy rep range
     compound: {
       bulk:     { sets: 4, reps_min: 6,  reps_max: 8,  rpe: 8.0, rest_seconds: 180 },
       cut:      { sets: 4, reps_min: 6,  reps_max: 8,  rpe: 8.5, rest_seconds: 150 },
@@ -357,9 +568,13 @@ window.ApexTraining = (function () {
      * @param {'beginner'|'intermediate'|'advanced'} experience
      * @returns {object} split template from _SPLITS
      */
-    function _selectSplit(experience) {
+    function _selectSplit(experience, preferredSplit) {
+      if (preferredSplit && _SPLITS[preferredSplit]) return _SPLITS[preferredSplit];
       return _SPLITS[experience] ?? _SPLITS.intermediate;
     }
+
+    // Return all split options with metadata for the UI
+    function getSplits() { return _SPLITS; }
 
     /**
      * Build an array of week descriptor objects for a full program.
@@ -392,9 +607,10 @@ window.ApexTraining = (function () {
      * @param {string}  [plannedWorkoutId] — filled in during generate()
      * @returns {object}
      */
-    function _buildSetSpec(exercise, isCompound, phase, sortOrder, plannedWorkoutId = null) {
-      const schemeKey = isCompound ? 'compound' : 'isolation';
-      const scheme    = _REP_SCHEMES[schemeKey][phase] ?? _REP_SCHEMES[schemeKey].maintain;
+    function _buildSetSpec(exercise, isCompound, phase, sortOrder, plannedWorkoutId = null, repScheme = null) {
+      const schemeKey = repScheme ?? (isCompound ? 'compound' : 'isolation');
+      const scheme    = (_REP_SCHEMES[schemeKey] ?? _REP_SCHEMES.compound)[phase]
+                     ?? _REP_SCHEMES.compound.maintain;
       return {
         planned_workout_id: plannedWorkoutId,
         exercise_id:        exercise.id,
@@ -482,7 +698,7 @@ window.ApexTraining = (function () {
 
       // 4. Pre-fetch exercise library once
       const allExercises = await ExerciseLibrary.getAll();
-      const split        = _selectSplit(experience);
+      const split        = _selectSplit(experience, profile.preferred_split);
       const weekFlags    = _buildWeekFlags(totalWeeks, deloadInterval);
 
       // 5. Build each week
@@ -540,7 +756,7 @@ window.ApexTraining = (function () {
 
             for (const ex of chosen) {
               usedIds.add(ex.id);
-              let spec = _buildSetSpec(ex, slot.is_compound, phase, sortOrder, workoutId);
+              let spec = _buildSetSpec(ex, slot.is_compound, phase, sortOrder, workoutId, slot.rep_scheme ?? null);
               if (wf.isDeload) {
                 spec = _applyDeloadMods([spec], wf.volumeMod, wf.intensityMod)[0];
               }
@@ -562,7 +778,7 @@ window.ApexTraining = (function () {
       return { programId, error: null };
     }
 
-    return { generate, _selectSplit, _buildWeekFlags, _buildSetSpec, _applyDeloadMods };
+    return { generate, getSplits, _selectSplit, _buildWeekFlags, _buildSetSpec, _applyDeloadMods };
   })();
 
   // ─────────────────────────────────────────────────────────────────────────
