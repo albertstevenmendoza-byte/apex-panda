@@ -2109,6 +2109,35 @@
       renderFspList(foods.length ? foods : (PICKER.source === 'recent' ? APP.allFoods.slice(0,20) : []));
     }
 
+    // ── Relevance scorer ────────────────────────────────────
+    function scoreRelevance(food, query) {
+      const q     = query.toLowerCase().trim();
+      const name  = (food.name  || '').toLowerCase();
+      const brand = (food.brand || '').toLowerCase();
+      const qWords = q.split(/\s+/).filter(Boolean);
+
+      // Exact full name match
+      if (name === q)                         return 100;
+      // Name starts with full query
+      if (name.startsWith(q))                 return 95;
+      // Every query word appears at the start of a word in the name
+      if (qWords.every(w => new RegExp(`\\b${w}`).test(name))) return 85;
+      // Brand exact match (e.g. typing "Kroger")
+      if (brand === q)                        return 80;
+      // Brand starts with query
+      if (brand.startsWith(q))                return 75;
+      // Name contains full query as substring
+      if (name.includes(q))                   return 65;
+      // Brand contains query
+      if (brand.includes(q))                  return 55;
+      // All query words appear somewhere in name
+      if (qWords.every(w => name.includes(w))) return 45;
+      // Most query words appear
+      const hits = qWords.filter(w => name.includes(w) || brand.includes(w)).length;
+      if (hits > 0) return 10 + Math.round((hits / qWords.length) * 25);
+      return 5;
+    }
+
     async function fspSearchExternal(query) {
       if (XSEARCH.ctrl) XSEARCH.ctrl.abort();
       XSEARCH.ctrl = new AbortController();
@@ -2139,10 +2168,12 @@
           );
           const d = await r.json();
           (d.foods || []).map(normalizeFDC).filter(f => f && f.kcal > 0)
-            .forEach(f => results.unshift(f));
+            .forEach(f => results.push(f));
         } catch(e) { if (e.name !== 'AbortError') console.warn('USDA:', e.message); }
       }
 
+      // Sort by relevance to the query before rendering
+      results.sort((a, b) => scoreRelevance(b, query) - scoreRelevance(a, query));
       renderFspList(results.slice(0, 40));
     }
 
@@ -2535,6 +2566,8 @@
         } catch(e) { if (e.name !== 'AbortError') console.warn('USDA:', e.message); }
       }
 
+      // Sort by relevance before rendering
+      results.sort((a, b) => scoreRelevance(b, query) - scoreRelevance(a, query));
       renderPickerFoods(results.slice(0, 40));
     }
 
