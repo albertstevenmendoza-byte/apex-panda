@@ -1430,7 +1430,15 @@
     }
 
 
-    // ── Training split selector ──────────────────────────────
+    function openQuickAdd() {
+      document.getElementById('quick-add-modal').classList.remove('hidden');
+    }
+
+    function closeQuickAdd() {
+      document.getElementById('quick-add-modal').classList.add('hidden');
+    }
+
+
     const SPLIT_META = {
       beginner:   { icon:'&#x1F7E2;', days:'3 days/week',  freq:'3×/muscle/week',  level:'Beginner'     },
       full_body_4:{ icon:'&#x1F535;', days:'4 days/week',  freq:'4×/muscle/week',  level:'Intermediate' },
