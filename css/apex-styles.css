@@ -703,7 +703,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 }
 
 /* Main content: clear bottom nav height */
-body { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+.app-shell { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
 
 /* ============================================================
    HOME TAB
@@ -1379,7 +1379,7 @@ button, nav, .bottom-nav, .fp-header, .focus-topbar,
 */
 
 /* Body: push ALL page content below the status bar */
-body {
+.app-shell {
   padding-top: env(safe-area-inset-top, 0px);
   /* padding-bottom (bottom nav) is already handled above */
 }
@@ -1411,7 +1411,7 @@ body {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
   height: calc(68px + max(env(safe-area-inset-bottom, 0px), 8px));
 }
-body {
+.app-shell {
   padding-bottom: calc(68px + max(env(safe-area-inset-bottom, 0px), 8px));
 }
 
@@ -1450,3 +1450,4 @@ body {
 }
 .meal-add-btn:hover  { background: var(--accent); color: #fff; }
 .meal-add-btn:active { transform: scale(0.9); }
+
