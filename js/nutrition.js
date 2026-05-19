@@ -48,32 +48,25 @@ window.ApexNutrition = (function () {
     // Calorie coefficients (Atwater)
     KCAL_PER_G: { protein: 4, carb: 4, fat: 9 },
 
-    // Default meal slot templates, keyed by phase.
-    // Bulk gets more slots (calorie surplus needs more feeding windows).
-    // Cut gets fewer, structured around training.
+    // Default meal slot templates — 4 meals for every phase.
     DEFAULT_SLOTS: {
       bulk: [
-        { label: 'Breakfast',          target_time: '07:00', sort_order: 0 },
-        { label: 'Mid-morning snack',  target_time: '10:00', sort_order: 1 },
-        { label: 'Lunch',              target_time: '13:00', sort_order: 2 },
-        { label: 'Pre-workout',        target_time: '16:00', sort_order: 3 },
-        { label: 'Post-workout',       target_time: '18:30', sort_order: 4 },
-        { label: 'Dinner',             target_time: '20:00', sort_order: 5 },
-        { label: 'Evening snack',      target_time: '21:30', sort_order: 6 },
+        { label: 'Breakfast', target_time: '07:00', sort_order: 0 },
+        { label: 'Lunch',     target_time: '12:30', sort_order: 1 },
+        { label: 'Snack',     target_time: '15:30', sort_order: 2 },
+        { label: 'Dinner',    target_time: '19:00', sort_order: 3 },
       ],
       cut: [
-        { label: 'Breakfast',          target_time: '07:00', sort_order: 0 },
-        { label: 'Lunch',              target_time: '13:00', sort_order: 1 },
-        { label: 'Pre-workout',        target_time: '16:00', sort_order: 2 },
-        { label: 'Post-workout shake', target_time: '18:30', sort_order: 3 },
-        { label: 'Dinner',             target_time: '20:00', sort_order: 4 },
+        { label: 'Breakfast', target_time: '07:00', sort_order: 0 },
+        { label: 'Lunch',     target_time: '12:30', sort_order: 1 },
+        { label: 'Snack',     target_time: '15:30', sort_order: 2 },
+        { label: 'Dinner',    target_time: '19:00', sort_order: 3 },
       ],
       maintain: [
-        { label: 'Breakfast',          target_time: '07:00', sort_order: 0 },
-        { label: 'Lunch',              target_time: '13:00', sort_order: 1 },
-        { label: 'Pre-workout',        target_time: '16:30', sort_order: 2 },
-        { label: 'Dinner',             target_time: '19:30', sort_order: 3 },
-        { label: 'Evening snack',      target_time: '21:00', sort_order: 4 },
+        { label: 'Breakfast', target_time: '07:00', sort_order: 0 },
+        { label: 'Lunch',     target_time: '12:30', sort_order: 1 },
+        { label: 'Snack',     target_time: '15:30', sort_order: 2 },
+        { label: 'Dinner',    target_time: '19:00', sort_order: 3 },
       ],
     },
   };
