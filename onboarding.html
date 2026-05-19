@@ -289,7 +289,8 @@
       const user = await ApexCore.Auth.requireAuth();
       if (!user) return;
       const profile = await ApexCore.Profile.get();
-      if (profile?.onboarding_done) { window.location.href = 'hub.html'; }
+      const isEditing = new URLSearchParams(location.search).get('edit') === '1';
+      if (profile?.onboarding_done && !isEditing) { window.location.href = 'hub.html'; }
     });
 
     // ── Segmented buttons ────────────────────────────────────────────────
