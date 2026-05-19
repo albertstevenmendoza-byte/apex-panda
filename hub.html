@@ -1801,8 +1801,9 @@
       // Pre-warm recent foods cache so picker opens instantly
       loadRecentFoods().then(foods => { APP.recentFoodsCache = foods; });
 
-      // Macro-based food suggestions
-      renderMacroSuggestions(totals, targets, slots);
+      // Macro-based food suggestions (isolated — never crashes diary load)
+      try { renderMacroSuggestions(totals, targets, slots); }
+      catch(e) { console.warn('[Apex] suggestions:', e); }
     }
 
     function updateMacroBars(totals, targets) {
@@ -2024,69 +2025,61 @@
       const el = document.getElementById('macro-suggestions');
       if (!el) return;
 
-      const remP = Math.max(0, (targets.proteinG || 0) - (totals.proteinG || 0));
-      const remC = Math.max(0, (targets.carbsG   || 0) - (totals.carbsG   || 0));
-      const remF = Math.max(0, (targets.fatG     || 0) - (totals.fatG     || 0));
-      const remK = Math.max(0, (targets.kcal     || 0) - (totals.kcal     || 0));
+      const remP = Math.max(0, (targets.proteinG || 0) - ((totals && totals.proteinG) || 0));
+      const remC = Math.max(0, (targets.carbsG   || 0) - ((totals && totals.carbsG)   || 0));
+      const remF = Math.max(0, (targets.fatG     || 0) - ((totals && totals.fatG)     || 0));
+      const remK = Math.max(0, (targets.kcal     || 0) - ((totals && totals.kcal)     || 0));
 
-      // Hide suggestions once within 10% of all targets
-      const pctDone = targets.kcal > 0 ? (totals.kcal / targets.kcal) : 0;
+      // Hide once within 10% of calorie target
+      const pctDone = targets.kcal > 0 ? ((totals && totals.kcal) || 0) / targets.kcal : 0;
       if (pctDone >= 0.90) { el.innerHTML = ''; return; }
 
-      // Find primary deficit
       const pctP = targets.proteinG > 0 ? remP / targets.proteinG : 0;
       const pctC = targets.carbsG   > 0 ? remC / targets.carbsG   : 0;
       const pctF = targets.fatG     > 0 ? remF / targets.fatG     : 0;
       const primary = pctP >= pctC && pctP >= pctF ? 'protein'
                     : pctC >= pctF                  ? 'carbs' : 'fat';
 
-      // Score each food by how well a 100g portion fills the primary deficit
-      // without massively overshooting other macros
       const pool = (APP.allFoods || []).filter(f =>
         f.kcal > 0 && f.protein_g != null && f.carbs_g != null && f.fat_g != null
       );
+      if (!pool.length) { el.innerHTML = ''; return; }
 
       const scored = pool.map(f => {
         const pScore = primary === 'protein' ? f.protein_g / (remP || 1)
                      : primary === 'carbs'   ? f.carbs_g   / (remC || 1)
                      :                         f.fat_g     / (remF || 1);
-        // Penalise foods that massively overshoot calories
-        const kcalFit  = remK > 0 ? Math.min(1, f.kcal / remK) : 0.5;
-        const score    = pScore * 0.65 + kcalFit * 0.35;
-        return { ...f, _score: score };
+        const kcalFit = remK > 0 ? Math.min(1, f.kcal / remK) : 0.5;
+        return { ...f, _score: pScore * 0.65 + kcalFit * 0.35 };
       });
-
       scored.sort((a, b) => b._score - a._score);
       const picks = scored.slice(0, 5);
       if (!picks.length) { el.innerHTML = ''; return; }
+
+      // Store picks and target slot so onclick can reference by safe integer index
+      APP._suggestions     = picks;
+      APP._suggestionSlot  = slots[slots.length - 1] || null;
 
       const primaryLabel = primary === 'protein' ? `${Math.round(remP)}g protein`
                          : primary === 'carbs'   ? `${Math.round(remC)}g carbs`
                          :                         `${Math.round(remF)}g fat`;
 
-      // Find the last slot id for quick-add (default: last slot)
-      const lastSlot = slots[slots.length - 1];
-
       el.innerHTML = `
         <div style="margin-top:1rem">
           <div style="font-size:0.75rem;font-weight:600;color:var(--text-3);
                       letter-spacing:.08em;text-transform:uppercase;margin-bottom:0.625rem">
-            Suggested · still need ${primaryLabel}
+            Suggested &middot; still need ${primaryLabel}
           </div>
           <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;
                       scrollbar-width:none;-webkit-overflow-scrolling:touch">
-            ${picks.map(f => {
-              const key = f.id ?? f._key ?? f.name;
-              return `
-              <div onclick="openFoodDetailFromSuggestion(${JSON.stringify(key)}, ${JSON.stringify(lastSlot?.id)}, ${JSON.stringify(lastSlot?.label)})"
+            ${picks.map((f, i) => `
+              <div onclick="openFoodDetailFromSuggestion(${i})"
                    style="flex:0 0 130px;background:var(--surface);border:1px solid var(--border);
                           border-radius:var(--r-md);padding:10px 12px;cursor:pointer;
-                          box-shadow:var(--shadow-sm);transition:box-shadow .15s">
-                <div style="font-size:0.8125rem;font-weight:600;line-height:1.3;
-                             margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;
-                             -webkit-box-orient:vertical;overflow:hidden">
-                  ${f.name}
-                </div>
+                          box-shadow:var(--shadow-sm)">
+                <div style="font-size:0.8125rem;font-weight:600;line-height:1.3;margin-bottom:4px;
+                             display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+                             overflow:hidden">${f.name}</div>
                 ${f.brand ? `<div style="font-size:0.6875rem;color:var(--text-3);margin-bottom:5px;
                                white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.brand}</div>` : ''}
                 <div style="font-size:0.75rem;font-weight:700;color:var(--accent)">
@@ -2095,27 +2088,22 @@
                 <div style="font-size:0.6875rem;color:var(--text-3);margin-top:2px">
                   P:${Math.round(f.protein_g)}g C:${Math.round(f.carbs_g)}g F:${Math.round(f.fat_g)}g
                 </div>
-              </div>`;
-            }).join('')}
+              </div>`).join('')}
           </div>
         </div>`;
     }
 
-    function openFoodDetailFromSuggestion(key, slotId, slotName) {
-      if (!slotId) { showToast('No meal slot available', 'error'); return; }
-      PICKER.slotId   = slotId;
-      PICKER.slotName = slotName || 'Meal';
-      openFoodSearch(slotId, slotName || 'Meal');
-      // Small delay to let food search open, then jump to detail
+    function openFoodDetailFromSuggestion(index) {
+      const food = (APP._suggestions || [])[index];
+      const slot = APP._suggestionSlot;
+      if (!food || !slot) { showToast('Tap + on a meal to add food', 'info'); return; }
+      PICKER.slotId   = slot.id;
+      PICKER.slotName = slot.label || 'Meal';
+      openFoodSearch(slot.id, slot.label || 'Meal');
       setTimeout(() => {
-        const food = (APP.allFoods || []).find(f =>
-          String(f.id) === String(key) || f._key === key || f.name === key
-        );
-        if (food) {
-          PICKER.selectedFood = food;
-          PICKER.cache.set(String(food.id ?? food._key), food);
-          openFoodDetail(String(food.id ?? food._key));
-        }
+        const key = String(food.id ?? food._key ?? food.name);
+        PICKER.cache.set(key, food);
+        openFoodDetail(key);
       }, 80);
     }
 
