@@ -2125,39 +2125,39 @@
       const g      = Math.round(toGrams(rawAmt, PICKER.unit));
       if (!food || g < 1) { showToast('Enter a valid amount', 'error'); return; }
 
-      const btn = document.getElementById('fdp-log-btn');
-      btn.disabled = true; btn.textContent = 'Adding…';
+      // Snapshot everything we need before closing the panel
+      const slotId   = PICKER.slotId;
+      const slotName = PICKER.slotName;
+      const foodSnap = { ...food };
+      let   foodId   = food.id;
 
-      let foodId = food.id;
-      if (!foodId) {
-        const { data, error: saveErr } = await saveExternalFood(food);
-        if (saveErr && saveErr.code !== '23505') {
-          showToast('Could not save food', 'error');
-          btn.disabled = false; btn.textContent = `Add to ${PICKER.slotName}`; return;
-        }
-        if (data) { foodId = data.id; APP.allFoods.push({ ...food, id: data.id }); }
-        else {
-          const user = await ApexCore.Auth.getUser();
-          const { data: ex } = await ApexCore.getClient().from('foods').select('id')
-            .eq('name', food.name).eq('created_by', user.id).maybeSingle();
-          if (ex) foodId = ex.id;
-        }
-        if (!foodId) {
-          showToast('Could not resolve food id', 'error');
-          btn.disabled = false; btn.textContent = `Add to ${PICKER.slotName}`; return;
-        }
-      }
-
-      const { error } = await ApexNutrition.MealItems.add(PICKER.slotId, foodId, g);
-      btn.disabled = false; btn.textContent = `Add to ${PICKER.slotName}`;
-
-      if (error) { showToast(error.message, 'error'); return; }
-
-      showToast(`${food.name} added`, 'success');
+      // ── Close and confirm immediately (optimistic) ───────────
+      closeFoodDetail();
+      showToast(`${foodSnap.name} added`, 'success');
       APP.recentFoodsCache = null;
 
-      // Stay on search page — user may want to add more items
-      closeFoodDetail();
+      // ── Background: resolve external food id if needed ───────
+      if (!foodId) {
+        const { data, error: saveErr } = await saveExternalFood(foodSnap);
+        if (saveErr && saveErr.code !== '23505') {
+          showToast('Save failed: ' + saveErr.message, 'error'); return;
+        }
+        if (data) {
+          foodId = data.id;
+          APP.allFoods.push({ ...foodSnap, id: data.id });
+        } else {
+          const user = await ApexCore.Auth.getUser();
+          const { data: ex } = await ApexCore.getClient()
+            .from('foods').select('id')
+            .eq('name', foodSnap.name).eq('created_by', user.id).maybeSingle();
+          if (ex) foodId = ex.id;
+        }
+        if (!foodId) { showToast('Could not resolve food', 'error'); return; }
+      }
+
+      // ── Background: write to DB ──────────────────────────────
+      const { error } = await ApexNutrition.MealItems.add(slotId, foodId, g);
+      if (error) showToast(error.message, 'error');
     }
 
     function closeFoodPicker() {
