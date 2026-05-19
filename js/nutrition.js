@@ -688,19 +688,13 @@ window.ApexNutrition = (function () {
       const validationErr = MealPlanUtils.validateQuantity(quantityG);
       if (validationErr) return { item: null, totals: null, error: new Error(validationErr) };
 
-      // Find the next sort_order within this slot
-      const { count } = await Core.getClient()
-        .from('meal_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('meal_slot_id', slotId);
-
       const { data: item, error: insertErr } = await Core.getClient()
         .from('meal_items')
         .insert({
           meal_slot_id: slotId,
           food_id:      foodId,
           quantity_g:   quantityG,
-          sort_order:   count ?? 0,
+          sort_order:   Date.now(), // avoids a round-trip COUNT query
         })
         .select(`
           id,
@@ -712,10 +706,9 @@ window.ApexNutrition = (function () {
 
       if (insertErr) return { item: null, totals: null, error: insertErr };
 
-      const mealPlanId = await MealItems._mealPlanIdFromSlot(slotId);
-      const totals     = await MealItems._fetchTotals(mealPlanId);
-
-      return { item, totals, error: null };
+      // Totals are recalculated by the caller when the diary reloads;
+      // skip the extra round-trips here.
+      return { item, totals: null, error: null };
     },
 
     /**
