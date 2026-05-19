@@ -2143,22 +2143,20 @@
       const g      = Math.round(toGrams(rawAmt, PICKER.unit));
       if (!food || g < 1) { showToast('Enter a valid amount', 'error'); return; }
 
-      // Snapshot everything we need before closing the panel
       const slotId   = PICKER.slotId;
       const slotName = PICKER.slotName;
       const foodSnap = { ...food };
       let   foodId   = food.id;
 
-      // ── Close and confirm immediately (optimistic) ───────────
+      // Close detail immediately — feels instant
       closeFoodDetail();
-      showToast(`${foodSnap.name} added`, 'success');
       APP.recentFoodsCache = null;
 
-      // ── Background: resolve external food id if needed ───────
+      // ── Resolve external food id if needed ───────────────────
       if (!foodId) {
         const { data, error: saveErr } = await saveExternalFood(foodSnap);
         if (saveErr && saveErr.code !== '23505') {
-          showToast('Save failed: ' + saveErr.message, 'error'); return;
+          showToast('Could not save food: ' + saveErr.message, 'error'); return;
         }
         if (data) {
           foodId = data.id;
@@ -2173,9 +2171,22 @@
         if (!foodId) { showToast('Could not resolve food', 'error'); return; }
       }
 
-      // ── Background: write to DB ──────────────────────────────
+      // ── Write to DB — wait for this before marking success ───
       const { error } = await ApexNutrition.MealItems.add(slotId, foodId, g);
-      if (error) showToast(error.message, 'error');
+      if (error) {
+        showToast(error.message, 'error');
+        return;
+      }
+
+      // Confirmed saved — show toast and mark diary stale
+      showToast(`${foodSnap.name} added`, 'success');
+      APP.loadedTabs.delete('diary');
+
+      // If food search is already closed, refresh diary immediately;
+      // otherwise closeFoodSearch() will handle it via its timer.
+      if (!document.getElementById('food-search-page').classList.contains('fp-open')) {
+        loadTab('diary');
+      }
     }
 
     function closeFoodPicker() {
