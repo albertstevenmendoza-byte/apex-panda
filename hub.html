@@ -862,11 +862,16 @@
     async function loadTab(name) {
       if (APP.loadedTabs.has(name)) return;
       APP.loadedTabs.add(name);
-      if (name === 'training')           await loadTrainingTab();
-      if (name === 'diary' ||
-          name === 'nutrition')          await loadNutritionTab();
-      if (name === 'stats')              await loadStatsTab();
-      if (name === 'home')               await loadHomeTab();
+      try {
+        if (name === 'training')           await loadTrainingTab();
+        if (name === 'diary' ||
+            name === 'nutrition')          await loadNutritionTab();
+        if (name === 'stats')              await loadStatsTab();
+        if (name === 'home')               await loadHomeTab();
+      } catch(err) {
+        console.error('[Apex] loadTab failed:', name, err);
+        APP.loadedTabs.delete(name); // allow retry next tap
+      }
     }
 
     // ═══════════════════════════════════════════════════════
