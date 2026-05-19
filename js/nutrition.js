@@ -694,7 +694,7 @@ window.ApexNutrition = (function () {
           meal_slot_id: slotId,
           food_id:      foodId,
           quantity_g:   quantityG,
-          sort_order:   Date.now(), // avoids a round-trip COUNT query
+          sort_order:   0,
         })
         .select(`
           id,
