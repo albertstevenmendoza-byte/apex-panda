@@ -2129,17 +2129,43 @@
       PICKER.slotName     = slotName;
       PICKER.selectedFood = null;
       PICKER.source       = 'all';
-      APP.allFoods.forEach(f => PICKER.cache.set(String(f.id), f));
+
+      // Safely warm the cache — allFoods may not be loaded yet if user
+      // came from the home tab without visiting the diary first
+      (APP.allFoods || []).forEach(f => PICKER.cache.set(String(f.id), f));
 
       document.getElementById('fsp-meal-name').textContent = slotName || 'Meal';
       document.getElementById('fsp-query').value = '';
       document.getElementById('fsp-clear').classList.add('fp-hidden');
-      // Reset tabs to Recent
       document.querySelectorAll('#fsp-tabs .fp-tab')
         .forEach(b => b.classList.toggle('active', b.dataset.src === 'all'));
 
       document.getElementById('food-search-page').classList.add('fp-open');
-      fspLoad();
+
+      // Show library foods immediately so the list is never blank on open.
+      // If allFoods isn't loaded yet, load it now then render.
+      const showLibrary = () => {
+        const foods = APP.allFoods || [];
+        if (foods.length) {
+          renderFspList(foods.slice(0, 30));
+        } else {
+          document.getElementById('fsp-list').innerHTML =
+            '<div class="fp-empty"><div style="font-size:2rem;margin-bottom:8px">&#x1F30E;</div>' +
+            'Type to search 3,000,000+ foods<br>' +
+            '<span style="font-size:0.8125rem;opacity:.7">Brands, packaged foods, USDA database</span></div>';
+        }
+      };
+
+      if (!APP.allFoods || !APP.allFoods.length) {
+        ApexNutrition.FoodArchive.getAll().then(foods => {
+          APP.allFoods = foods;
+          (foods || []).forEach(f => PICKER.cache.set(String(f.id), f));
+          showLibrary();
+        });
+      } else {
+        showLibrary();
+      }
+
       setTimeout(() => document.getElementById('fsp-query').focus(), 320);
     }
 
