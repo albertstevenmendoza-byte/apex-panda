@@ -172,8 +172,8 @@
       </div>
     </div>
 
-    <!-- 7-day grid -->
-    <div id="days-grid" class="days-grid"></div>
+    <!-- Day strip -->
+    <div id="days-grid"></div>
 
     <!-- Workout detail -->
     <div id="workout-detail" class="card hidden">
@@ -191,19 +191,7 @@
           </button>
         </div>
       </div>
-      <table class="exercise-table" id="exercise-table">
-        <thead>
-          <tr>
-            <th style="width:40%">Exercise</th>
-            <th>Sets</th>
-            <th>Reps</th>
-            <th>RPE</th>
-            <th>Rest</th>
-            <th style="width:32px"></th>
-          </tr>
-        </thead>
-        <tbody id="exercise-tbody"></tbody>
-      </table>
+      <div id="exercise-cards"></div>
 
       <!-- Cardio prescription (for cardio days) -->
       <div id="cardio-detail" class="hidden">
@@ -628,6 +616,66 @@
     </div>
   </div>
 
+  <!-- ── Lift history + edit ───────────────────────────────── -->
+  <div id="lift-history-modal" class="modal-backdrop hidden"
+       onclick="if(event.target===this)closeLiftHistory()">
+    <div class="modal-box" style="max-width:480px;max-height:82dvh;overflow:hidden;
+                                   display:flex;flex-direction:column;padding:0">
+      <div style="padding:1.25rem;border-bottom:0.5px solid var(--border);flex-shrink:0">
+        <div class="row-between">
+          <div>
+            <div class="modal-title" id="lift-history-title">History</div>
+            <div id="lift-history-sub" style="font-size:0.8125rem;color:var(--text-3);margin-top:2px"></div>
+          </div>
+          <button class="btn-icon btn-ghost" onclick="closeLiftHistory()">&#x2715;</button>
+        </div>
+      </div>
+      <div id="lift-history-body" style="overflow-y:auto;flex:1;padding:1.25rem"></div>
+    </div>
+  </div>
+
+  <!-- ── Edit single set ───────────────────────────────────── -->
+  <div id="edit-set-modal" class="modal-backdrop hidden"
+       onclick="if(event.target===this)closeEditSet()">
+    <div class="modal-box" style="max-width:360px">
+      <div class="row-between" style="margin-bottom:1.25rem">
+        <div class="modal-title">Edit Set</div>
+        <button class="btn-icon btn-ghost" onclick="closeEditSet()">&#x2715;</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:1rem">
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">Weight (lbs)</label>
+          <input type="number" id="edit-set-wt" step="2.5" min="0"
+                 style="width:100%;padding:10px 12px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:1rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">Reps</label>
+          <input type="number" id="edit-set-reps" min="1" max="100"
+                 style="width:100%;padding:10px 12px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:1rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:6px">RPE</label>
+          <div style="display:flex;gap:6px">
+            ${[6,7,8,9,10].map(r =>
+              `<button class="rpe-btn" id="edit-rpe-${r}" onclick="selectEditRPE(${r})"
+                       style="flex:1">${r}</button>`
+            ).join('')}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-danger btn-sm" onclick="deleteSet()"
+                  style="flex:0 0 auto">Delete</button>
+          <button class="btn btn-primary" style="flex:1" onclick="saveSetEdit()">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <!-- ── Backlog past workout ───────────────────────────────── -->
   <div id="backlog-modal" class="modal-backdrop hidden"
        onclick="if(event.target===this)closeBacklogModal()">
@@ -1002,43 +1050,290 @@
       renderDaysGrid(workouts, week);
     }
 
+    // ── Exercise card rendering ───────────────────────────────
+    const MUSCLE_COLORS = {
+      chest: '#E11D48', back: '#2563EB', shoulders: '#7C3AED',
+      quads: '#EA580C', hamstrings: '#EA580C', glutes: '#EA580C',
+      legs: '#EA580C', biceps: '#059669', triceps: '#059669',
+      arms: '#059669', core: '#CA8A04', abs: '#CA8A04', calves: '#0891B2',
+    };
+    const MUSCLE_SHORT = {
+      chest:'CH', back:'BK', shoulders:'SH', quads:'QD',
+      hamstrings:'HM', glutes:'GL', legs:'LG', biceps:'BI',
+      triceps:'TR', arms:'AR', core:'CO', abs:'AB', calves:'CA',
+    };
+
+    function muscleColor(m) { return MUSCLE_COLORS[m?.toLowerCase()] ?? '#6366F1'; }
+    function muscleShort(m) { return MUSCLE_SHORT[m?.toLowerCase()] ?? m?.slice(0,2).toUpperCase() ?? '??'; }
+
+    function renderExerciseCards(plannedSets, isDeload) {
+      const container = document.getElementById('exercise-cards');
+      if (!container) return;
+
+      // Deduplicate by exercise_id (planned_sets has one row per set)
+      const seen = new Set();
+      const exercises = plannedSets.filter(ps => {
+        if (seen.has(ps.exercise_id)) return false;
+        seen.add(ps.exercise_id);
+        return true;
+      });
+
+      const setsFor = (exId) => plannedSets.filter(p => p.exercise_id === exId);
+
+      container.innerHTML = exercises.map(ps => {
+        const ex    = ps.exercises ?? {};
+        const sets  = setsFor(ps.exercise_id);
+        const col   = muscleColor(ex.muscle_primary);
+        const abbr  = muscleShort(ex.muscle_primary);
+        const reps  = `${ps.reps_min}–${ps.reps_max} reps`;
+        const rest  = ps.rest_seconds ? `${ps.rest_seconds}s rest` : '';
+        const rpe   = isDeload ? 'RPE ~7' : (ps.rpe_target ? `RPE ${ps.rpe_target}` : '');
+
+        return `
+          <div class="exercise-card">
+            <div class="ex-icon" style="background:${col}">${abbr}</div>
+            <div class="ex-body">
+              <div class="ex-name">${ex.name ?? 'Exercise'}</div>
+              <div class="ex-spec">${sets.length} sets · ${reps}${rpe ? ' · ' + rpe : ''}${rest ? ' · ' + rest : ''}</div>
+              <div class="ex-last" id="last-lift-${ps.exercise_id}">
+                <span style="color:var(--border)">Loading…</span>
+              </div>
+            </div>
+            <button class="ex-history-btn"
+                    onclick="openLiftHistory('${ps.exercise_id}','${(ex.name ?? '').replace(/'/g,"\\'")}')">
+              History
+            </button>
+          </div>`;
+      }).join('');
+    }
+
+    async function loadLastLifts(plannedSets) {
+      if (!plannedSets.length) return;
+      const exIds = [...new Set(plannedSets.map(p => p.exercise_id))];
+      try {
+        const { data } = await ApexCore.getClient()
+          .from('set_logs')
+          .select('exercise_id, weight_kg, reps, workout_logs!inner(log_date)')
+          .in('exercise_id', exIds)
+          .eq('is_warmup', false)
+          .order('workout_log_id', { ascending: false })
+          .limit(exIds.length * 6);
+
+        // Most recent set per exercise
+        const best = {};
+        for (const s of data ?? []) {
+          if (!best[s.exercise_id]) {
+            best[s.exercise_id] = {
+              wt: kgToLbs(s.weight_kg), reps: s.reps,
+              date: s.workout_logs?.log_date,
+            };
+          }
+        }
+
+        for (const [exId, last] of Object.entries(best)) {
+          const el = document.getElementById(`last-lift-${exId}`);
+          if (!el) continue;
+          const ago = last.date ? timeAgo(last.date) : '';
+          el.innerHTML = `<span style="color:var(--text-2)">Last: ${fmtLbs(last.wt)} × ${last.reps}${ago ? ' <span style="color:var(--text-3)">· ' + ago + '</span>' : ''}</span>`;
+        }
+
+        // Clear "Loading…" for exercises with no history
+        document.querySelectorAll('[id^="last-lift-"]').forEach(el => {
+          if (el.innerHTML.includes('Loading')) el.innerHTML = '<span style="color:var(--text-3)">No history yet</span>';
+        });
+      } catch(e) {
+        document.querySelectorAll('[id^="last-lift-"]').forEach(el => {
+          if (el.innerHTML.includes('Loading')) el.innerHTML = '';
+        });
+      }
+    }
+
+    function timeAgo(dateStr) {
+      const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+      if (days === 0) return 'today';
+      if (days === 1) return 'yesterday';
+      if (days < 14)  return `${days}d ago`;
+      if (days < 60)  return `${Math.floor(days/7)}w ago`;
+      return `${Math.floor(days/30)}mo ago`;
+    }
+
+    // ── Lift history ──────────────────────────────────────────
+    let _historyExId = null;
+
+    async function openLiftHistory(exerciseId, exerciseName) {
+      _historyExId = exerciseId;
+      document.getElementById('lift-history-title').textContent = exerciseName;
+      document.getElementById('lift-history-sub').textContent   = 'Loading history…';
+      document.getElementById('lift-history-body').innerHTML    = '';
+      document.getElementById('lift-history-modal').classList.remove('hidden');
+
+      try {
+        const { data, error } = await ApexCore.getClient()
+          .from('set_logs')
+          .select(`
+            id, set_number, weight_kg, reps, rpe,
+            workout_logs!inner(id, log_date)
+          `)
+          .eq('exercise_id', exerciseId)
+          .eq('is_warmup', false)
+          .order('set_number')
+          .limit(60);
+
+        if (error) throw error;
+        renderLiftHistory(data ?? [], exerciseName);
+      } catch(e) {
+        document.getElementById('lift-history-sub').textContent = 'Could not load history';
+      }
+    }
+
+    function closeLiftHistory() {
+      document.getElementById('lift-history-modal').classList.add('hidden');
+    }
+
+    function renderLiftHistory(sets, exerciseName) {
+      if (!sets.length) {
+        document.getElementById('lift-history-sub').textContent = 'No logged sets yet';
+        document.getElementById('lift-history-body').innerHTML =
+          '<div style="text-align:center;padding:2rem;color:var(--text-3)">' +
+          'Start a workout to log sets</div>';
+        return;
+      }
+
+      // Group by workout_log date
+      const sessions = {};
+      for (const s of sets) {
+        const date = s.workout_logs?.log_date ?? 'Unknown';
+        if (!sessions[date]) sessions[date] = [];
+        sessions[date].push(s);
+      }
+
+      const sortedDates = Object.keys(sessions).sort((a, b) => b.localeCompare(a));
+      document.getElementById('lift-history-sub').textContent =
+        `${sortedDates.length} session${sortedDates.length !== 1 ? 's' : ''}`;
+
+      document.getElementById('lift-history-body').innerHTML = sortedDates.map(date => {
+        const sessionSets = sessions[date].sort((a, b) => a.set_number - b.set_number);
+        const d = new Date(date + 'T12:00:00');
+        const label = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+
+        return `
+          <div class="lift-session">
+            <div class="lift-session-hdr">${label}</div>
+            ${sessionSets.map(s => `
+              <div class="lift-set-row">
+                <span class="lift-set-num">S${s.set_number}</span>
+                <span class="lift-set-val">${fmtLbs(kgToLbs(s.weight_kg))} × ${s.reps}</span>
+                ${s.rpe ? `<span class="lift-set-rpe">RPE ${s.rpe}</span>` : ''}
+                <button class="lift-set-edit"
+                        onclick="openEditSet('${s.id}',${kgToLbs(s.weight_kg)},${s.reps},${s.rpe ?? 'null'})">
+                  Edit
+                </button>
+              </div>`).join('')}
+          </div>`;
+      }).join('');
+    }
+
+    // ── Edit / delete set ─────────────────────────────────────
+    let _editSetId = null, _editSetRPE = null;
+
+    function openEditSet(id, wtLbs, reps, rpe) {
+      _editSetId  = id;
+      _editSetRPE = rpe;
+      document.getElementById('edit-set-wt').value   = Math.round(wtLbs * 4) / 4;
+      document.getElementById('edit-set-reps').value = reps;
+      document.querySelectorAll('.rpe-btn[id^="edit-rpe-"]').forEach(b => {
+        b.classList.toggle('rpe-active', parseInt(b.id.split('-').pop()) === rpe);
+      });
+      document.getElementById('edit-set-modal').classList.remove('hidden');
+    }
+
+    function closeEditSet() {
+      document.getElementById('edit-set-modal').classList.add('hidden');
+    }
+
+    function selectEditRPE(val) {
+      _editSetRPE = val;
+      document.querySelectorAll('.rpe-btn[id^="edit-rpe-"]')
+        .forEach(b => b.classList.toggle('rpe-active', parseInt(b.id.split('-').pop()) === val));
+    }
+
+    async function saveSetEdit() {
+      const wtLbs = parseFloat(document.getElementById('edit-set-wt').value);
+      const reps  = parseInt(document.getElementById('edit-set-reps').value);
+      if (isNaN(wtLbs) || isNaN(reps)) { showToast('Enter valid weight and reps', 'error'); return; }
+
+      const btn = document.querySelector('#edit-set-modal .btn-primary');
+      btn.disabled = true; btn.textContent = 'Saving…';
+
+      const { error } = await ApexCore.getClient()
+        .from('set_logs')
+        .update({ weight_kg: lbsToKg(wtLbs), reps, rpe: _editSetRPE })
+        .eq('id', _editSetId);
+
+      btn.disabled = false; btn.textContent = 'Save';
+      if (error) { showToast(error.message, 'error'); return; }
+
+      closeEditSet();
+      showToast('Set updated', 'success');
+      // Refresh history
+      if (_historyExId) {
+        const title = document.getElementById('lift-history-title').textContent;
+        openLiftHistory(_historyExId, title);
+      }
+    }
+
+    async function deleteSet() {
+      if (!confirm('Delete this set?')) return;
+      const { error } = await ApexCore.getClient()
+        .from('set_logs').delete().eq('id', _editSetId);
+      if (error) { showToast(error.message, 'error'); return; }
+      closeEditSet();
+      showToast('Set deleted', 'success');
+      if (_historyExId) {
+        const title = document.getElementById('lift-history-title').textContent;
+        openLiftHistory(_historyExId, title);
+      }
+    }
+
     function renderDaysGrid(workouts, week) {
       const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
       const grid = document.getElementById('days-grid');
+      grid.className = 'day-strip';
       grid.innerHTML = '';
 
-      // Build lookup: day_of_week → workout
-      const byDay = new Map(workouts.map(w => [w.day_of_week, w]));
-      const today = new Date().getDay(); // 0=Sun … 6=Sat
-      const todayDow = today === 0 ? 6 : today - 1; // convert to Mon=0
+      const byDay     = new Map(workouts.map(w => [w.day_of_week, w]));
+      const todayDow  = (() => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; })();
 
       for (let i = 0; i < 7; i++) {
         const wo  = byDay.get(i);
-        const div = document.createElement('div');
-        div.className = 'day-cell' + (!wo || wo.workout_type === null ? ' rest' : '');
-        if (wo?.is_completed) div.classList.add('done');
-        if (i === todayDow && wo) div.classList.add('active');
+        const isRest = !wo || wo.workout_type === null;
+        const pill = document.createElement('div');
+        pill.className = 'day-pill' + (isRest ? ' rest' : '');
+        if (wo?.is_completed) pill.classList.add('done');
+        if (i === todayDow && !isRest) pill.classList.add('today-dot');
 
-        div.innerHTML = `
-          <div class="day-name">${DAY_NAMES[i]}</div>
-          <div class="day-type ${!wo || wo.workout_type === null ? 't-hint' : ''}">
-            ${wo ? wo.label : 'Rest'}
-          </div>
-          ${wo && wo.set_count > 0 ? `<div class="day-meta">${wo.set_count} sets</div>` : ''}
-          ${wo?.is_completed ? `<div class="day-done">✓ Done</div>` : ''}
+        pill.innerHTML = `
+          <div class="day-pill-name">${DAY_NAMES[i]}</div>
+          <div class="day-pill-label">${isRest ? 'Rest' : wo.label}</div>
+          ${wo?.is_completed ? '<div class="day-pill-done">✓</div>' : ''}
         `;
 
-        if (wo && wo.workout_type) {
-          div.style.cursor = 'pointer';
-          div.addEventListener('click', () => selectWorkout(wo, div));
+        if (!isRest) {
+          pill.addEventListener('click', () => {
+            document.querySelectorAll('.day-pill').forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            selectWorkout(wo, pill);
+          });
         }
-        grid.appendChild(div);
+        grid.appendChild(pill);
       }
 
-      // Auto-select today's workout
-      const todayWo = byDay.get(todayDow);
-      if (todayWo && todayWo.workout_type) {
-        selectWorkout(todayWo, grid.children[todayDow]);
+      // Auto-select today (or first workout day)
+      const autoWo = byDay.get(todayDow) || workouts.find(w => w.workout_type);
+      if (autoWo && autoWo.workout_type) {
+        const idx   = autoWo.day_of_week;
+        const pill  = grid.children[idx];
+        if (pill) { pill.classList.add('active'); selectWorkout(autoWo, pill); }
       }
     }
 
@@ -1080,7 +1375,6 @@
       }
 
       // Strength day
-      tableEl.classList.remove('hidden');
       cardioEl.classList.add('hidden');
       document.getElementById('start-workout-btn').classList.remove('hidden');
 
@@ -1088,6 +1382,11 @@
         workout.planned_sets?.[0]?.rpe_target ? `RPE target ${workout.planned_sets[0].rpe_target}` : '';
       document.getElementById('detail-workout-meta').textContent =
         `${workout.planned_sets?.length ?? 0} exercises · ${rpeLabel}`;
+
+      // Render exercise cards
+      renderExerciseCards(workout.planned_sets ?? [], isDeload);
+      // Fetch last lifts in background and update cards
+      loadLastLifts(workout.planned_sets ?? []);
 
       renderExerciseTable(workout.planned_sets ?? [], isDeload);
     }
