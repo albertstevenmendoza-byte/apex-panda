@@ -1164,6 +1164,9 @@ window.ApexTraining = (function () {
       if (wlErr) return { workoutLogId: null, deloadCheck: null, error: wlErr };
       // set_logs were already written in real-time by logSet() — nothing to batch here
 
+      // Need user for program lookup
+      const user = await Core.Auth.getUser();
+
       // Fetch active program for deload check
       const { data: program } = await Core.getClient()
         .from('programs')
@@ -1216,6 +1219,59 @@ window.ApexTraining = (function () {
 
       _state.status = _STATES.ABANDONED;
       return { error };
+    }
+
+    /**
+     * Log a past workout without set-by-set detail (backlog).
+     * Looks up the planned workout for the given date automatically.
+     * @param {object} params
+     * @param {string} params.date         — ISO date string e.g. '2025-05-19'
+     * @param {number} [params.durationMin]
+     * @param {number} [params.rpeOverall]
+     * @param {string} [params.notes]
+     * @returns {{ workoutLogId, label, error }}
+     */
+    async function backlog({ date, durationMin = 0, rpeOverall = null, notes = null }) {
+      const user = await Core.Auth.getUser();
+      if (!user) return { workoutLogId: null, label: null, error: new Error('Not signed in') };
+
+      // Find active program
+      const { data: program } = await Core.getClient()
+        .from('programs').select('id').eq('user_id', user.id).eq('is_active', true).maybeSingle();
+
+      let plannedWorkoutId = null;
+      let label = null;
+
+      if (program) {
+        // Find the program week containing the selected date
+        const { data: week } = await Core.getClient()
+          .from('program_weeks').select('id')
+          .lte('start_date', date).gte('end_date', date)
+          .eq('program_id', program.id).maybeSingle();
+
+        if (week) {
+          const dayOfWeek = new Date(date + 'T12:00:00').getDay(); // avoid TZ edge cases
+          const { data: pw } = await Core.getClient()
+            .from('planned_workouts').select('id, label')
+            .eq('program_week_id', week.id).eq('day_of_week', dayOfWeek).maybeSingle();
+
+          if (pw) { plannedWorkoutId = pw.id; label = pw.label; }
+        }
+      }
+
+      const { data, error } = await Core.getClient()
+        .from('workout_logs')
+        .insert({
+          user_id:            user.id,
+          planned_workout_id: plannedWorkoutId,
+          log_date:           date,
+          duration_min:       durationMin,
+          rpe_overall:        rpeOverall,
+          notes:              notes ? `[Backlog] ${notes}` : '[Backlog]',
+        })
+        .select('id').single();
+
+      return { workoutLogId: data?.id ?? null, label, error: error ?? null };
     }
 
     /**
@@ -1274,6 +1330,7 @@ window.ApexTraining = (function () {
       skipSet,
       completeSession,
       abandon,
+      backlog,
       getState,
       STATES: _STATES,
       // Expose for testing only
