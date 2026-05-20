@@ -2300,11 +2300,86 @@
       loadTab('diary');
     }
 
+    // Pending deletes: itemId → { slotId, rowEl, timer }
+    const _pendingDeletes = {};
+
     async function removeItem(itemId, slotId) {
-      const { error } = await ApexNutrition.MealItems.remove(itemId, slotId);
-      if (error) { showToast(error.message, 'error'); return; }
-      APP.loadedTabs.delete('diary');
-      loadTab('diary');
+      const row = document.getElementById(`item-${itemId}`);
+      if (!row) return;
+
+      // If this item already has a pending delete, commit it immediately first
+      if (_pendingDeletes[itemId]) {
+        clearTimeout(_pendingDeletes[itemId].timer);
+        delete _pendingDeletes[itemId];
+      }
+
+      // Optimistically dim and disable the row
+      row.style.cssText += ';opacity:0.25;pointer-events:none;transition:opacity 0.2s';
+
+      // Schedule the actual DB delete after the undo window
+      _pendingDeletes[itemId] = {
+        slotId,
+        rowEl: row,
+        timer: setTimeout(async () => {
+          delete _pendingDeletes[itemId];
+          const { error } = await ApexNutrition.MealItems.remove(itemId, slotId);
+          if (error) {
+            showToast(error.message, 'error');
+            row.style.opacity = '1';
+            row.style.pointerEvents = '';
+          } else {
+            row.remove();
+            // Refresh macro summary without full reload
+            APP.loadedTabs.delete('diary');
+            loadTab('diary');
+          }
+        }, 4000),
+      };
+
+      showUndoToast(`Food removed`, () => undoRemoveItem(itemId));
+    }
+
+    function undoRemoveItem(itemId) {
+      const pending = _pendingDeletes[itemId];
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      delete _pendingDeletes[itemId];
+      pending.rowEl.style.opacity = '1';
+      pending.rowEl.style.pointerEvents = '';
+    }
+
+    function showUndoToast(message, onUndo) {
+      // Remove any existing undo toast
+      document.getElementById('undo-toast-el')?.remove();
+
+      const t = document.createElement('div');
+      t.id = 'undo-toast-el';
+      t.style.cssText = `
+        position:fixed;
+        bottom:calc(76px + env(safe-area-inset-bottom, 0px));
+        left:50%;transform:translateX(-50%);
+        background:#1E1E2E;color:#F1F1F3;
+        padding:11px 10px 11px 16px;
+        border-radius:var(--r-md);
+        display:flex;align-items:center;gap:14px;
+        font-size:0.875rem;font-family:var(--font);
+        box-shadow:0 4px 20px rgba(0,0,0,.35);
+        z-index:800;white-space:nowrap;
+        animation:toast-in .18s var(--ease);
+      `;
+      t.innerHTML = `
+        <span>${message}</span>
+        <button style="background:none;border:none;color:#818CF8;
+                       font-weight:700;font-size:0.875rem;
+                       cursor:pointer;padding:4px 6px;font-family:inherit">
+          Undo
+        </button>`;
+
+      t.querySelector('button').onclick = () => { onUndo(); t.remove(); };
+      document.body.appendChild(t);
+
+      // Auto-dismiss after 4 s (matches the delete timer)
+      setTimeout(() => t.remove(), 4000);
     }
 
 
