@@ -1231,7 +1231,10 @@ window.ApexTraining = (function () {
           .eq('program_id', program.id).maybeSingle();
 
         if (week) {
-          const dayOfWeek = new Date(date + 'T12:00:00').getDay(); // avoid TZ edge cases
+          const dayOfWeek = (() => {
+            const d = new Date(date + 'T12:00:00').getDay(); // JS: 0=Sun…6=Sat
+            return d === 0 ? 6 : d - 1; // convert to Mon=0…Sun=6
+          })();
           const { data: pw } = await Core.getClient()
             .from('planned_workouts').select('id, label')
             .eq('program_week_id', week.id).eq('day_of_week', dayOfWeek).maybeSingle();
@@ -1240,16 +1243,19 @@ window.ApexTraining = (function () {
         }
       }
 
+      // Build insert — omit planned_workout_id for rest days to avoid NOT NULL errors
+      const insertRow = {
+        user_id:      user.id,
+        log_date:     date,
+        duration_min: durationMin,
+        rpe_overall:  rpeOverall,
+        notes:        notes ? `[Backlog] ${notes}` : '[Backlog]',
+      };
+      if (plannedWorkoutId) insertRow.planned_workout_id = plannedWorkoutId;
+
       const { data, error } = await Core.getClient()
         .from('workout_logs')
-        .insert({
-          user_id:            user.id,
-          planned_workout_id: plannedWorkoutId ?? undefined, // omit if null — avoids NOT NULL violation
-          log_date:           date,
-          duration_min:       durationMin,
-          rpe_overall:        rpeOverall,
-          notes:              notes ? `[Backlog] ${notes}` : '[Backlog]',
-        })
+        .insert(insertRow)
         .select('id').single();
 
       return { workoutLogId: data?.id ?? null, label, error: error ?? null };
