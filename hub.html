@@ -1074,9 +1074,13 @@
 
     // ── Event bus listeners ───────────────────────────────
     function setupEventBus() {
-      ApexCore.on(ApexCore.Events.MACROS_RECALCULATED, () => {
-        APP.loadedTabs.delete('diary');
-        if (APP.activeTab === 'diary') loadTab('diary');
+      ApexCore.on(ApexCore.Events.MACROS_RECALCULATED, async () => {
+        // Re-fetch profile so APP.profile has fresh calorie/macro targets
+        const fresh = await ApexCore.Profile.getCached();
+        if (fresh) APP.profile = fresh;
+        // Force the currently-visible tab to reload
+        APP.loadedTabs.delete(APP.activeTab);
+        loadTab(APP.activeTab);
       });
       ApexCore.on(ApexCore.Events.DELOAD_TRIGGERED, ({ reason }) => {
         showToast(`Deload triggered: ${reason}`, 'warning');
@@ -1895,13 +1899,25 @@
     }
 
     async function selectGoal(phase) {
-      const { error } = await ApexCore.Profile.update({ phase });
+      const { data: updatedProfile, error } = await ApexCore.Profile.update({ phase });
       if (error) { showToast('Could not save goal', 'error'); return; }
-      APP.profile = { ...APP.profile, phase };
+
+      // Use the full returned profile — it contains recalculated
+      // calorie_target, protein_target_g, carb_target_g, fat_target_g
+      APP.profile = updatedProfile ?? { ...APP.profile, phase };
+
       closeGoalModal();
-      APP.loadedTabs.delete('home');
-      loadTab('home');
-      showToast('Goal updated', 'success');
+
+      // Update the phase pill immediately
+      renderTopBar();
+
+      // Clear every cached tab so they all reload with the new targets
+      ['home', 'diary', 'training', 'stats'].forEach(t => APP.loadedTabs.delete(t));
+
+      // Reload whichever tab the user is currently on
+      await loadTab(APP.activeTab);
+
+      showToast(`Switched to ${phase} — macros updated`, 'success');
     }
 
 
@@ -1995,7 +2011,8 @@
 
         if (!week) { label.textContent = 'Date is outside your current program'; return; }
 
-        const dow = new Date(date + 'T12:00:00').getDay(); // 0=Sun … 6=Sat
+        const d   = new Date(date + 'T12:00:00').getDay(); // JS: 0=Sun…6=Sat
+        const dow = d === 0 ? 6 : d - 1; // convert to Mon=0…Sun=6 to match DB
         const { data: pw } = await ApexCore.getClient()
           .from('planned_workouts')
           .select('label, workout_type')
