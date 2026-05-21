@@ -2601,7 +2601,8 @@
         header.innerHTML = `
           <span id="chev-${slot.id}"
                 style="font-size:0.75rem;color:${hasItems ? 'var(--accent)' : 'var(--border)'};
-                       transition:transform 0.2s;flex-shrink:0;display:inline-block">
+                       transition:transform 0.2s;flex-shrink:0;display:inline-block;
+                       transform:rotate(-90deg)">
             &#x25BC;
           </span>
           <div style="flex:1;min-width:0">
@@ -2624,8 +2625,8 @@
         // ── Items container ──────────────────────────────────
         const body = document.createElement('div');
         body.id = `body-${slot.id}`;
-        // Start collapsed if no items
-        if (!hasItems) body.style.display = 'none';
+        // Always start collapsed — user taps to expand
+        body.style.display = 'none';
 
         items.forEach(item => body.appendChild(buildItemRow(item, slot.id)));
         card.appendChild(body);
