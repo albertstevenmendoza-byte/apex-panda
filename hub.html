@@ -345,6 +345,11 @@
   <!-- ── Focus mode ──────────────────────────────────────────── -->
   <div id="focus-mode" class="fm-hidden">
 
+    <!-- Workout completion progress bar -->
+    <div id="focus-progress-track" style="height:3px;background:rgba(255,255,255,0.07);position:relative;flex-shrink:0">
+      <div id="focus-progress-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#818CF8,#6366F1);transition:width 0.6s cubic-bezier(0.16,1,0.3,1)"></div>
+    </div>
+
     <div class="focus-topbar">
       <button class="focus-abandon-btn" data-confirm="0" onclick="confirmAbandon()">&#x2715; End</button>
       <div class="focus-topbar-center">
@@ -357,6 +362,7 @@
     <div class="focus-body" id="focus-body">
 
       <div class="focus-ex-header">
+        <div id="focus-muscle-chip" class="focus-muscle-chip"></div>
         <div id="focus-ex-name" class="focus-ex-name"></div>
         <div id="focus-ex-meta" class="focus-ex-meta"></div>
         <div id="focus-set-dots" class="focus-set-dots"></div>
@@ -400,17 +406,23 @@
   <div id="rest-overlay" class="fm-hidden">
     <div class="rest-label">Rest</div>
     <div class="rest-ring-wrap">
-      <svg width="220" height="220" viewBox="0 0 220 220">
-        <circle cx="110" cy="110" r="88" fill="none"
-                stroke="var(--surface-alt)" stroke-width="10"/>
-        <circle id="rest-ring" cx="110" cy="110" r="88"
-                fill="none" stroke="var(--accent)" stroke-width="10"
+      <svg width="240" height="240" viewBox="0 0 240 240">
+        <defs>
+          <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%"   stop-color="#818CF8"/>
+            <stop offset="100%" stop-color="#4F46E5"/>
+          </linearGradient>
+        </defs>
+        <circle cx="120" cy="120" r="96" fill="none"
+                stroke="rgba(255,255,255,0.07)" stroke-width="14"/>
+        <circle id="rest-ring" cx="120" cy="120" r="96"
+                fill="none" stroke="url(#ring-grad)" stroke-width="14"
                 stroke-linecap="round"
-                stroke-dasharray="553" stroke-dashoffset="0"
-                transform="rotate(-90 110 110)"/>
+                stroke-dasharray="603" stroke-dashoffset="0"
+                transform="rotate(-90 120 120)"/>
       </svg>
       <div class="rest-ring-center">
-        <div id="rest-sec" class="rest-seconds-big">90</div>
+        <div id="rest-sec" class="rest-seconds-big" style="color:#F1F1F3">90</div>
         <div class="rest-sec-unit">sec</div>
       </div>
     </div>
@@ -1244,7 +1256,7 @@
         const safeMuscle = (ex.muscle_primary ?? '').replace(/'/g, "\\'");
 
         return `
-          <div class="exercise-card">
+          <div class="exercise-card" data-muscle="${(ex.muscle_primary||'').toLowerCase()}">
             <div class="ex-icon" style="background:${col}">${abbr}</div>
             <div class="ex-body">
               <div class="ex-name">${ex.name ?? 'Exercise'}</div>
@@ -1607,13 +1619,47 @@
       const { ps } = item;
       const ex = ps.exercises ?? {};
 
+      // Set ambient glow colour to match the muscle group
+      const muscleGlowMap = {
+        chest:'rgba(248,113,113,0.18)', back:'rgba(96,165,250,0.18)',
+        shoulders:'rgba(251,191,36,0.18)', quads:'rgba(52,211,153,0.18)',
+        hamstrings:'rgba(52,211,153,0.18)', glutes:'rgba(16,185,129,0.18)',
+        biceps:'rgba(167,139,250,0.18)', triceps:'rgba(192,132,252,0.18)',
+        core:'rgba(251,146,60,0.18)', calves:'rgba(56,189,248,0.18)',
+      };
+      const glowColor = muscleGlowMap[(ps.exercises?.muscle_primary||'').toLowerCase()]
+                     || 'rgba(99,102,241,0.18)';
+      document.getElementById('focus-mode').style.setProperty('--fm-glow', glowColor);
+
+      // Overall workout progress bar
+      const totalSets = WORKOUT.exercises.reduce((s, e) => s + e.setsTotal, 0);
+      const doneSets  = WORKOUT.exercises.reduce((s, e, i) =>
+        s + (i < WORKOUT.curEx ? e.setsTotal : i === WORKOUT.curEx ? item.setsDone : 0), 0);
+      const pct = totalSets > 0 ? (doneSets / totalSets) * 100 : 0;
+      const fill = document.getElementById('focus-progress-fill');
+      if (fill) fill.style.width = pct + '%';
+
       // Progress counter
       document.getElementById('focus-ex-counter').textContent =
         `Exercise ${WORKOUT.curEx + 1} / ${WORKOUT.exercises.length}`;
 
+      // Muscle group chip
+      const chipEl = document.getElementById('focus-muscle-chip');
+      if (chipEl) {
+        const col   = typeof muscleColor === 'function' ? muscleColor(ex.muscle_primary) : '#6366F1';
+        const label = ex.muscle_primary
+          ? ex.muscle_primary.charAt(0).toUpperCase() + ex.muscle_primary.slice(1)
+          : '';
+        chipEl.textContent  = label;
+        chipEl.style.display    = label ? 'inline-block' : 'none';
+        chipEl.style.background = col + '22';
+        chipEl.style.color      = col;
+        chipEl.style.borderColor = col + '55';
+      }
+
       // Exercise name + meta
       document.getElementById('focus-ex-name').textContent = ex.name ?? 'Exercise';
-      const parts = [ex.muscle_primary, `${ps.reps_min}–${ps.reps_max} reps`,
+      const parts = [`${ps.reps_min}–${ps.reps_max} reps`,
                      `RPE ${ps.rpe_target}`,
                      ps.rest_seconds >= 60
                        ? `${Math.floor(ps.rest_seconds / 60)}m rest`
@@ -1642,6 +1688,7 @@
       const btn = document.getElementById('log-set-btn');
       btn.disabled    = false;
       btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
+      btn.classList.remove('focus-log-flash');
 
       renderCompletedSets(item.logs);
       document.getElementById('focus-body').scrollTo({ top: 0, behavior: 'smooth' });
@@ -1710,6 +1757,11 @@
       item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
       item.setsDone++;
 
+      // Flash + haptic feedback
+      const flashBtn = document.getElementById('log-set-btn');
+      if (flashBtn) { void flashBtn.offsetWidth; flashBtn.classList.add('focus-log-flash'); }
+      if (navigator.vibrate) navigator.vibrate(40);
+
       if (isPR) showToast(
         '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' lbs', 'success');
 
@@ -1744,7 +1796,7 @@
     function showRestOverlay(totalSec, nextInfo, onComplete) {
       const ringEl = document.getElementById('rest-ring');
       const secEl  = document.getElementById('rest-sec');
-      const CIRC   = 2 * Math.PI * 88;           // ≈ 553
+      const CIRC   = 2 * Math.PI * 96;           // ≈ 603 (ring r=96)
 
       WORKOUT._restCB = onComplete;
       document.getElementById('rest-next').textContent = nextInfo;
@@ -1765,6 +1817,11 @@
         remaining--;
         secEl.textContent             = Math.max(0, remaining);
         ringEl.style.strokeDashoffset = `${CIRC * (1 - remaining / totalSec)}`;
+        // Pulse red when time is almost up
+        if (remaining <= 10) {
+          ringEl.style.stroke = 'var(--danger)';
+          if (remaining === 10) ringEl.classList.add('rest-ring-low');
+        }
         if (remaining <= 0) _endRest(true);
       }, 1000);
     }
@@ -1772,6 +1829,12 @@
     function _endRest(vibrate) {
       clearInterval(WORKOUT._restTimer);
       WORKOUT._restTimer = null;
+      // Reset ring to accent gradient
+      const ringEl = document.getElementById('rest-ring');
+      if (ringEl) {
+        ringEl.classList.remove('rest-ring-low');
+        ringEl.style.stroke = 'url(#ring-grad)';
+      }
       document.getElementById('rest-overlay').classList.add('fm-hidden');
       if (vibrate && navigator.vibrate) navigator.vibrate([200, 100, 200]);
       const cb = WORKOUT._restCB;
