@@ -508,10 +508,153 @@
       <button class="fp-tab active" data-src="all"      onclick="setFspSrc(this)">&#x1F30E; All Foods</button>
     </div>
 
+    <!-- Create food shortcut -->
+    <div style="padding:8px 16px 0">
+      <button onclick="openCreateFood()"
+              style="width:100%;padding:9px 14px;border-radius:var(--r-md);
+                     border:1.5px dashed var(--border);background:transparent;
+                     color:var(--text-2);font-family:inherit;font-size:0.875rem;
+                     cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.1rem;color:var(--accent)">&#x2795;</span>
+        Create custom food
+      </button>
+    </div>
+
     <!-- Food list -->
     <div id="fsp-list" class="fp-list"></div>
 
   </div><!-- /food-search-page -->
+
+
+  <!-- ══════════════════════════════════════════════════════════
+       FOOD FLOW — page 3: Create custom food
+       ══════════════════════════════════════════════════════════ -->
+  <div id="create-food-page" class="food-page"
+       style="z-index:320;background:var(--bg)">
+
+    <div class="fp-header">
+      <button class="fp-back-btn" onclick="closeCreateFood()">&#x2190; Back</button>
+      <div class="fp-title">Create Food</div>
+      <div style="width:56px"></div>
+    </div>
+
+    <div class="fp-detail-body" style="padding-top:1rem">
+
+      <div style="display:flex;flex-direction:column;gap:1rem">
+
+        <!-- Name -->
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+            Food name <span style="color:var(--danger)">*</span>
+          </label>
+          <input id="cf-name" type="text" placeholder="e.g. Warrior Shake (Large)"
+                 style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+
+        <!-- Brand -->
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">Brand / Restaurant</label>
+          <input id="cf-brand" type="text" placeholder="e.g. Tropical Smoothie Café"
+                 style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+
+        <!-- Serving size -->
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+            Serving size (g) — macros below are for this serving
+          </label>
+          <input id="cf-serving" type="number" value="100" min="1" max="5000"
+                 style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:1rem">
+          <div class="t-small t-muted" style="margin-bottom:0.875rem;font-weight:600">
+            Nutrition per serving
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+                Calories <span style="color:var(--danger)">*</span>
+              </label>
+              <input id="cf-kcal" type="number" placeholder="454" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+                Protein (g) <span style="color:var(--danger)">*</span>
+              </label>
+              <input id="cf-protein" type="number" placeholder="32" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+                Carbs (g) <span style="color:var(--danger)">*</span>
+              </label>
+              <input id="cf-carbs" type="number" placeholder="53" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+                Fat (g) <span style="color:var(--danger)">*</span>
+              </label>
+              <input id="cf-fat" type="number" placeholder="13" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">Fiber (g)</label>
+              <input id="cf-fiber" type="number" placeholder="0" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">Sugar (g)</label>
+              <input id="cf-sugar" type="number" placeholder="0" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+          </div><!-- /grid -->
+        </div><!-- /nutrition -->
+
+        <!-- Actions -->
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:4px">
+          <button id="cf-save-log-btn" class="btn btn-primary"
+                  onclick="submitCreateFood(true)">
+            Save &amp; Log this food
+          </button>
+          <button id="cf-save-btn" class="btn"
+                  onclick="submitCreateFood(false)"
+                  style="border-color:var(--border)">
+            Save to My Foods only
+          </button>
+        </div>
+
+      </div><!-- /stack -->
+    </div><!-- /body -->
+  </div><!-- /create-food-page -->
 
   <!-- ══════════════════════════════════════════════════════════
        FOOD FLOW — page 2: Detail & log
@@ -2557,6 +2700,93 @@
     function openFoodPicker(slotId, slotName) {
       // Redirect old callers to new page flow
       openFoodSearch(slotId, slotName);
+    }
+
+    // ── Custom food creator ───────────────────────────────────
+    function openCreateFood() {
+      // Clear all fields
+      ['cf-name','cf-brand','cf-kcal','cf-protein','cf-carbs',
+       'cf-fat','cf-fiber','cf-sugar'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('cf-serving').value = '100';
+      document.getElementById('create-food-page').classList.add('fp-open');
+      setTimeout(() => document.getElementById('cf-name').focus(), 320);
+    }
+
+    function closeCreateFood() {
+      document.getElementById('create-food-page').classList.remove('fp-open');
+      preventGhostTaps();
+    }
+
+    async function submitCreateFood(andLog = false) {
+      const name    = document.getElementById('cf-name').value.trim();
+      const brand   = document.getElementById('cf-brand').value.trim();
+      const serving = parseFloat(document.getElementById('cf-serving').value) || 100;
+      const kcal    = parseFloat(document.getElementById('cf-kcal').value);
+      const protein = parseFloat(document.getElementById('cf-protein').value);
+      const carbs   = parseFloat(document.getElementById('cf-carbs').value);
+      const fat     = parseFloat(document.getElementById('cf-fat').value);
+      const fiber   = parseFloat(document.getElementById('cf-fiber').value) || 0;
+      const sugar   = parseFloat(document.getElementById('cf-sugar').value) || 0;
+
+      if (!name)                       { showToast('Food name is required', 'error'); return; }
+      if (isNaN(kcal) || kcal < 0)    { showToast('Enter calories', 'error'); return; }
+      if (isNaN(protein) || protein < 0) { showToast('Enter protein', 'error'); return; }
+      if (isNaN(carbs)   || carbs < 0)   { showToast('Enter carbs', 'error'); return; }
+      if (isNaN(fat)     || fat < 0)     { showToast('Enter fat', 'error'); return; }
+
+      // Scale all macros to per-100g (DB stores per 100g)
+      const scale   = 100 / serving;
+      const macro_class = protein >= carbs && protein >= fat ? 'protein'
+                        : carbs >= fat                       ? 'carb' : 'fat';
+
+      const btn = document.getElementById(andLog ? 'cf-save-log-btn' : 'cf-save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      const user = await ApexCore.Auth.getUser();
+      const { data: food, error } = await ApexCore.getClient()
+        .from('foods')
+        .insert({
+          name,
+          brand:          brand || null,
+          serving_size_g: serving,
+          kcal:           Math.round(kcal    * scale * 10) / 10,
+          protein_g:      Math.round(protein * scale * 10) / 10,
+          carbs_g:        Math.round(carbs   * scale * 10) / 10,
+          fat_g:          Math.round(fat     * scale * 10) / 10,
+          fiber_g:        Math.round(fiber   * scale * 10) / 10,
+          sugar_g:        Math.round(sugar   * scale * 10) / 10,
+          macro_class,
+          is_whole_food:  false,
+          tags:           ['custom'],
+          created_by:     user.id,
+        })
+        .select()
+        .single();
+
+      btn.disabled = false;
+      btn.textContent = andLog ? 'Save & Log this food' : 'Save to My Foods only';
+
+      if (error) { showToast(error.message, 'error'); return; }
+
+      // Add to local cache
+      APP.allFoods = [...(APP.allFoods || []), food];
+      APP.recentFoodsCache = null;
+      PICKER.cache.set(String(food.id), food);
+
+      showToast(`${name} saved!`, 'success');
+      closeCreateFood();
+
+      if (andLog) {
+        // Open food detail so the user can set quantity and log immediately
+        setTimeout(() => openFoodDetail(String(food.id)), 350);
+      } else {
+        // Switch to My Foods tab so they can see it
+        const myFoodsBtn = document.querySelector('#fsp-tabs .fp-tab[data-src="library"]');
+        if (myFoodsBtn) setFspSrc(myFoodsBtn);
+      }
     }
 
     function openFoodSearch(slotId, slotName) {
