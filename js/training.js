@@ -1127,6 +1127,18 @@ window.ApexTraining = (function () {
       const durationMin = Math.round(SessionTimer.elapsedSeconds(_state.timer) / 60);
       const user        = await Core.Auth.getUser();
 
+      // Compute session calorie burn before inserting the log
+      const workout    = await WeeklyPlan.getWorkout(_state.plannedWorkoutId);
+      const plannedSets = workout?.workout?.planned_sets ?? _state.plannedSets;
+      const profile    = await Core.Profile.getCached();
+      const energyL2   = Core.SessionEnergy.fromSession(
+        plannedSets, profile?.weight_kg, durationMin,
+        meta.rpeOverall, workout?.workout?.workout_type
+      );
+      const sessionKcal = Core.SessionEnergy.refineWithVolume(
+        energyL2?.kcal ?? 0, _state.setLogs, plannedSets
+      );
+
       // Write workout_log header (INSERT — RLS policy always exists)
       const { data: workoutLog, error: wlErr } = await Core.getClient()
         .from('workout_logs')
@@ -1137,6 +1149,7 @@ window.ApexTraining = (function () {
           duration_min:       durationMin,
           rpe_overall:        meta.rpeOverall ?? null,
           notes:              meta.notes ?? null,
+          session_kcal:       sessionKcal || null,
         })
         .select('id')
         .single();
