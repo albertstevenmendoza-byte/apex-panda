@@ -158,24 +158,23 @@
           </div>
 
           <div class="form-group">
-            <label>Activity level <span class="t-hint">(outside the gym)</span></label>
+            <label>Daily lifestyle <span class="t-hint">Your job &amp; day-to-day activity — not counting the gym</span></label>
             <div class="option-grid">
               <div class="option-card" data-group="activity" data-val="1" onclick="pickOption(this)">
-                <div class="opt-title">Sedentary</div>
-                <div class="opt-desc">Desk job, minimal movement</div>
+                <div class="opt-title">&#x1F4BB; Desk job</div>
+                <div class="opt-desc">Mostly sitting — office, driving, remote work</div>
               </div>
-              <div class="option-card" data-group="activity" data-val="2" onclick="pickOption(this)">
-                <div class="opt-title">Light</div>
-                <div class="opt-desc">1–3 workouts / week</div>
+              <div class="option-card selected" data-group="activity" data-val="2" onclick="pickOption(this)">
+                <div class="opt-title">&#x1F6B6; Mixed</div>
+                <div class="opt-desc">Some walking &amp; standing throughout the day</div>
               </div>
-              <div class="option-card selected" data-group="activity" data-val="3" onclick="pickOption(this)">
-                <div class="opt-title">Moderate</div>
-                <div class="opt-desc">3–5 workouts / week</div>
+              <div class="option-card" data-group="activity" data-val="3" onclick="pickOption(this)">
+                <div class="opt-title">&#x1F528; Active job</div>
+                <div class="opt-desc">On your feet most of the day — trades, retail, healthcare</div>
               </div>
-              <div class="option-card" data-group="activity" data-val="4" onclick="pickOption(this)">
-                <div class="opt-title">Very active</div>
-                <div class="opt-desc">Hard training 6–7× / week</div>
-              </div>
+            </div>
+            <div style="margin-top:10px;padding:10px 12px;background:var(--surface-alt);border-radius:var(--r-md);font-size:0.8125rem;color:var(--text-3)">
+              &#x2139;&#xFE0F; Workout calories are calculated automatically from your training plan — you don't need to account for them here.
             </div>
           </div>
 
@@ -271,7 +270,7 @@
     const selections = {
       sex:        'male',
       experience: 'beginner',
-      activity:   '3',
+      activity:   '2',
       phase:      'maintain',
     };
 
@@ -320,18 +319,29 @@
       const profile = {
         weight_kg: weight, height_cm: height, date_of_birth: dob,
         sex: selections.sex, body_fat_pct: bf,
-        activity_level: parseInt(selections.activity),
-        phase: selections.phase, experience: selections.experience,
+        activity_level:  parseInt(selections.activity),
+        phase:           selections.phase,
+        experience:      selections.experience,
+        preferred_split: selections.preferred_split ?? null,
       };
 
-      const { calorieTarget } = ApexCore.TDEE.calculate(profile);
-      const macros = ApexCore.Macros.calculate(profile, calorieTarget);
+      const result = ApexCore.TDEE.calculate(profile);
+      const macros = ApexCore.Macros.calculate(profile, result.calorieTarget);
 
-      document.getElementById('prev-kcal').textContent    = calorieTarget.toLocaleString();
+      document.getElementById('prev-kcal').textContent    = result.calorieTarget.toLocaleString();
       document.getElementById('prev-protein').textContent = macros.proteinG;
       document.getElementById('prev-carbs').textContent   = macros.carbsG;
       document.getElementById('prev-fat').textContent     = macros.fatG;
-      document.getElementById('tdee-preview').classList.remove('hidden');
+
+      // Show training breakdown if available
+      const tdeeEl = document.getElementById('tdee-preview');
+      tdeeEl.classList.remove('hidden');
+      const trainingNote = document.getElementById('tdee-training-note');
+      if (trainingNote && result.trainingDays) {
+        trainingNote.textContent =
+          `Lifestyle: ${result.lifestyleTDEE.toLocaleString()} kcal · `
+          + `Training (${result.trainingDays}×/wk): +${result.dailyTrainingBump} kcal/day`;
+      }
     }
 
     // ── Navigation ────────────────────────────────────────────────────────
