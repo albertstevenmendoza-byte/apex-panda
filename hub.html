@@ -660,10 +660,11 @@
         <div>
           <label class="t-small t-muted" style="display:block;margin-bottom:6px">RPE</label>
           <div style="display:flex;gap:6px">
-            ${[6,7,8,9,10].map(r =>
-              `<button class="rpe-btn" id="edit-rpe-${r}" onclick="selectEditRPE(${r})"
-                       style="flex:1">${r}</button>`
-            ).join('')}
+            <button class="rpe-btn" id="edit-rpe-6"  onclick="selectEditRPE(6)"  style="flex:1">6</button>
+            <button class="rpe-btn" id="edit-rpe-7"  onclick="selectEditRPE(7)"  style="flex:1">7</button>
+            <button class="rpe-btn" id="edit-rpe-8"  onclick="selectEditRPE(8)"  style="flex:1">8</button>
+            <button class="rpe-btn" id="edit-rpe-9"  onclick="selectEditRPE(9)"  style="flex:1">9</button>
+            <button class="rpe-btn" id="edit-rpe-10" onclick="selectEditRPE(10)" style="flex:1">10</button>
           </div>
         </div>
         <div style="display:flex;gap:8px">
@@ -710,10 +711,11 @@
         <div>
           <label class="t-small t-muted" style="display:block;margin-bottom:8px">Overall RPE</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${[6,7,8,9,10].map(r =>
-              `<button class="rpe-btn" id="backlog-rpe-${r}" onclick="selectBacklogRPE(${r})"
-                       style="flex:1;min-width:44px">${r}</button>`
-            ).join('')}
+            <button class="rpe-btn" id="backlog-rpe-6"  onclick="selectBacklogRPE(6)"  style="flex:1">6</button>
+            <button class="rpe-btn" id="backlog-rpe-7"  onclick="selectBacklogRPE(7)"  style="flex:1">7</button>
+            <button class="rpe-btn" id="backlog-rpe-8"  onclick="selectBacklogRPE(8)"  style="flex:1">8</button>
+            <button class="rpe-btn" id="backlog-rpe-9"  onclick="selectBacklogRPE(9)"  style="flex:1">9</button>
+            <button class="rpe-btn" id="backlog-rpe-10" onclick="selectBacklogRPE(10)" style="flex:1">10</button>
           </div>
         </div>
 
