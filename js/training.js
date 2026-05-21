@@ -1150,22 +1150,52 @@ window.ApexTraining = (function () {
       SessionTimer.stop(_state.timer);
       const durationMin = Math.round(SessionTimer.elapsedSeconds(_state.timer) / 60);
 
-      // workout_log was created at session start — just update with final stats
-      const workoutLogId = _state.workoutLogId;
-      const { error: wlErr } = await Core.getClient()
+      const user = await Core.Auth.getUser();
+
+      // INSERT the final complete workout_log row — uses the INSERT RLS policy
+      // which is guaranteed to exist, unlike UPDATE.
+      const { data: finalWl, error: wlErr } = await Core.getClient()
         .from('workout_logs')
-        .update({
-          duration_min: durationMin,
-          rpe_overall:  meta.rpeOverall ?? null,
-          notes:        meta.notes ?? null,
+        .insert({
+          user_id:            user.id,
+          planned_workout_id: _state.plannedWorkoutId,
+          log_date:           Core.utils.isoToday(),
+          duration_min:       durationMin,
+          rpe_overall:        meta.rpeOverall ?? null,
+          notes:              meta.notes ?? null,
         })
-        .eq('id', workoutLogId);
+        .select('id')
+        .single();
 
       if (wlErr) return { workoutLogId: null, deloadCheck: null, error: wlErr };
-      // set_logs were already written in real-time by logSet() — nothing to batch here
 
-      // Need user for program lookup
-      const user = await Core.Auth.getUser();
+      const finalId = finalWl.id;
+
+      // The set_logs were already inserted in real-time pointing to the
+      // placeholder workoutLogId from start(). Re-point them to the final row.
+      // If this UPDATE fails (RLS), fall back to inserting them fresh.
+      const { error: mvErr } = await Core.getClient()
+        .from('set_logs')
+        .update({ workout_log_id: finalId })
+        .eq('workout_log_id', _state.workoutLogId);
+
+      if (mvErr) {
+        // UPDATE policy missing — insert set_logs fresh from in-memory log
+        if (_state.setLogs.length > 0) {
+          const rows = _state.setLogs.map(({ planned_set_id: _, logged_at: __, ...row }) => ({
+            ...row, workout_log_id: finalId,
+          }));
+          await Core.getClient().from('set_logs').insert(rows);
+        }
+      }
+
+      // Clean up the placeholder workout_log from start()
+      // (ignore errors — it will be a dangling row at worst)
+      await Core.getClient()
+        .from('workout_logs')
+        .delete()
+        .eq('id', _state.workoutLogId)
+        .neq('id', finalId); // safety: never delete the final row
 
       // Fetch active program for deload check
       const { data: program } = await Core.getClient()
@@ -1175,7 +1205,6 @@ window.ApexTraining = (function () {
         .eq('is_active', true)
         .single();
 
-      // Deload check (async — non-blocking for UI)
       let deloadCheck = null;
       if (program) {
         deloadCheck = await Core.Deload.check(program.id);
@@ -1183,18 +1212,14 @@ window.ApexTraining = (function () {
           console.warn('[ApexTraining] Deload triggered:', deloadCheck.reason);
           Core.emit(Core.Events.DELOAD_TRIGGERED, deloadCheck);
         }
-      }
-
-      // Apply any pending overload flags to next week's planned sets
-      if (program) {
         await ProgressionEngine.applyPending(program.id);
       }
 
       _state.status      = _STATES.COMPLETE;
-      _state.workoutLogId = workoutLogId;
+      _state.workoutLogId = finalId;
 
       console.log(`[ApexTraining] Session completed — ${durationMin} min, ${_state.setLogs.length} sets logged`);
-      return { workoutLogId, deloadCheck, error: null };
+      return { workoutLogId: finalId, deloadCheck, error: null };
     }
 
     /**
