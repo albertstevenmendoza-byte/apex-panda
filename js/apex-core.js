@@ -523,6 +523,9 @@ window.ApexCore = (function () {
 
       if (error) { _handleError('Profile.update', error); return { data: null, macros: null, error }; }
 
+      // Bust the cache so getCached() returns fresh data immediately
+      Profile.invalidateCache();
+
       emit(Events.PROFILE_UPDATED,     { profile: data });
       emit(Events.MACROS_RECALCULATED, { ...macroResult, tdee: tdeeResult.tdee });
 
