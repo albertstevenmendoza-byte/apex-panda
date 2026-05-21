@@ -49,6 +49,35 @@ window.ApexCore = (function () {
     BEGINNER_BULK_SURPLUS:      500,    // kcal above TDEE for beginners
     CUT_DEFICIT:                500,    // kcal below TDEE for cutting
 
+    // ── Session energy constants ─────────────────────────────────────────────
+    // MET values from Ainsworth et al. 2011 Compendium of Physical Activities
+    MET_COMPOUND:   5.0,   // vigorous resistance training (heavy compounds)
+    MET_ISOLATION:  3.5,   // general resistance training (machine/isolation)
+    MET_CARDIO:     6.5,   // moderate cardio baseline
+
+    // EPOC (excess post-exercise O2 consumption) — Borsheim & Bahr 2003
+    EPOC_BASE:      0.07,  // 7 % of active kcal at RPE 6-7
+    EPOC_SCALE:     0.02,  // +2 % per RPE point above 6
+    EPOC_MAX:       0.15,  // hard cap at 15 %
+
+    // RPE → intensity modifier (linear interpolation of Borg scale data)
+    RPE_INTENSITY: { 6:0.75, 7:0.85, 8:1.00, 9:1.10, 10:1.20 },
+
+    // Metabolic cost multiplier by primary muscle group
+    // Larger muscle groups = higher metabolic demand
+    MUSCLE_METABOLIC: {
+      quads: 1.15, hamstrings: 1.15, glutes: 1.15, legs: 1.15,
+      chest: 1.05, back: 1.05,
+      shoulders: 1.00,
+      biceps: 0.90, triceps: 0.90, arms: 0.90,
+      core: 0.90, abs: 0.90, calves: 0.85,
+    },
+
+    // Timing assumptions for duration estimation
+    SECS_PER_REP:  3,    // ~3 s per rep (concentric + eccentric)
+    WARMUP_MIN:    5,    // warmup added to every session
+    COOLDOWN_MIN:  3,    // cooldown added to every session
+
     // Protein targets (g per kg of body/lean mass)
     PROTEIN_BULK_MAINTAIN:      2.1,    // g/kg -- optimal for anabolism
     PROTEIN_CUT:                2.5,    // g/kg -- muscle-sparing on deficit
@@ -996,6 +1025,99 @@ window.ApexCore = (function () {
   // 12. PUBLIC API
   // -------------------------------------------------------------------------
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // SESSION ENERGY — 3-layer calorie burn calculation
+  // Layer 1: Plan estimate  (MET × weight × estimated duration + EPOC)
+  // Layer 2: Post-session   (Layer 1 × rpe_modifier using actual duration)
+  // Layer 3: Volume-load    (±15 % adjustment from actual vs expected kg×reps)
+  //
+  // Reference: Ainsworth 2011 (MET), Borsheim & Bahr 2003 (EPOC),
+  //            Scott et al. 2015 (volume-load metabolic cost)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const SessionEnergy = {
+
+    estimateDuration(plannedSets) {
+      if (!plannedSets?.length) return 45;
+      let secs = (CONFIG.WARMUP_MIN + CONFIG.COOLDOWN_MIN) * 60;
+      for (const ps of plannedSets) {
+        const repsAvg = Math.round(((ps.reps_min ?? 8) + (ps.reps_max ?? 12)) / 2);
+        secs += (ps.sets ?? 3) * (repsAvg * CONFIG.SECS_PER_REP + (ps.rest_seconds ?? 120));
+      }
+      return Math.max(20, Math.round(secs / 60));
+    },
+
+    weightedMET(plannedSets, workoutType) {
+      if (workoutType === 'cardio') return CONFIG.MET_CARDIO;
+      if (!plannedSets?.length)    return CONFIG.MET_COMPOUND;
+      let metSum = 0, muscleSum = 0;
+      for (const ps of plannedSets) {
+        metSum    += ps.exercises?.is_compound ? CONFIG.MET_COMPOUND : CONFIG.MET_ISOLATION;
+        muscleSum += CONFIG.MUSCLE_METABOLIC[ps.exercises?.muscle_primary?.toLowerCase()] ?? 1.0;
+      }
+      const n = plannedSets.length;
+      return (metSum / n) * (muscleSum / n);
+    },
+
+    // Layer 1 — planning estimate
+    fromPlan(plannedSets, weightKg, workoutType = 'strength') {
+      if (!weightKg) return null;
+      const durationMin = workoutType === 'cardio' ? 40 : SessionEnergy.estimateDuration(plannedSets);
+      const durationH   = durationMin / 60;
+      const met         = SessionEnergy.weightedMET(plannedSets, workoutType);
+      const active      = met * weightKg * durationH;
+      const epoc        = active * CONFIG.EPOC_BASE;
+      return { kcal: Math.round(active + epoc), durationMin,
+               met: Math.round(met * 10) / 10, epocKcal: Math.round(epoc),
+               method: 'plan-estimate' };
+    },
+
+    // Layer 2 — post-session refinement (actual duration + RPE)
+    fromSession(plannedSets, weightKg, durationMin, rpeOverall, workoutType = 'strength') {
+      if (!weightKg || !durationMin) return SessionEnergy.fromPlan(plannedSets, weightKg, workoutType);
+      const durationH = durationMin / 60;
+      const rpeNum    = Math.max(6, Math.min(10, parseFloat(rpeOverall) || 8));
+      const rpeMod    = CONFIG.RPE_INTENSITY[Math.round(rpeNum)] ?? 1.0;
+      const met       = SessionEnergy.weightedMET(plannedSets, workoutType);
+      const active    = met * weightKg * durationH * rpeMod;
+      const epocRate  = Math.min(CONFIG.EPOC_MAX, CONFIG.EPOC_BASE + (rpeNum - 6) * CONFIG.EPOC_SCALE);
+      const epoc      = active * epocRate;
+      return { kcal: Math.round(active + epoc), durationMin,
+               met: Math.round(met * 10) / 10, rpe: rpeNum,
+               epocKcal: Math.round(epoc), method: 'session-actual' };
+    },
+
+    // Layer 3 — volume-load refinement (±15 % from actual kg × reps vs baseline)
+    refineWithVolume(sessionKcal, setLogs, plannedSets) {
+      if (!setLogs?.length || !plannedSets?.length) return sessionKcal;
+      const actualVol = setLogs
+        .filter(s => !s.is_warmup)
+        .reduce((sum, s) => sum + (s.weight_kg ?? 0) * (s.reps ?? 0), 0);
+      if (!actualVol) return sessionKcal;
+      const expectedVol = plannedSets.reduce((sum, ps) => {
+        const wEst    = ps.exercises?.is_compound ? 60 : 20;
+        const repsAvg = Math.round(((ps.reps_min ?? 8) + (ps.reps_max ?? 12)) / 2);
+        return sum + (ps.sets ?? 3) * wEst * repsAvg;
+      }, 0);
+      if (!expectedVol) return sessionKcal;
+      const factor = Math.max(0.85, Math.min(1.15, actualVol / expectedVol));
+      return Math.round(sessionKcal * factor);
+    },
+
+    // Full pipeline — picks best available layer
+    calculate({ plannedSets, weightKg, workoutType, durationMin, rpeOverall, setLogs }) {
+      let result = durationMin
+        ? SessionEnergy.fromSession(plannedSets, weightKg, durationMin, rpeOverall, workoutType)
+        : SessionEnergy.fromPlan(plannedSets, weightKg, workoutType);
+      if (!result) return null;
+      if (setLogs?.length) {
+        result.kcal = SessionEnergy.refineWithVolume(result.kcal, setLogs, plannedSets);
+      }
+      return result;
+    },
+  };
+
+
   const PublicAPI = {
     init,
     getClient,
@@ -1006,6 +1128,7 @@ window.ApexCore = (function () {
     Profile,
     TDEE,
     Macros,
+    SessionEnergy,
     Deload,
     Overload,
     CONFIG,
