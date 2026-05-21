@@ -54,13 +54,26 @@ window.ApexCore = (function () {
     PROTEIN_CUT:                2.5,    // g/kg -- muscle-sparing on deficit
     FAT_RATIO:                  0.25,   // 25 % of total kcal from fat (minimum)
 
-    // PAL (Physical Activity Level) multipliers
+    // Lifestyle PAL — reflects daily life activity ONLY, NOT workouts.
+    // Workout contribution is calculated separately from the training split.
     PAL: {
-      1: 1.20,  // sedentary -- desk job, no structured exercise
-      2: 1.375, // lightly active -- 1-3x/week
-      3: 1.55,  // moderately active -- 3-5x/week
-      4: 1.725, // very active -- hard training 6-7x/week
-      5: 1.90,  // extremely active -- athlete or physical job + daily training
+      1: 1.20,  // sedentary  — desk job, mostly sitting, minimal walking
+      2: 1.35,  // mixed      — some walking / standing throughout the day
+      3: 1.55,  // active job — on feet most of the day, manual labour
+    },
+
+    // Estimated kcal burned per strength-training session (conservative average)
+    KCAL_PER_TRAINING_DAY: 300,
+
+    // Training days per week for each split (used to auto-calculate workout TDEE)
+    SPLIT_TRAINING_DAYS: {
+      beginner:     3,
+      full_body_4:  4,
+      intermediate: 4,
+      strength:     4,
+      ppl_3:        3,
+      advanced:     6,
+      body_part:    5,
     },
   };
 
@@ -335,10 +348,10 @@ window.ApexCore = (function () {
     calculate(profile) {
       const {
         weight_kg, height_cm, date_of_birth, sex,
-        body_fat_pct, activity_level, phase, experience,
+        body_fat_pct, activity_level, phase, experience, preferred_split,
       } = profile;
 
-      const age    = TDEE.calcAge(date_of_birth);
+      const age = TDEE.calcAge(date_of_birth);
       let bmr, method;
 
       if (body_fat_pct) {
@@ -349,10 +362,23 @@ window.ApexCore = (function () {
         method = 'Mifflin-St Jeor';
       }
 
-      const tdee          = TDEE.applyPAL(bmr, activity_level);
+      // Step 1 — lifestyle-only TDEE (no workout contribution)
+      const lifestylePAL  = CONFIG.PAL[activity_level] ?? CONFIG.PAL[2];
+      const lifestyleTDEE = Math.round(bmr * lifestylePAL);
+
+      // Step 2 — training contribution derived from the active split.
+      // This removes the guesswork from "activity level" entirely.
+      const trainingDays = CONFIG.SPLIT_TRAINING_DAYS[preferred_split]
+        ?? (experience === 'advanced' ? 5 : experience === 'beginner' ? 3 : 4);
+      const dailyTrainingBump = Math.round(
+        (trainingDays * CONFIG.KCAL_PER_TRAINING_DAY) / 7
+      );
+
+      const tdee          = lifestyleTDEE + dailyTrainingBump;
       const calorieTarget = TDEE.applyPhase(tdee, phase, experience);
 
-      return { bmr, tdee, calorieTarget, method };
+      return { bmr, tdee, lifestyleTDEE, dailyTrainingBump, trainingDays,
+               calorieTarget, method };
     },
   };
 
