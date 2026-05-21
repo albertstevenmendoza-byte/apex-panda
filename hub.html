@@ -1043,7 +1043,7 @@
     // ═══════════════════════════════════════════════════════
     const APP = {
       profile:         null,
-      activeTab:       'training',
+      activeTab:       'home',
       loadedTabs:      new Set(),
       trainingData:    null,   // { week, workouts, program }
       selectedWorkout: null,   // planned_workout row + planned_sets
@@ -1483,19 +1483,20 @@
     }
 
     async function selectWorkout(wo, cellEl) {
-      document.querySelectorAll('.day-cell').forEach(c => c.classList.remove('active'));
-      cellEl.classList.add('active');
+      // Highlight selected pill
+      document.querySelectorAll('.day-pill').forEach(c => c.classList.remove('active'));
+      if (cellEl) cellEl.classList.add('active');
 
       const { workout, error } = await ApexTraining.WeeklyPlan.getWorkout(wo.id);
       if (error) { showToast('Failed to load workout', 'error'); return; }
       APP.selectedWorkout = workout;
 
-      const detail      = document.getElementById('workout-detail');
-      const emptyEl     = document.getElementById('training-empty');
-      const cardioEl    = document.getElementById('cardio-detail');
-      const tableEl     = document.getElementById('exercise-table');
-      const isDeload    = workout.program_weeks?.is_deload;
-      const phase       = workout.program_weeks?.programs?.phase ?? APP.profile.phase;
+      const detail   = document.getElementById('workout-detail');
+      const emptyEl  = document.getElementById('training-empty');
+      const cardioEl = document.getElementById('cardio-detail');
+      const cardsEl  = document.getElementById('exercise-cards');
+      const isDeload = workout.program_weeks?.is_deload;
+      const phase    = workout.program_weeks?.programs?.phase ?? APP.profile?.phase;
 
       detail.classList.remove('hidden');
       emptyEl.classList.add('hidden');
@@ -1503,7 +1504,7 @@
       document.getElementById('detail-deload-note').classList.toggle('hidden', !isDeload);
 
       if (workout.workout_type === 'cardio') {
-        tableEl.classList.add('hidden');
+        if (cardsEl) cardsEl.innerHTML = '';
         cardioEl.classList.remove('hidden');
         const c = ApexTraining.CardioEngine.prescribe(phase, isDeload);
         document.getElementById('cardio-prescription').innerHTML = `
@@ -1532,37 +1533,6 @@
       renderExerciseCards(workout.planned_sets ?? [], isDeload);
       // Fetch last lifts in background and update cards
       loadLastLifts(workout.planned_sets ?? []);
-
-      renderExerciseTable(workout.planned_sets ?? [], isDeload);
-    }
-
-    function renderExerciseTable(sets, isDeload) {
-      const tbody = document.getElementById('exercise-tbody');
-      tbody.innerHTML = '';
-
-      sets.forEach(s => {
-        const ex = s.exercises;
-        const nextWeightNote = s.notes?.startsWith('Target:') ? s.notes : null;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>
-            <div class="ex-name">
-              ${ex?.name ?? 'Unknown'}
-              ${ex?.is_compound ? '<span class="badge badge-accent" style="font-size:0.6rem;padding:1px 5px;margin-left:5px">compound</span>' : ''}
-            </div>
-            <div class="ex-muscle">${ex?.muscle_primary ?? ''}</div>
-            ${nextWeightNote ? `<div class="t-small" style="color:var(--accent);margin-top:2px;font-size:0.7rem">↑ ${nextWeightNote}</div>` : ''}
-          </td>
-          <td>${s.sets}</td>
-          <td>${s.reps_min}–${s.reps_max}</td>
-          <td><span class="rpe-dot"></span>${s.rpe_target}</td>
-          <td style="color:var(--text-3)">${s.rest_seconds >= 60 ? Math.floor(s.rest_seconds/60) + 'm' : s.rest_seconds + 's'}</td>
-          <td>
-            <button class="btn-icon btn-ghost" style="width:28px;height:28px;font-size:13px"
-              title="Swap exercise" onclick="openSwapModal('${s.id}','${ex?.muscle_primary}','${ex?.is_compound}')">⇄</button>
-          </td>`;
-        tbody.appendChild(tr);
-      });
     }
 
     async function generateProgram() {
@@ -2895,7 +2865,10 @@
       let foods = [];
       if (PICKER.source === 'recent')   foods = await loadRecentFoods();
       if (PICKER.source === 'frequent') foods = await loadFrequentFoods();
-      if (PICKER.source === 'library')  foods = APP.allFoods;
+      if (PICKER.source === 'library') {
+        const u = await ApexCore.Auth.getUser();
+        foods = (APP.allFoods || []).filter(f => f.created_by && f.created_by === u?.id);
+      }
       if (q) foods = ApexNutrition.FoodArchive.search(foods, q);
       renderFspList(foods.length ? foods : (PICKER.source === 'recent' ? APP.allFoods.slice(0,20) : []));
     }
@@ -2912,7 +2885,8 @@
       // Name starts with full query
       if (name.startsWith(q))                 return 95;
       // Every query word appears at the start of a word in the name
-      if (qWords.every(w => new RegExp(`\\b${w}`).test(name))) return 85;
+      const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (qWords.every(w => new RegExp(`\\b${esc(w)}`).test(name))) return 85;
       // Brand exact match (e.g. typing "Kroger")
       if (brand === q)                        return 80;
       // Brand starts with query
@@ -3176,9 +3150,8 @@
             if (d.status === 1 && d.product?.nutriments?.['energy-kcal_100g'] > 0) {
               const food = normalizeOFF(d.product);
               if (food) {
-                document.getElementById('picker-search').value = food.name;
-                renderPickerFoods([food]);
-                selectPickerFood(food._key);
+                PICKER.cache.set(food._key, food);
+                openFoodDetail(food._key);
                 return;
               }
             }
@@ -3191,83 +3164,6 @@
       video.onloadedmetadata = () => requestAnimationFrame(scanLoop);
     }
 
-    function setPickerFilter(btn) {
-      document.querySelectorAll('.filter-btn-noop')
-        .forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      PICKER.activeFilter = btn.dataset.macro;
-      filterPickerFoods();
-    }
-
-    // ── Source / tab switcher ──────────────────────────────────────
-    function setPickerSrc(btn) {
-      document.querySelectorAll('.picker-tab-noop')
-        .forEach(b => b.classList.toggle('active', b === btn));
-      PICKER.source = btn.dataset.src;
-      PICKER.selectedFood = null;
-      PICKER.multiSel.clear();
-      document.getElementById('picker-footer').classList.add('hidden');
-      document.getElementById('multi-add-footer').classList.add('hidden');
-      filterPickerFoods();
-    }
-
-    // Toggle multi-add mode
-    function toggleMultiAdd() {
-      PICKER.multiMode = !PICKER.multiMode;
-      PICKER.multiSel.clear();
-      PICKER.selectedFood = null;
-      document.getElementById('picker-footer').classList.add('hidden');
-      const btn = document.getElementById('multi-add-toggle');
-      btn.textContent = PICKER.multiMode ? 'Cancel' : 'Select';
-      btn.style.background = PICKER.multiMode ? 'var(--accent-light)' : '';
-      btn.style.color = PICKER.multiMode ? 'var(--accent)' : '';
-      document.getElementById('multi-add-footer').classList.toggle('hidden', !PICKER.multiMode);
-      filterPickerFoods();
-    }
-
-    // ── Library + external search dispatcher ────────────────────
-    function filterPickerFoods() {
-      const q = document.getElementById('picker-search').value.trim();
-
-      if (PICKER.source === 'recent') {
-        loadRecentFoods().then(foods => {
-          const filtered = q ? ApexNutrition.FoodArchive.search(foods, q) : foods;
-          renderPickerFoods(filtered.length ? filtered : APP.allFoods.slice(0, 20));
-        });
-        return;
-      }
-      if (PICKER.source === 'frequent') {
-        loadFrequentFoods().then(foods => {
-          const filtered = q ? ApexNutrition.FoodArchive.search(foods, q) : foods;
-          renderPickerFoods(filtered.length ? filtered : APP.allFoods.slice(0, 20));
-        });
-        return;
-      }
-      if (PICKER.source === 'all') {
-        if (q.length < 2) {
-          document.getElementById('picker-food-list').innerHTML =
-            '<div style="text-align:center;color:var(--text-3);' +
-            'font-size:0.875rem;padding:2.5rem 1rem;line-height:1.7">' +
-            '<div style="font-size:1.5rem;margin-bottom:8px">&#x1F30E;</div>' +
-            'Type to search 3,000,000+ foods<br>' +
-            '<span style="font-size:0.8125rem;opacity:.7">' +
-            'Brands, packaged foods, restaurant items</span></div>';
-          return;
-        }
-        clearTimeout(XSEARCH.timer);
-        XSEARCH.timer = setTimeout(() => searchExternal(q), 200);
-        return;
-      }
-      // Library mode
-      let foods = APP.allFoods;
-      if (PICKER.activeFilter)
-        foods = ApexNutrition.FoodArchive.filter(foods, { macroClass: PICKER.activeFilter });
-      if (q)
-        foods = ApexNutrition.FoodArchive.search(foods, q);
-      renderPickerFoods(foods);
-    }
-
-    // Load recently used foods from DB
     async function loadRecentFoods() {
       if (APP.recentFoodsCache) return APP.recentFoodsCache;
       if (PICKER._recentCache) return PICKER._recentCache;
@@ -3311,58 +3207,6 @@
     }
 
     // ── External search (Open Food Facts + optional USDA FDC) ───
-    async function searchExternal(query) {
-      const list = document.getElementById('picker-food-list');
-      list.innerHTML =
-        '<div style="text-align:center;color:var(--text-3);font-size:0.875rem;padding:2rem">' +
-        'Searching...</div>';
-
-      if (XSEARCH.ctrl) XSEARCH.ctrl.abort();
-      XSEARCH.ctrl = new AbortController();
-      const sig = XSEARCH.ctrl.signal;
-
-      const results = [];
-
-      // -- Open Food Facts (no key needed, 3M+ branded products) --
-      try {
-        const r = await fetch(
-          'https://world.openfoodfacts.org/cgi/search.pl?' +
-          'search_terms=' + encodeURIComponent(query) +
-          '&search_simple=1&action=process&json=1&page_size=20' +
-          '&fields=product_name,product_name_en,brands,nutriments',
-          { signal: sig }
-        );
-        const d = await r.json();
-        (d.products || [])
-          .map(normalizeOFF)
-          .filter(f => f && f.kcal > 0 && f.name && f.name !== 'Unknown')
-          .forEach(f => results.push(f));
-      } catch(e) { if (e.name !== 'AbortError') console.warn('OFF:', e.message); }
-
-      // -- USDA FoodData Central (free key, 400k+ foods inc. branded) --
-      if (typeof FDC_KEY !== 'undefined' && FDC_KEY) {
-        try {
-          const r = await fetch(
-            'https://api.nal.usda.gov/fdc/v1/foods/search?' +
-            'query=' + encodeURIComponent(query) +
-            '&dataType=Branded,Foundation,SR%20Legacy&pageSize=20' +
-            '&api_key=' + FDC_KEY,
-            { signal: sig }
-          );
-          const d = await r.json();
-          (d.foods || [])
-            .map(normalizeFDC)
-            .filter(f => f && f.kcal > 0)
-            .forEach(f => results.unshift(f)); // USDA results first
-        } catch(e) { if (e.name !== 'AbortError') console.warn('USDA:', e.message); }
-      }
-
-      // Sort by relevance before rendering
-      results.sort((a, b) => scoreRelevance(b, query) - scoreRelevance(a, query));
-      renderPickerFoods(results.slice(0, 40));
-    }
-
-    // ── Normalize Open Food Facts product ───────────────────────
     function normalizeOFF(p) {
       if (!p) return null;
       const n = p.nutriments || {};
@@ -3439,99 +3283,6 @@
     }
 
     // ── Render food list (library + external + multi-add) ───────
-    function renderPickerFoods(foods) {
-      const list = document.getElementById('picker-food-list');
-      if (!foods.length) {
-        list.innerHTML =
-          '<div style="text-align:center;color:var(--text-3);font-size:0.8125rem;padding:2rem">' +
-          'No foods found</div>';
-        return;
-      }
-
-      const tagColors = {
-        protein: { bg:'var(--accent-light)',  text:'var(--accent-dark)' },
-        carb:    { bg:'var(--info-light)',     text:'var(--info)' },
-        fat:     { bg:'var(--warning-light)',  text:'var(--warning)' },
-      };
-      const macroKey = { protein:'protein_g', carb:'carbs_g', fat:'fat_g' };
-      const macroLbl = { protein:'P', carb:'C', fat:'F' };
-
-      const srcBadge = s =>
-        s === 'usda'   ? '<span style="font-size:0.65rem;font-weight:600;padding:1px 5px;border-radius:3px;background:#EEF2FF;color:#4F46E5;margin-left:5px">USDA</span>' :
-        s === 'brands' ? '<span style="font-size:0.65rem;font-weight:600;padding:1px 5px;border-radius:3px;background:#FDF4FF;color:#9333EA;margin-left:5px">Brand</span>' : '';
-
-      list.innerHTML = foods.map(f => {
-        const tc      = tagColors[f.macro_class] ?? tagColors.protein;
-        const mKey    = macroKey[f.macro_class];
-        const mLbl    = macroLbl[f.macro_class];
-        const selKey  = String(f._key || f.id);
-        const isSel   = PICKER.selectedFood &&
-                        String(PICKER.selectedFood._key || PICKER.selectedFood.id) === selKey;
-        const isMulti = PICKER.multiSel.has(selKey);
-        const recentHint = f._recentQty
-          ? `<span style="color:var(--accent);font-size:0.7rem"> (last: ${f._recentQty}g)</span>` : '';
-        const brandRow = f.brand
-          ? `<div style="font-size:0.72rem;color:var(--text-3);margin-top:1px">${f.brand}</div>` : '';
-        const checkEl = PICKER.multiMode
-          ? `<div style="width:22px;height:22px;border-radius:6px;border:1.5px solid ${isMulti?'var(--accent)':'var(--border)'};
-                         background:${isMulti?'var(--accent)':'transparent'};flex-shrink:0;
-                         display:flex;align-items:center;justify-content:center;
-                         color:white;font-size:14px">${isMulti?'&#x2713;':''}</div>` : '';
-        return `
-          <div onclick="selectPickerFood('${selKey.replace(/'/g,"\'")}')"
-               style="display:flex;align-items:center;gap:10px;padding:11px 14px;
-                      cursor:pointer;border-bottom:0.5px solid var(--border);
-                      background:${isSel||isMulti?'var(--accent-light)':'transparent'};
-                      transition:background 0.1s">
-            ${checkEl}
-            <div style="flex:1;min-width:0">
-              <div style="font-size:0.875rem;font-weight:500;display:flex;align-items:center;flex-wrap:wrap">
-                ${f.name}${srcBadge(f.source)}${recentHint}
-              </div>
-              ${brandRow}
-              <div style="font-size:0.72rem;color:var(--text-3);margin-top:2px">
-                per 100 g &middot; ${Math.round(f.kcal)} kcal
-                &middot; P:${f.protein_g}g C:${f.carbs_g}g F:${f.fat_g}g
-              </div>
-            </div>
-            <span style="font-size:0.75rem;font-weight:500;padding:3px 8px;
-                         border-radius:4px;white-space:nowrap;flex-shrink:0;
-                         background:${tc.bg};color:${tc.text}">
-              ${mLbl}: ${f[mKey]}g
-            </span>
-          </div>`;
-      }).join('');
-    }
-
-    // ── Select a food from the list ─────────────────────────────
-    function selectPickerFood(key) {
-      const food = PICKER.cache.get(key)
-                || PICKER.cache.get(Number(key))
-                || APP.allFoods.find(f => String(f.id) === String(key));
-      if (!food) return;
-
-      if (PICKER.multiMode) {
-        if (PICKER.multiSel.has(key)) PICKER.multiSel.delete(key);
-        else                          PICKER.multiSel.add(key);
-        document.getElementById('multi-count').textContent = PICKER.multiSel.size;
-        filterPickerFoods();
-        return;
-      }
-
-      PICKER.selectedFood = food;
-      document.getElementById('picker-selected-name').textContent = food.name;
-      document.getElementById('picker-selected-brand').textContent = food.brand || '';
-      // Pre-fill with last used qty converted to current unit
-      const recentG = food._recentQty || 100;
-      document.getElementById('picker-qty').value = fromGrams(recentG, PICKER.unit);
-      renderPresets();
-      document.getElementById('picker-footer').classList.remove('hidden');
-      updatePickerPreview();
-      document.getElementById('picker-footer')
-        .scrollIntoView({ behavior:'smooth', block:'nearest' });
-    }
-
-    // Servings ± stepper
     function changeServings(delta) {
       const inp = document.getElementById('picker-servings');
       const val = Math.max(0.25, Math.round((parseFloat(inp.value) + delta) * 4) / 4);
