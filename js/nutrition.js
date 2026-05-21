@@ -583,7 +583,13 @@ window.ApexNutrition = (function () {
               carbs_g,
               fat_g,
               fiber_g,
-              macro_class
+              macro_class,
+              sodium_mg,
+              potassium_mg,
+              calcium_mg,
+              iron_mg,
+              vitamin_c_mg,
+              vitamin_d_mcg
             )
           )
         `)
