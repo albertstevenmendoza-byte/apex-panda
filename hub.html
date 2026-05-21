@@ -1215,39 +1215,37 @@
       const container = document.getElementById('exercise-cards');
       if (!container) return;
 
-      // Deduplicate by exercise_id (planned_sets has one row per set)
-      const seen = new Set();
-      const exercises = plannedSets.filter(ps => {
-        if (seen.has(ps.exercise_id)) return false;
-        seen.add(ps.exercise_id);
-        return true;
-      });
-
-      const setsFor = (exId) => plannedSets.filter(p => p.exercise_id === exId);
-
-      container.innerHTML = exercises.map(ps => {
-        const ex    = ps.exercises ?? {};
-        const sets  = setsFor(ps.exercise_id);
-        const col   = muscleColor(ex.muscle_primary);
-        const abbr  = muscleShort(ex.muscle_primary);
-        const reps  = `${ps.reps_min}–${ps.reps_max} reps`;
-        const rest  = ps.rest_seconds ? `${ps.rest_seconds}s rest` : '';
-        const rpe   = isDeload ? 'RPE ~7' : (ps.rpe_target ? `RPE ${ps.rpe_target}` : '');
+      // Each row = one exercise; ps.sets = number of sets to perform
+      container.innerHTML = plannedSets.map(ps => {
+        const ex   = ps.exercises ?? {};
+        const col  = muscleColor(ex.muscle_primary);
+        const abbr = muscleShort(ex.muscle_primary);
+        const reps = `${ps.reps_min}–${ps.reps_max} reps`;
+        const rest = ps.rest_seconds ? `${ps.rest_seconds}s rest` : '';
+        const rpe  = isDeload ? 'RPE ~7' : (ps.rpe_target ? `RPE ${ps.rpe_target}` : '');
+        const safeName   = (ex.name ?? 'Exercise').replace(/'/g, "\\'");
+        const safeMuscle = (ex.muscle_primary ?? '').replace(/'/g, "\\'");
 
         return `
           <div class="exercise-card">
             <div class="ex-icon" style="background:${col}">${abbr}</div>
             <div class="ex-body">
               <div class="ex-name">${ex.name ?? 'Exercise'}</div>
-              <div class="ex-spec">${sets.length} sets · ${reps}${rpe ? ' · ' + rpe : ''}${rest ? ' · ' + rest : ''}</div>
+              <div class="ex-spec">${ps.sets} sets · ${reps}${rpe ? ' · ' + rpe : ''}${rest ? ' · ' + rest : ''}</div>
               <div class="ex-last" id="last-lift-${ps.exercise_id}">
-                <span style="color:var(--border)">Loading…</span>
+                <span style="color:var(--text-3);font-size:0.75rem">Loading…</span>
               </div>
             </div>
-            <button class="ex-history-btn"
-                    onclick="openLiftHistory('${ps.exercise_id}','${(ex.name ?? '').replace(/'/g,"\\'")}')">
-              History
-            </button>
+            <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+              <button class="ex-history-btn"
+                      onclick="openLiftHistory('${ps.exercise_id}','${safeName}')">
+                History
+              </button>
+              <button class="ex-history-btn"
+                      onclick="openSwapModal('${ps.id}','${safeMuscle}','${String(ex.is_compound)}')">
+                Swap
+              </button>
+            </div>
           </div>`;
       }).join('');
     }
@@ -1261,16 +1259,17 @@
           .select('exercise_id, weight_kg, reps, workout_logs!inner(log_date)')
           .in('exercise_id', exIds)
           .eq('is_warmup', false)
-          .order('workout_log_id', { ascending: false })
-          .limit(exIds.length * 6);
+          .order('id', { ascending: false })
+          .limit(exIds.length * 10);
 
-        // Most recent set per exercise
+        // Most recent set per exercise (compare by log_date string YYYY-MM-DD)
         const best = {};
         for (const s of data ?? []) {
-          if (!best[s.exercise_id]) {
-            best[s.exercise_id] = {
-              wt: kgToLbs(s.weight_kg), reps: s.reps,
-              date: s.workout_logs?.log_date,
+          const exId   = s.exercise_id;
+          const logDate = s.workout_logs?.log_date ?? '';
+          if (!best[exId] || logDate > best[exId].date) {
+            best[exId] = {
+              wt: kgToLbs(s.weight_kg), reps: s.reps, date: logDate,
             };
           }
         }
@@ -1506,6 +1505,8 @@
       if (workout.workout_type === 'cardio') {
         if (cardsEl) cardsEl.innerHTML = '';
         cardioEl.classList.remove('hidden');
+        document.getElementById('detail-workout-meta').textContent = 'Cardio · active recovery';
+        document.getElementById('detail-workout-meta').textContent = 'Cardio session';
         const c = ApexTraining.CardioEngine.prescribe(phase, isDeload);
         document.getElementById('cardio-prescription').innerHTML = `
           <div class="t-label t-muted" style="margin-bottom:8px">Today's cardio</div>
