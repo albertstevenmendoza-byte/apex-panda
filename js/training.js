@@ -1127,19 +1127,26 @@ window.ApexTraining = (function () {
       const durationMin = Math.round(SessionTimer.elapsedSeconds(_state.timer) / 60);
       const user        = await Core.Auth.getUser();
 
-      // Compute session calorie burn before inserting the log
-      const workout    = await WeeklyPlan.getWorkout(_state.plannedWorkoutId);
-      const plannedSets = workout?.workout?.planned_sets ?? _state.plannedSets;
-      const profile    = await Core.Profile.getCached();
-      const energyL2   = Core.SessionEnergy.fromSession(
-        plannedSets, profile?.weight_kg, durationMin,
-        meta.rpeOverall, workout?.workout?.workout_type
-      );
-      const sessionKcal = Core.SessionEnergy.refineWithVolume(
-        energyL2?.kcal ?? 0, _state.setLogs, plannedSets
-      );
+      // Compute session calorie burn (non-critical — wrapped so it never blocks the save)
+      let sessionKcal = null;
+      try {
+        const workout     = await WeeklyPlan.getWorkout(_state.plannedWorkoutId);
+        const plannedSets = workout?.workout?.planned_sets ?? _state.plannedSets;
+        const profile     = await Core.Profile.getCached();
+        const energyL2    = Core.SessionEnergy?.fromSession(
+          plannedSets, profile?.weight_kg, durationMin,
+          meta.rpeOverall, workout?.workout?.workout_type
+        );
+        if (energyL2?.kcal) {
+          sessionKcal = Core.SessionEnergy.refineWithVolume(
+            energyL2.kcal, _state.setLogs, plannedSets
+          );
+        }
+      } catch(e) {
+        console.warn('[ApexTraining] session_kcal calc failed (non-fatal):', e.message);
+      }
 
-      // Write workout_log header (INSERT — RLS policy always exists)
+      // Write workout_log header — only stable columns, no optional schema deps
       const { data: workoutLog, error: wlErr } = await Core.getClient()
         .from('workout_logs')
         .insert({
@@ -1149,13 +1156,23 @@ window.ApexTraining = (function () {
           duration_min:       durationMin,
           rpe_overall:        meta.rpeOverall ?? null,
           notes:              meta.notes ?? null,
-          session_kcal:       sessionKcal || null,
         })
         .select('id')
         .single();
 
       if (wlErr) return { workoutLogId: null, deloadCheck: null, error: wlErr };
       const workoutLogId = workoutLog.id;
+
+      // session_kcal — separate update so a missing column never blocks the save
+      if (sessionKcal) {
+        Core.getClient()
+          .from('workout_logs')
+          .update({ session_kcal: sessionKcal })
+          .eq('id', workoutLogId)
+          .then(({ error }) => {
+            if (error) console.warn('[ApexTraining] session_kcal update skipped:', error.message);
+          });
+      }
 
       // Batch-insert set_logs
       if (_state.setLogs.length > 0) {
