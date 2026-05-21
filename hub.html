@@ -1074,11 +1074,9 @@
 
     // ── Event bus listeners ───────────────────────────────
     function setupEventBus() {
-      ApexCore.on(ApexCore.Events.MACROS_RECALCULATED, async () => {
-        // Re-fetch profile so APP.profile has fresh calorie/macro targets
-        const fresh = await ApexCore.Profile.getCached();
-        if (fresh) APP.profile = fresh;
-        // Force the currently-visible tab to reload
+      ApexCore.on(ApexCore.Events.MACROS_RECALCULATED, () => {
+        // APP.profile is already updated by the caller (e.g. selectGoal).
+        // Just force the visible tab to re-render with the new numbers.
         APP.loadedTabs.delete(APP.activeTab);
         loadTab(APP.activeTab);
       });
@@ -1902,22 +1900,38 @@
       const { data: updatedProfile, error } = await ApexCore.Profile.update({ phase });
       if (error) { showToast('Could not save goal', 'error'); return; }
 
-      // Use the full returned profile — it contains recalculated
-      // calorie_target, protein_target_g, carb_target_g, fat_target_g
+      // Profile.update() recalculates macros and returns the full updated row.
+      // Use it directly — never rely on getCached() here since the cache was
+      // just invalidated and a round-trip would be wasted.
       APP.profile = updatedProfile ?? { ...APP.profile, phase };
+
+      // Also update today's meal plan so its stored targets stay in sync.
+      // Without this, getOrCreateToday() would return stale plan.*_target values.
+      if (APP.mealPlanId && updatedProfile) {
+        await ApexCore.getClient()
+          .from('meal_plans')
+          .update({
+            phase,
+            kcal_target:    updatedProfile.calorie_target,
+            protein_target: updatedProfile.protein_target_g,
+            carb_target:    updatedProfile.carb_target_g,
+            fat_target:     updatedProfile.fat_target_g,
+          })
+          .eq('id', APP.mealPlanId);
+      }
 
       closeGoalModal();
 
-      // Update the phase pill immediately
+      // Refresh the phase pill in the top bar immediately
       renderTopBar();
 
-      // Clear every cached tab so they all reload with the new targets
+      // Bust all tab caches so every tab reloads with the new targets
       ['home', 'diary', 'training', 'stats'].forEach(t => APP.loadedTabs.delete(t));
 
       // Reload whichever tab the user is currently on
       await loadTab(APP.activeTab);
 
-      showToast(`Switched to ${phase} — macros updated`, 'success');
+      showToast(`Switched to ${phase} — targets updated`, 'success');
     }
 
 
@@ -2398,11 +2412,14 @@
       if (error) { showToast('Failed to load meal plan', 'error'); return; }
 
       APP.mealPlanId = plan.id;
+      // Always prefer APP.profile targets — they reflect the current phase.
+      // plan.*_target values are snapshots from when the plan was created and
+      // may be stale if the user just changed phase.
       const targets = {
-        proteinG: plan.protein_target ?? APP.profile.protein_target_g ?? 0,
-        carbsG:   plan.carb_target    ?? APP.profile.carb_target_g    ?? 0,
-        fatG:     plan.fat_target     ?? APP.profile.fat_target_g     ?? 0,
-        kcal:     plan.kcal_target    ?? APP.profile.calorie_target   ?? 0,
+        proteinG: APP.profile.protein_target_g ?? plan.protein_target ?? 0,
+        carbsG:   APP.profile.carb_target_g    ?? plan.carb_target    ?? 0,
+        fatG:     APP.profile.fat_target_g     ?? plan.fat_target     ?? 0,
+        kcal:     APP.profile.calorie_target   ?? plan.kcal_target    ?? 0,
       };
 
       updateMacroBars(totals, targets);
