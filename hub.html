@@ -1,6 +1,3731 @@
 <!DOCTYPE html>
 <html lang="en">
+<head><!DOCTYPE html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Apex Fitness</title>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Apex">
+  <meta name="theme-color" content="#0C0C0E">
+  <link rel="stylesheet" href="css/apex-styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="js/apex-core.js"></script>
+  <script src="js/training.js"></script>
+  <script src="js/nutrition.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/panda.js"></script>
+</head>
+<body class="app-shell">
+
+  <!-- ── Top bar ──────────────────────────────────────────── -->
+  <header id="topbar">
+    <div class="topbar-logo">Apex<span>.</span></div>
+    <div class="row gap-12">
+      <div id="phase-pill" class="pill" style="background:var(--accent-light);color:var(--accent-dark);font-size:0.8rem"></div>
+      <button class="btn-icon btn-ghost" id="weight-log-btn" title="Log weight" onclick="openWeightModal()">⚖️</button>
+      <div id="user-avatar" class="row gap-8" style="cursor:pointer" onclick="toggleUserMenu()">
+        <div id="avatar-circle" style="width:32px;height:32px;border-radius:50%;background:var(--accent-light);color:var(--accent-dark);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:600"></div>
+      </div>
+    </div>
+    <!-- User menu -->
+    <div id="user-menu" class="card" style="position:absolute;top:58px;right:1.5rem;width:180px;z-index:50;display:none;padding:0.5rem">
+      <button class="btn btn-ghost btn-full" style="justify-content:flex-start;font-size:0.875rem" onclick="window.location.href='onboarding.html?edit=1'">⚙ Profile settings</button>
+      <div class="divider" style="margin:6px 0"></div>
+      <button class="btn btn-ghost btn-full" style="justify-content:flex-start;font-size:0.875rem;color:var(--danger)" onclick="ApexCore.Auth.signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <!-- ── Bottom navigation ───────────────────────────────── -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-tab="home" onclick="switchTab('home',this)">
+      <span class="nav-icon">&#x1F3E0;</span>
+      <span class="nav-label">Home</span>
+    </button>
+    <button class="nav-btn" data-tab="training" onclick="switchTab('training',this)">
+      <span class="nav-icon">&#x1F4AA;</span>
+      <span class="nav-label">Training</span>
+    </button>
+    <button class="nav-plus" onclick="openQuickAdd()" aria-label="Quick add">
+      <span class="nav-plus-inner">+</span>
+    </button>
+    <button class="nav-btn" data-tab="diary" onclick="switchTab('diary',this)">
+      <span class="nav-icon">&#x1F4D4;</span>
+      <span class="nav-label">Diary</span>
+    </button>
+    <button class="nav-btn" data-tab="stats" onclick="switchTab('stats',this)">
+      <span class="nav-icon">&#x1F4C8;</span>
+      <span class="nav-label">Stats</span>
+    </button>
+  </nav>
+
+  <!-- ── Home / Dashboard panel ──────────────────────────── -->
+  <section id="panel-home" class="panel">
+
+    <!-- Greeting -->
+    <div style="margin-bottom:1.25rem">
+      <h2 class="t-heading" id="home-greeting">Good morning</h2>
+      <div class="t-small t-muted" id="home-date-sub"></div>
+    </div>
+
+    <!-- Calorie ring + macro snapshot -->
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:1.5rem">
+        <!-- Donut ring -->
+        <div style="position:relative;flex-shrink:0">
+          <svg id="home-ring" width="96" height="96" viewBox="0 0 96 96">
+            <circle cx="48" cy="48" r="40" fill="none" stroke="var(--surface-alt)" stroke-width="10"/>
+            <circle id="home-ring-arc" cx="48" cy="48" r="40" fill="none"
+                    stroke="var(--accent)" stroke-width="10" stroke-linecap="round"
+                    stroke-dasharray="0 251" stroke-dashoffset="63"
+                    style="transition:stroke-dasharray .6s cubic-bezier(.4,0,.2,1)"/>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <div id="home-kcal-rem" style="font-size:1.125rem;font-weight:700;line-height:1">—</div>
+            <div style="font-size:0.625rem;color:var(--text-3);margin-top:1px">kcal left</div>
+          </div>
+        </div>
+        <!-- Macro bars -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px">
+              <span style="color:var(--text-2)">Protein</span>
+              <span id="home-p-txt" style="color:var(--text-3)">—</span>
+            </div>
+            <div style="height:6px;border-radius:3px;background:var(--surface-alt)">
+              <div id="home-p-bar" style="height:100%;border-radius:3px;background:var(--accent);width:0%;transition:width .5s"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px">
+              <span style="color:var(--text-2)">Carbs</span>
+              <span id="home-c-txt" style="color:var(--text-3)">—</span>
+            </div>
+            <div style="height:6px;border-radius:3px;background:var(--surface-alt)">
+              <div id="home-c-bar" style="height:100%;border-radius:3px;background:#3B82F6;width:0%;transition:width .5s"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px">
+              <span style="color:var(--text-2)">Fat</span>
+              <span id="home-f-txt" style="color:var(--text-3)">—</span>
+            </div>
+            <div style="height:6px;border-radius:3px;background:var(--surface-alt)">
+              <div id="home-f-bar" style="height:100%;border-radius:3px;background:#F59E0B;width:0%;transition:width .5s"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick-action tiles -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem">
+      <button class="card home-tile" onclick="switchTab('diary',document.querySelector('[data-tab=diary]'))">
+        <span style="font-size:1.75rem">&#x1F4D4;</span>
+        <span style="font-size:0.875rem;font-weight:600;margin-top:4px">Log Food</span>
+        <span id="home-meals-sub" class="t-hint">0 meals today</span>
+      </button>
+      <button class="card home-tile" onclick="switchTab('training',document.querySelector('[data-tab=training]'))">
+        <span style="font-size:1.75rem">&#x1F4AA;</span>
+        <span style="font-size:0.875rem;font-weight:600;margin-top:4px">Training</span>
+        <span id="home-workout-sub" class="t-hint">Tap to view</span>
+      </button>
+      <button class="card home-tile" onclick="openWeightModal()">
+        <span style="font-size:1.75rem">&#x2696;&#xFE0F;</span>
+        <span style="font-size:0.875rem;font-weight:600;margin-top:4px">Log Weight</span>
+        <span id="home-weight-sub" class="t-hint">—</span>
+      </button>
+      <button class="card home-tile" onclick="switchTab('stats',document.querySelector('[data-tab=stats]'))">
+        <span style="font-size:1.75rem">&#x1F4C8;</span>
+        <span style="font-size:0.875rem;font-weight:600;margin-top:4px">Progress</span>
+        <span class="t-hint">View stats</span>
+      </button>
+    </div>
+
+  </section>
+
+  <!-- ── Training panel ───────────────────────────────────── -->
+  <section id="panel-training" class="panel active">
+
+    <!-- Week header -->
+    <div class="row-between" style="margin-bottom:1.25rem">
+      <div>
+        <div class="row gap-8" style="margin-bottom:4px">
+          <h2 class="t-heading" id="week-title">Loading…</h2>
+          <div id="deload-badge" class="badge badge-warning hidden">Deload week</div>
+        </div>
+        <div class="t-small t-muted" id="week-sub"></div>
+      </div>
+      <div class="row gap-8">
+        <div id="next-deload-badge" class="badge badge-neutral hidden"></div>
+        <button onclick="openSplitModal()"
+                style="font-size:0.75rem;padding:4px 10px;border-radius:var(--r-sm);
+                       border:0.5px solid var(--border);background:transparent;
+                       color:var(--text-2);cursor:pointer;font-family:inherit">
+          &#x2299; Split
+        </button>
+      </div>
+    </div>
+
+    <!-- Day strip -->
+    <div id="days-grid"></div>
+
+    <!-- Workout detail -->
+    <div id="workout-detail" class="card hidden">
+      <div class="row-between" style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:0.5px solid var(--border)">
+        <div>
+          <div class="t-subhead" id="detail-workout-name"></div>
+          <div class="t-small t-muted" id="detail-workout-meta"></div>
+        </div>
+        <div class="row gap-8">
+          <div id="detail-deload-note" class="badge badge-warning hidden">Deload — 60% volume</div>
+          <button id="start-workout-btn" class="btn btn-primary btn-sm" onclick="startWorkout()">Start workout</button>
+          <button class="btn btn-sm" onclick="openBacklogModal()"
+                  style="margin-left:6px;border-color:var(--border);color:var(--text-2)">
+            &#x1F4C5; Backlog
+          </button>
+        </div>
+      </div>
+      <div id="exercise-cards"></div>
+
+      <!-- Cardio prescription (for cardio days) -->
+      <div id="cardio-detail" class="hidden">
+        <div class="card-flat" id="cardio-prescription"></div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div id="training-empty" class="card hidden" style="text-align:center;padding:3rem">
+      <div style="font-size:2.5rem;margin-bottom:1rem">🗓️</div>
+      <div class="t-subhead" style="margin-bottom:6px">No active program</div>
+      <div class="t-muted t-small" style="margin-bottom:1.25rem">Generate a program to get started.</div>
+      <button class="btn btn-primary" onclick="generateProgram()">Generate program</button>
+    </div>
+
+  </section>
+
+  <!-- ── Diary / Nutrition panel ─────────────────────────── -->
+  <section id="panel-diary" class="panel">
+
+    <!-- Date navigation header -->
+    <div class="diary-date-nav" style="display:flex;align-items:center;justify-content:center;gap:1rem;margin-bottom:1rem">
+      <button class="btn-icon btn-ghost" onclick="changeDate(-1)" style="font-size:1.1rem">&#x2190;</button>
+      <button onclick="openDatePicker()" style="border:none;background:transparent;font-size:0.9375rem;font-weight:600;cursor:pointer;color:var(--text)" id="diary-date-btn">Today</button>
+      <button class="btn-icon btn-ghost" onclick="changeDate(+1)" id="diary-next-btn" style="font-size:1.1rem">&#x2192;</button>
+    </div>
+
+    <!-- Calorie equation banner -->
+    <div class="card calorie-banner" style="margin-bottom:1rem;padding:0.875rem 1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+        <div class="cal-col">
+          <div class="cal-num" id="cal-goal">—</div>
+          <div class="cal-lbl">Goal</div>
+        </div>
+        <div class="cal-op">-</div>
+        <div class="cal-col">
+          <div class="cal-num" id="cal-food">0</div>
+          <div class="cal-lbl">Food</div>
+        </div>
+        <div class="cal-op">+</div>
+        <div class="cal-col">
+          <div class="cal-num" id="cal-exercise">0</div>
+          <div class="cal-lbl">Exercise</div>
+        </div>
+        <div class="cal-op">=</div>
+        <div class="cal-col" style="text-align:center">
+          <div class="cal-num" id="cal-remaining" style="color:var(--accent)">—</div>
+          <div class="cal-lbl">Remaining</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden date input for calendar -->
+    <input type="date" id="diary-date-input" style="display:none" onchange="onDatePickerChange()">
+
+    <!-- Macro bars (collapsible) -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="row-between" style="margin-bottom:1rem">
+        <div class="t-subhead" id="nutr-date-label">Macros</div>
+        <div class="t-small t-muted" id="nutr-kcal-summary"></div>
+      </div>
+      <div class="macro-bars" id="macro-bars">
+        <div class="macro-row">
+          <div class="macro-label">Protein</div>
+          <div class="macro-track"><div class="macro-fill protein" id="bar-protein" style="width:0%"></div></div>
+          <div class="macro-nums"><strong id="val-protein">0</strong> / <span id="tgt-protein">—</span>g</div>
+        </div>
+        <div class="macro-row">
+          <div class="macro-label">Carbs</div>
+          <div class="macro-track"><div class="macro-fill carbs" id="bar-carbs" style="width:0%"></div></div>
+          <div class="macro-nums"><strong id="val-carbs">0</strong> / <span id="tgt-carbs">—</span>g</div>
+        </div>
+        <div class="macro-row">
+          <div class="macro-label">Fat</div>
+          <div class="macro-track"><div class="macro-fill fat" id="bar-fat" style="width:0%"></div></div>
+          <div class="macro-nums"><strong id="val-fat">0</strong> / <span id="tgt-fat">—</span>g</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Meal slot cards -->
+    <div id="meal-slots-list"></div>
+    <div id="macro-suggestions"></div>
+
+    <!-- Micronutrient tracking section (populated by JS) -->
+    <details id="micro-section" style="margin-top:0.75rem" open>
+      <summary style="list-style:none;cursor:pointer;padding:0.875rem 1rem;
+                      background:var(--surface);border-radius:var(--r-md);
+                      border:0.5px solid var(--border);display:flex;
+                      align-items:center;justify-content:space-between;
+                      font-size:0.875rem;font-weight:600;color:var(--text)">
+        <span>&#x1F52C; Micronutrients</span>
+        <span id="micro-summary-badge" style="font-size:0.75rem;font-weight:400;color:var(--text-3)">Loading...</span>
+      </summary>
+      <div id="micro-content"
+           style="padding:1rem;background:var(--surface);
+                  border:0.5px solid var(--border);border-top:none;
+                  border-radius:0 0 var(--r-md) var(--r-md)">
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line-s"></div>
+      </div>
+    </details>
+
+  </section>
+
+  <!-- ── Stats panel ───────────────────────────────────────── -->
+  <section id="panel-stats" class="panel">
+
+    <!-- Metric cards -->
+    <div class="stats-grid" id="stats-cards">
+      <div class="stat-card"><div class="stat-label">Body weight</div><div class="stat-value" id="sc-weight">—<span class="stat-unit">lbs</span></div><div class="stat-delta" id="sc-weight-d"></div></div>
+      <div class="stat-card"><div class="stat-label">Avg. daily balance</div><div class="stat-value" id="sc-balance">—<span class="stat-unit">kcal</span></div><div class="stat-delta" id="sc-balance-d"></div></div>
+      <div class="stat-card"><div class="stat-label">Training streak</div><div class="stat-value" id="sc-streak">—<span class="stat-unit">days</span></div><div class="stat-delta" id="sc-streak-d"></div></div>
+      <div class="stat-card"><div class="stat-label">Best squat (est. 1RM)</div><div class="stat-value" id="sc-squat">—<span class="stat-unit">lbs</span></div><div class="stat-delta" id="sc-squat-d"></div></div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Body weight — 90 days</div>
+        <div class="chart-wrap" style="height:160px"><canvas id="chart-weight"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Calorie balance</div>
+        <div class="chart-wrap" style="height:160px"><canvas id="chart-balance"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Volume + PR row -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Weekly volume — sets</div>
+        <div class="chart-wrap" style="height:160px"><canvas id="chart-volume"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Strength PRs</div>
+        <div class="t-small t-muted" style="margin-bottom:1rem" id="pr-empty-hint" hidden>Log some sessions to start tracking PRs</div>
+        <table class="pr-table" id="pr-table">
+          <thead>
+            <tr><th>Exercise</th><th>Best</th><th>Latest</th><th>Gain</th></tr>
+          </thead>
+          <tbody id="pr-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── Active workout session overlay ───────────────────── -->
+  <!-- ── Focus mode ──────────────────────────────────────────── -->
+  <div id="focus-mode" class="fm-hidden">
+
+    <div class="focus-topbar">
+      <button class="focus-abandon-btn" data-confirm="0" onclick="confirmAbandon()">&#x2715; End</button>
+      <div class="focus-topbar-center">
+        <div id="focus-ex-counter" class="focus-ex-counter"></div>
+        <div id="focus-elapsed"    class="focus-elapsed">00:00</div>
+      </div>
+      <button class="focus-done-btn" onclick="openCompleteModal()">Done &#x2713;</button>
+    </div>
+
+    <div class="focus-body" id="focus-body">
+
+      <div class="focus-ex-header">
+        <div id="focus-ex-name" class="focus-ex-name"></div>
+        <div id="focus-ex-meta" class="focus-ex-meta"></div>
+        <div id="focus-set-dots" class="focus-set-dots"></div>
+      </div>
+
+      <div class="focus-inputs">
+        <div>
+          <div class="focus-input-lbl">Weight (lbs)</div>
+          <div class="stepper">
+            <button class="stepper-btn" onclick="adjustVal('focus-wt',-5)">&#x2212;</button>
+            <input  class="stepper-val" id="focus-wt" type="number" step="5" min="0"
+                    inputmode="decimal" placeholder="0">
+            <button class="stepper-btn" onclick="adjustVal('focus-wt',+5)">+</button>
+          </div>
+        </div>
+        <div>
+          <div class="focus-input-lbl">Reps</div>
+          <div class="stepper">
+            <button class="stepper-btn" onclick="adjustVal('focus-reps',-1)">&#x2212;</button>
+            <input  class="stepper-val" id="focus-reps" type="number" step="1" min="1"
+                    inputmode="numeric" placeholder="8">
+            <button class="stepper-btn" onclick="adjustVal('focus-reps',+1)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rpe-section">
+        <div class="focus-input-lbl">Rate of Perceived Exertion (RPE)</div>
+        <div class="rpe-grid" id="rpe-row"></div>
+      </div>
+
+      <button id="log-set-btn" class="btn btn-primary btn-full btn-lg"
+              style="margin-bottom:1rem" onclick="logFocusSet()">Log Set</button>
+
+      <div id="focus-history"></div>
+
+    </div><!-- /focus-body -->
+  </div><!-- /focus-mode -->
+
+  <!-- ── Rest countdown ───────────────────────────────────── -->
+  <div id="rest-overlay" class="fm-hidden">
+    <div class="rest-label">Rest</div>
+    <div class="rest-ring-wrap">
+      <svg width="220" height="220" viewBox="0 0 220 220">
+        <circle cx="110" cy="110" r="88" fill="none"
+                stroke="var(--surface-alt)" stroke-width="10"/>
+        <circle id="rest-ring" cx="110" cy="110" r="88"
+                fill="none" stroke="var(--accent)" stroke-width="10"
+                stroke-linecap="round"
+                stroke-dasharray="553" stroke-dashoffset="0"
+                transform="rotate(-90 110 110)"/>
+      </svg>
+      <div class="rest-ring-center">
+        <div id="rest-sec" class="rest-seconds-big">90</div>
+        <div class="rest-sec-unit">sec</div>
+      </div>
+    </div>
+    <div class="rest-next-wrap">
+      <div class="rest-next-lbl">Up next</div>
+      <div id="rest-next" class="rest-next-val"></div>
+    </div>
+    <button class="btn-skip-rest" onclick="skipRest()">Skip Rest</button>
+  </div>
+
+  <!-- ── Complete session modal ────────────────────────────── -->
+  <div id="complete-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-title">Complete session?</div>
+      <div class="stack gap-14">
+        <div class="form-group">
+          <label for="sess-rpe">Overall session RPE <span class="t-hint">(6–10)</span></label>
+          <input id="sess-rpe" type="number" min="6" max="10" step="0.5" placeholder="8.0">
+        </div>
+        <div class="form-group">
+          <label for="sess-notes">Notes <span class="t-hint">optional</span></label>
+          <input id="sess-notes" type="text" placeholder="Felt strong on squats…">
+        </div>
+        <div class="row gap-10" style="justify-content:flex-end">
+          <button class="btn" onclick="document.getElementById('complete-modal').classList.add('hidden')">Cancel</button>
+          <button class="btn btn-primary" onclick="completeSession()">Save session</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Quick Add action sheet -->
+  <div id="quick-add-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeQuickAdd()">
+    <div style="background:var(--surface);border-radius:var(--r-xl) var(--r-xl) 0 0;
+                width:100%;max-width:520px;padding:1.5rem;
+                position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+                box-shadow:0 -8px 40px rgba(0,0,0,.15)">
+      <div style="width:36px;height:4px;border-radius:2px;background:var(--border-strong);margin:0 auto 1.25rem"></div>
+      <div style="font-size:0.75rem;font-weight:600;color:var(--text-3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:0.875rem">Quick Add</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button class="quick-add-tile" onclick="closeQuickAdd();switchTab('diary',document.querySelector('[data-tab=diary]'))">
+          <span style="font-size:1.75rem">&#x1F34E;</span>
+          <span>Log Food</span>
+        </button>
+        <button class="quick-add-tile" onclick="closeQuickAdd();openWeightModal()">
+          <span style="font-size:1.75rem">&#x2696;&#xFE0F;</span>
+          <span>Log Weight</span>
+        </button>
+        <button class="quick-add-tile" onclick="closeQuickAdd();switchTab('training',document.querySelector('[data-tab=training]'))">
+          <span style="font-size:1.75rem">&#x1F4AA;</span>
+          <span>Start Workout</span>
+        </button>
+        <button class="quick-add-tile" onclick="closeQuickAdd();switchTab('stats',document.querySelector('[data-tab=stats]'))">
+          <span style="font-size:1.75rem">&#x1F4CA;</span>
+          <span>View Progress</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════
+       FOOD FLOW — page 1: Search
+       ══════════════════════════════════════════════════════════ -->
+  <div id="food-search-page" class="food-page">
+
+    <!-- Header -->
+    <div class="fp-header">
+      <button class="fp-back-btn" onclick="closeFoodSearch()">&#x2190; Done</button>
+      <div class="fp-title">
+        Add to <span id="fsp-meal-name" style="color:var(--accent)">Meal</span>
+      </div>
+      <div style="width:56px"></div>
+    </div>
+
+    <!-- Search bar -->
+    <div class="fp-search-bar">
+      <div class="fp-search-wrap">
+        <span class="fp-search-icon">&#x1F50D;</span>
+        <input id="fsp-query" type="text" placeholder="Search foods..."
+               autocomplete="off" oninput="fspOnInput()">
+        <button id="fsp-clear" class="fp-clear-btn fp-hidden"
+                onclick="fspClear()">&#x2715;</button>
+      </div>
+      <button class="fp-cam-btn" onclick="startBarcodeScanner()"
+              title="Scan barcode">&#x1F4F7;</button>
+    </div>
+
+    <!-- Source tabs -->
+    <div class="fp-tabs" id="fsp-tabs">
+      <button class="fp-tab"        data-src="recent"   onclick="setFspSrc(this)">Recent</button>
+      <button class="fp-tab"        data-src="frequent" onclick="setFspSrc(this)">Frequent</button>
+      <button class="fp-tab"        data-src="library"  onclick="setFspSrc(this)">My Foods</button>
+      <button class="fp-tab active" data-src="all"      onclick="setFspSrc(this)">&#x1F30E; All Foods</button>
+    </div>
+
+    <!-- Create food shortcut -->
+    <div style="padding:8px 16px 0">
+      <button onclick="openCreateFood()"
+              style="width:100%;padding:9px 14px;border-radius:var(--r-md);
+                     border:1.5px dashed var(--border);background:transparent;
+                     color:var(--text-2);font-family:inherit;font-size:0.875rem;
+                     cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.1rem;color:var(--accent)">&#x2795;</span>
+        Create custom food
+      </button>
+    </div>
+
+    <!-- Food list -->
+    <div id="fsp-list" class="fp-list"></div>
+
+  </div><!-- /food-search-page -->
+
+
+  <!-- ══════════════════════════════════════════════════════════
+       FOOD FLOW — page 3: Create custom food
+       ══════════════════════════════════════════════════════════ -->
+  <div id="create-food-page" class="food-page"
+       style="z-index:320;background:var(--bg)">
+
+    <div class="fp-header">
+      <button class="fp-back-btn" onclick="closeCreateFood()">&#x2190; Back</button>
+      <div class="fp-title">Create Food</div>
+      <div style="width:56px"></div>
+    </div>
+
+    <div class="fp-detail-body" style="padding-top:1rem">
+
+      <div style="display:flex;flex-direction:column;gap:1rem">
+
+        <!-- Name -->
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+            Food name <span style="color:var(--danger)">*</span>
+          </label>
+          <input id="cf-name" type="text" placeholder="e.g. Warrior Shake (Large)"
+                 style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+
+        <!-- Brand -->
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">Brand / Restaurant</label>
+          <input id="cf-brand" type="text" placeholder="e.g. Tropical Smoothie Café"
+                 style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+
+        <!-- Serving size -->
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+            Serving size (g) — macros below are for this serving
+          </label>
+          <input id="cf-serving" type="number" value="100" min="1" max="5000"
+                 style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:1rem">
+          <div class="t-small t-muted" style="margin-bottom:0.875rem;font-weight:600">
+            Nutrition per serving
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+                Calories <span style="color:var(--danger)">*</span>
+              </label>
+              <input id="cf-kcal" type="number" placeholder="454" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+                Protein (g) <span style="color:var(--danger)">*</span>
+              </label>
+              <input id="cf-protein" type="number" placeholder="32" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+                Carbs (g) <span style="color:var(--danger)">*</span>
+              </label>
+              <input id="cf-carbs" type="number" placeholder="53" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">
+                Fat (g) <span style="color:var(--danger)">*</span>
+              </label>
+              <input id="cf-fat" type="number" placeholder="13" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">Fiber (g)</label>
+              <input id="cf-fiber" type="number" placeholder="0" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+            <div>
+              <label class="t-small t-muted" style="display:block;margin-bottom:4px">Sugar (g)</label>
+              <input id="cf-sugar" type="number" placeholder="0" min="0"
+                     style="width:100%;padding:11px 13px;border:1px solid var(--border);
+                            border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                            background:var(--surface);color:var(--text);box-sizing:border-box">
+            </div>
+
+          </div><!-- /grid -->
+        </div><!-- /nutrition -->
+
+        <!-- Actions -->
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:4px">
+          <button id="cf-save-log-btn" class="btn btn-primary"
+                  onclick="submitCreateFood(true)">
+            Save &amp; Log this food
+          </button>
+          <button id="cf-save-btn" class="btn"
+                  onclick="submitCreateFood(false)"
+                  style="border-color:var(--border)">
+            Save to My Foods only
+          </button>
+        </div>
+
+      </div><!-- /stack -->
+    </div><!-- /body -->
+  </div><!-- /create-food-page -->
+
+  <!-- ══════════════════════════════════════════════════════════
+       FOOD FLOW — page 2: Detail & log
+       ══════════════════════════════════════════════════════════ -->
+  <div id="food-detail-page" class="food-page">
+
+    <!-- Header -->
+    <div class="fp-header">
+      <button class="fp-back-btn" onclick="closeFoodDetail()">&#x2190; Back</button>
+      <div class="fp-title">Food Details</div>
+      <div style="width:56px"></div>
+    </div>
+
+    <!-- Scrollable body -->
+    <div class="fp-detail-body">
+
+      <!-- Identity -->
+      <div id="fdp-name"  class="fdp-name"></div>
+      <div id="fdp-brand" class="fdp-brand"></div>
+
+      <!-- Live macro card -->
+      <div class="fdp-macro-card">
+        <div id="fdp-kcal" class="fdp-kcal">0 kcal</div>
+        <div class="fdp-bars">
+          <div class="fdp-bar-row">
+            <span class="fdp-bar-lbl">Protein</span>
+            <div class="fdp-bar-track">
+              <div id="fdp-bar-p" class="fdp-bar-fill" style="background:var(--accent)"></div>
+            </div>
+            <span id="fdp-p" class="fdp-bar-val">0g</span>
+          </div>
+          <div class="fdp-bar-row">
+            <span class="fdp-bar-lbl">Carbs</span>
+            <div class="fdp-bar-track">
+              <div id="fdp-bar-c" class="fdp-bar-fill" style="background:#3B82F6"></div>
+            </div>
+            <span id="fdp-c" class="fdp-bar-val">0g</span>
+          </div>
+          <div class="fdp-bar-row">
+            <span class="fdp-bar-lbl">Fat</span>
+            <div class="fdp-bar-track">
+              <div id="fdp-bar-f" class="fdp-bar-fill" style="background:#F59E0B"></div>
+            </div>
+            <span id="fdp-f" class="fdp-bar-val">0g</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Unit selector -->
+      <div class="fp-sec-lbl">Unit</div>
+      <div class="fp-unit-row" id="fdp-unit-row">
+        <button class="unit-btn active" data-unit="g"    onclick="fdpSetUnit('g')">g</button>
+        <button class="unit-btn"        data-unit="oz"   onclick="fdpSetUnit('oz')">oz</button>
+        <button class="unit-btn"        data-unit="lbs"  onclick="fdpSetUnit('lbs')">lbs</button>
+        <button class="unit-btn"        data-unit="ml"   onclick="fdpSetUnit('ml')">ml</button>
+        <button class="unit-btn"        data-unit="tbsp" onclick="fdpSetUnit('tbsp')">tbsp</button>
+        <button class="unit-btn"        data-unit="tsp"  onclick="fdpSetUnit('tsp')">tsp</button>
+        <button class="unit-btn"        data-unit="cups" onclick="fdpSetUnit('cups')">cups</button>
+      </div>
+
+      <!-- Quick presets -->
+      <div class="fp-sec-lbl">Quick select</div>
+      <div id="fdp-presets" class="fp-presets-row"></div>
+
+      <!-- Amount stepper -->
+      <div class="fp-sec-lbl">Amount</div>
+      <div class="fdp-amount-row">
+        <div class="stepper" style="flex:1">
+          <button class="stepper-btn" onclick="fdpAdj(-1)">&#x2212;</button>
+          <input class="stepper-val" id="fdp-qty" type="number" min="0.01"
+                 step="1" value="100" inputmode="decimal" oninput="fdpPreview()">
+          <button class="stepper-btn" onclick="fdpAdj(+1)">+</button>
+        </div>
+        <span id="fdp-unit-lbl" class="fdp-unit-lbl">g</span>
+      </div>
+
+      <!-- Log button -->
+      <button id="fdp-log-btn" class="btn btn-primary btn-full btn-lg"
+              style="margin-top:1.5rem" onclick="logSelectedFood()">
+        Add to meal
+      </button>
+
+    </div><!-- /fp-detail-body -->
+  </div><!-- /food-detail-page -->
+
+
+
+  <!-- ── Exercise swap modal ─────────────────────────────── -->
+  <div id="swap-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeSwapModal()">
+    <div class="modal-box" style="max-width:480px;max-height:75dvh;overflow:hidden;
+                                  display:flex;flex-direction:column;padding:0">
+      <div style="padding:1.25rem 1.25rem 0.875rem;border-bottom:0.5px solid var(--border);flex-shrink:0">
+        <div class="row-between" style="margin-bottom:0.625rem">
+          <div class="modal-title">Swap Exercise</div>
+          <button class="btn-icon btn-ghost" onclick="closeSwapModal()">&#x2715;</button>
+        </div>
+        <div style="font-size:0.8125rem;color:var(--text-3);margin-bottom:0.75rem" id="swap-subtitle"></div>
+        <input type="text" id="swap-search" placeholder="Search alternatives..."
+               oninput="filterSwapList()" style="width:100%">
+      </div>
+      <div id="swap-list" style="overflow-y:auto;flex:1"></div>
+    </div>
+  </div>
+
+  <!-- ── Lift history + edit ───────────────────────────────── -->
+  <div id="lift-history-modal" class="modal-backdrop hidden"
+       onclick="if(event.target===this)closeLiftHistory()">
+    <div class="modal-box" style="max-width:480px;max-height:82dvh;overflow:hidden;
+                                   display:flex;flex-direction:column;padding:0">
+      <div style="padding:1.25rem;border-bottom:0.5px solid var(--border);flex-shrink:0">
+        <div class="row-between">
+          <div>
+            <div class="modal-title" id="lift-history-title">History</div>
+            <div id="lift-history-sub" style="font-size:0.8125rem;color:var(--text-3);margin-top:2px"></div>
+          </div>
+          <button class="btn-icon btn-ghost" onclick="closeLiftHistory()">&#x2715;</button>
+        </div>
+      </div>
+      <div id="lift-history-body" style="overflow-y:auto;flex:1;padding:1.25rem"></div>
+    </div>
+  </div>
+
+  <!-- ── Edit single set ───────────────────────────────────── -->
+  <div id="edit-set-modal" class="modal-backdrop hidden"
+       onclick="if(event.target===this)closeEditSet()">
+    <div class="modal-box" style="max-width:360px">
+      <div class="row-between" style="margin-bottom:1.25rem">
+        <div class="modal-title">Edit Set</div>
+        <button class="btn-icon btn-ghost" onclick="closeEditSet()">&#x2715;</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:1rem">
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">Weight (lbs)</label>
+          <input type="number" id="edit-set-wt" step="2.5" min="0"
+                 style="width:100%;padding:10px 12px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:1rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">Reps</label>
+          <input type="number" id="edit-set-reps" min="1" max="100"
+                 style="width:100%;padding:10px 12px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:1rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:6px">RPE</label>
+          <div style="display:flex;gap:6px">
+            <button class="rpe-btn" id="edit-rpe-6"  onclick="selectEditRPE(6)"  style="flex:1">6</button>
+            <button class="rpe-btn" id="edit-rpe-7"  onclick="selectEditRPE(7)"  style="flex:1">7</button>
+            <button class="rpe-btn" id="edit-rpe-8"  onclick="selectEditRPE(8)"  style="flex:1">8</button>
+            <button class="rpe-btn" id="edit-rpe-9"  onclick="selectEditRPE(9)"  style="flex:1">9</button>
+            <button class="rpe-btn" id="edit-rpe-10" onclick="selectEditRPE(10)" style="flex:1">10</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-danger btn-sm" onclick="deleteSet()"
+                  style="flex:0 0 auto">Delete</button>
+          <button class="btn btn-primary" style="flex:1" onclick="saveSetEdit()">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── Backlog past workout ───────────────────────────────── -->
+  <div id="backlog-modal" class="modal-backdrop hidden"
+       onclick="if(event.target===this)closeBacklogModal()">
+    <div class="modal-box" style="max-width:420px">
+
+      <div class="row-between" style="margin-bottom:1.25rem">
+        <div class="modal-title">Log Past Workout</div>
+        <button class="btn-icon btn-ghost" onclick="closeBacklogModal()">&#x2715;</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:1rem">
+
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">Date</label>
+          <input type="date" id="backlog-date"
+                 style="width:100%;padding:10px 12px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box"
+                 onchange="backlogDateChanged()">
+          <div id="backlog-workout-label"
+               style="font-size:0.8125rem;color:var(--accent);margin-top:5px;min-height:18px"></div>
+        </div>
+
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">Duration (minutes)</label>
+          <input type="number" id="backlog-duration" value="60" min="1" max="300"
+                 style="width:100%;padding:10px 12px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:8px">Overall RPE</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="rpe-btn" id="backlog-rpe-6"  onclick="selectBacklogRPE(6)"  style="flex:1">6</button>
+            <button class="rpe-btn" id="backlog-rpe-7"  onclick="selectBacklogRPE(7)"  style="flex:1">7</button>
+            <button class="rpe-btn" id="backlog-rpe-8"  onclick="selectBacklogRPE(8)"  style="flex:1">8</button>
+            <button class="rpe-btn" id="backlog-rpe-9"  onclick="selectBacklogRPE(9)"  style="flex:1">9</button>
+            <button class="rpe-btn" id="backlog-rpe-10" onclick="selectBacklogRPE(10)" style="flex:1">10</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="t-small t-muted" style="display:block;margin-bottom:4px">Notes (optional)</label>
+          <input type="text" id="backlog-notes" placeholder="Good session, PRs, etc."
+                 style="width:100%;padding:10px 12px;border:1px solid var(--border);
+                        border-radius:var(--r-md);font-family:inherit;font-size:0.9375rem;
+                        background:var(--surface);color:var(--text);box-sizing:border-box">
+        </div>
+
+        <button class="btn btn-primary" onclick="submitBacklog()">Log Workout</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── Training split selector ───────────────────────────── -->
+  <div id="split-modal" class="modal-backdrop hidden"
+       onclick="if(event.target===this)closeSplitModal()">
+    <div class="modal-box"
+         style="max-width:500px;max-height:82dvh;overflow:hidden;
+                display:flex;flex-direction:column;padding:0">
+
+      <div style="padding:1.25rem;border-bottom:0.5px solid var(--border);flex-shrink:0">
+        <div class="row-between" style="margin-bottom:4px">
+          <div class="modal-title">Training Split</div>
+          <button class="btn-icon btn-ghost" onclick="closeSplitModal()">&#x2715;</button>
+        </div>
+        <div style="font-size:0.8125rem;color:var(--text-3)">
+          Selecting a new split regenerates your program from Week 1.
+        </div>
+      </div>
+
+      <div id="split-options-list" style="overflow-y:auto;flex:1;padding:0.5rem 0"></div>
+    </div>
+  </div>
+
+
+  <!-- ── Goal edit modal ──────────────────────────────────── -->
+  <div id="goal-edit-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeGoalModal()">
+    <div class="modal-box" style="max-width:340px">
+      <div class="row-between" style="margin-bottom:1.25rem">
+        <div class="modal-title">Change Goal</div>
+        <button class="btn-icon btn-ghost" onclick="closeGoalModal()">&#x2715;</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px" id="goal-options">
+        <button class="goal-opt-btn" data-phase="bulk" onclick="selectGoal('bulk')">
+          <span style="font-size:1.5rem">&#x1F4AA;</span>
+          <div>
+            <div style="font-weight:600;text-align:left">Lean Bulk</div>
+            <div style="font-size:0.8125rem;color:var(--text-3);text-align:left">Caloric surplus &middot; Build muscle</div>
+          </div>
+        </button>
+        <button class="goal-opt-btn" data-phase="cut" onclick="selectGoal('cut')">
+          <span style="font-size:1.5rem">&#x1F525;</span>
+          <div>
+            <div style="font-weight:600;text-align:left">Cut</div>
+            <div style="font-size:0.8125rem;color:var(--text-3);text-align:left">Caloric deficit &middot; Lose fat</div>
+          </div>
+        </button>
+        <button class="goal-opt-btn" data-phase="maintain" onclick="selectGoal('maintain')">
+          <span style="font-size:1.5rem">&#x2696;&#xFE0F;</span>
+          <div>
+            <div style="font-weight:600;text-align:left">Maintain</div>
+            <div style="font-size:0.8125rem;color:var(--text-3);text-align:left">At TDEE &middot; Recomposition</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Weight log modal ──────────────────────────────────── -->
+  <div id="weight-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-title">Log today's weight</div>
+      <div class="stack gap-14">
+        <div class="form-group">
+          <label for="wt-input">Weight</label>
+          <div class="input-group">
+            <input id="wt-input" type="number" min="66" max="880" step="0.5" placeholder="180">
+            <span class="input-suffix">lbs</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="wt-notes">Notes <span class="t-hint">optional</span></label>
+          <input id="wt-notes" type="text" placeholder="Post-deload, morning…">
+        </div>
+        <div class="row gap-10" style="justify-content:flex-end">
+          <button class="btn" onclick="document.getElementById('weight-modal').classList.add('hidden')">Cancel</button>
+          <button class="btn btn-primary" onclick="logWeight()">Log weight</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast container ───────────────────────────────────── -->
+  <div id="toast-container"></div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════
+    // CONFIG — replace with real keys
+    // ═══════════════════════════════════════════════════════
+    const FDC_KEY = '8WgoHcFWJmQoVUN70VhiMKmlWaKSD8tRgh89kZYO';
+
+    // Weight unit helpers — DB stores kg, UI shows lbs
+    const KG_TO_LBS = 2.20462;
+    const kgToLbs = kg  => Math.round(kg  * KG_TO_LBS * 10) / 10;
+    const lbsToKg = lbs => lbs / KG_TO_LBS;
+    const fmtLbs  = kg  => kg != null ? Math.round(kg * KG_TO_LBS) : '—';
+
+    // ── Goal-phase display configs ──────────────────────────
+    const GOAL_CONFIGS = {
+      bulk: {
+        label: 'Lean Bulk',       icon: '&#x1F4AA;',
+        accent: '#1D9E75',        bg: '#E1F5EE',
+        heroLabel: 'Protein Target',
+        heroFn: (tot, tgt) => `${Math.round(tot.proteinG||0)}g / ${Math.round(tgt.proteinG)}g`,
+        priorities: [
+          'Hit your protein target across 4+ meals',
+          'Aim for a 200-300 kcal daily surplus',
+          'Progressive overload: add weight or reps each session',
+        ],
+        trainingFocus: 'Volume & Mechanical Tension',
+        trainingDetail: 'Myofibrillar hypertrophy requires 10-20 weekly sets per muscle group at 65-80% 1RM with RPE 7-9.',
+      },
+      cut: {
+        label: 'Fat Loss',        icon: '&#x1F525;',
+        accent: '#EF4444',        bg: '#FEF2F2',
+        heroLabel: 'Calorie Deficit',
+        heroFn: (tot, tgt) => {
+          const rem = (tgt.kcal||0) - Math.round(tot.kcal||0);
+          return (rem >= 0 ? '' : '-') + Math.abs(rem).toLocaleString() + ' kcal';
+        },
+        priorities: [
+          'Maintain a 300-500 kcal daily deficit',
+          'Keep protein high (2.3-3.1 g/kg) to preserve lean mass',
+          'Resistance train 3-4x/week to minimise muscle loss',
+        ],
+        trainingFocus: 'Muscle Preservation',
+        trainingDetail: 'In a deficit, prioritise maintaining training load over adding volume. Reduce sets before reducing intensity.',
+      },
+      maintain: {
+        label: 'Maintenance',     icon: '&#x2696;&#xFE0F;',
+        accent: '#6B7280',        bg: '#F3F4F6',
+        heroLabel: 'Calorie Balance',
+        heroFn: (tot, tgt) => `${Math.round(tot.kcal||0).toLocaleString()} kcal`,
+        priorities: [
+          'Match calorie intake to expenditure consistently',
+          'Optimise macro split for performance',
+          'Monitor body composition monthly, not daily',
+        ],
+        trainingFocus: 'General Health & Performance',
+        trainingDetail: 'Maintenance is ideal for building a training base, peaking for an event, or recovering between phases.',
+      },
+    };
+
+    // ── Animated number counter ─────────────────────────────
+    function animateNum(el, toVal, duration=380,
+                        fmt=v=>Math.round(v).toLocaleString()) {
+      if (!el) return;
+      const from = parseFloat(el._animTarget ?? el.textContent.replace(/[^0-9.\-]/g,'')) || 0;
+      el._animTarget = toVal;
+      const start = performance.now();
+      const tick = now => {
+        const t = Math.min((now - start) / duration, 1);
+        const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+        el.textContent = fmt(from + (toVal - from) * ease);
+        if (t < 1) requestAnimationFrame(tick);
+        else { el._animTarget = null; el.classList.add('num-updated'); setTimeout(()=>el.classList.remove('num-updated'),520); }
+      };
+      requestAnimationFrame(tick);
+    }
+
+    const APEX_CONFIG = {
+      url:  'https://iedeghnykrigeensamcj.supabase.co',
+      anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImllZGVnaG55a3JpZ2VlbnNhbWNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MzIwMTMsImV4cCI6MjA5NDUwODAxM30.xfSKLPqofpHLSKFieUepFqvbVjHGgGGC6nRn2HvMOz8',
+    };
+
+    // ═══════════════════════════════════════════════════════
+    // APP STATE
+    // ═══════════════════════════════════════════════════════
+    const APP = {
+      profile:         null,
+      activeTab:       'home',
+      loadedTabs:      new Set(),
+      trainingData:    null,   // { week, workouts, program }
+      selectedWorkout: null,   // planned_workout row + planned_sets
+      timerInterval:   null,
+      charts:          {},
+      allFoods:        [],
+      activeMacroFilter: '',
+      mealPlanId:      null,
+    };
+
+    // ═══════════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', async () => {
+      await ApexCore.init(APEX_CONFIG);
+      const user = await ApexCore.Auth.requireAuth();
+      if (!user) return;
+
+      APP.profile = await ApexCore.Profile.getCached();
+      if (!APP.profile?.onboarding_done) {
+        window.location.href = 'onboarding.html'; return;
+      }
+
+      renderTopBar();
+      setupEventBus();
+      await switchTab('home', document.querySelector('.nav-btn[data-tab="home"]'));
+    });
+
+    // ── Event bus listeners ───────────────────────────────
+    function setupEventBus() {
+      ApexCore.on(ApexCore.Events.MACROS_RECALCULATED, () => {
+        // APP.profile is already updated by the caller (e.g. selectGoal).
+        // Just force the visible tab to re-render with the new numbers.
+        APP.loadedTabs.delete(APP.activeTab);
+        loadTab(APP.activeTab);
+      });
+      ApexCore.on(ApexCore.Events.DELOAD_TRIGGERED, ({ reason }) => {
+        showToast(`Deload triggered: ${reason}`, 'warning');
+      });
+      ApexCore.on(ApexCore.Events.OVERLOAD_FLAGGED, ({ estimated1RM, delta }) => {
+        showToast(`New PR! Est. 1RM: ${Math.round(kgToLbs(estimated1RM))} lbs (+${Math.round(kgToLbs(delta))} lbs)`, 'success');
+      });
+    }
+
+    // ── Top bar ───────────────────────────────────────────
+    function renderTopBar() {
+      const p = APP.profile;
+      const phase = p.phase ?? 'maintain';
+      const pill  = document.getElementById('phase-pill');
+      pill.textContent = phase === 'bulk' ? '● Lean Bulk' : phase === 'cut' ? '● Cut' : '● Maintain';
+      pill.style.background = phase === 'cut' ? '#FAEEDA' : phase === 'bulk' ? '#E1F5EE' : '#E6F1FB';
+      pill.style.color      = phase === 'cut' ? '#633806' : phase === 'bulk' ? '#0F6E56' : '#0C447C';
+
+      const initials = (p.display_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+      document.getElementById('avatar-circle').textContent = initials;
+    }
+
+    function toggleUserMenu() {
+      const menu = document.getElementById('user-menu');
+      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+    document.addEventListener('click', e => {
+      if (!document.getElementById('user-avatar').contains(e.target))
+        document.getElementById('user-menu').style.display = 'none';
+    });
+
+    // ═══════════════════════════════════════════════════════
+    // TAB SWITCHING
+    // ═══════════════════════════════════════════════════════
+    async function switchTab(name, btn) {
+      // 'nutrition' is the legacy alias — internally everything is 'diary'
+      const tab = (name === 'nutrition') ? 'diary' : name;
+
+      // Update bottom nav active state
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      const navBtn = btn || document.querySelector(`.nav-btn[data-tab="${tab}"]`);
+      if (navBtn) navBtn.classList.add('active');
+
+      APP.activeTab = tab;
+
+      const sceneMap = {
+        training: 'training',
+        diary:    'nutrition',
+        home:     'login',
+        stats:    'stats',
+      };
+      const scene = sceneMap[tab] ?? 'login';
+
+      await Promise.all([
+        PandaLoader.show(scene, 1700),
+        loadTab(tab),
+      ]);
+
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      const panel = document.getElementById('panel-' + tab);
+      if (panel) panel.classList.add('active');
+    }
+
+    async function loadTab(name) {
+      if (APP.loadedTabs.has(name)) return;
+      APP.loadedTabs.add(name);
+      try {
+        if (name === 'training')           await loadTrainingTab();
+        if (name === 'diary' ||
+            name === 'nutrition')          await loadNutritionTab();
+        if (name === 'stats')              await loadStatsTab();
+        if (name === 'home')               await loadHomeTab();
+      } catch(err) {
+        console.error('[Apex] loadTab failed:', name, err);
+        APP.loadedTabs.delete(name); // allow retry next tap
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TRAINING TAB
+    // ═══════════════════════════════════════════════════════
+    async function loadTrainingTab() {
+      const { week, workouts, program, error } = await ApexTraining.WeeklyPlan.getCurrent();
+
+      if (error || !program) {
+        document.getElementById('training-empty').classList.remove('hidden');
+        return;
+      }
+
+      APP.trainingData = { week, workouts, program };
+
+      // Week header
+      const phaseLabel = program.phase.charAt(0).toUpperCase() + program.phase.slice(1);
+      document.getElementById('week-title').textContent = `Week ${week.week_number} — ${phaseLabel}`;
+      document.getElementById('week-sub').textContent   =
+        `${program.name} · Calorie target: ${APP.profile.calorie_target?.toLocaleString() ?? '—'} kcal`;
+
+      if (week.is_deload) {
+        document.getElementById('deload-badge').classList.remove('hidden');
+      } else {
+        const weeksLeft = program.deload_interval -
+          ((week.week_number) % program.deload_interval || program.deload_interval);
+        if (weeksLeft === 1) {
+          const nb = document.getElementById('next-deload-badge');
+          nb.textContent = 'Deload next week';
+          nb.classList.remove('hidden');
+        }
+      }
+
+      // Cardio prescription note
+      const cardio = ApexTraining.CardioEngine.prescribe(program.phase, week.is_deload);
+      document.getElementById('week-sub').textContent +=
+        ` · Cardio: ${cardio.liss.sessions}× LISS${cardio.hiit.sessions > 0 ? ' + ' + cardio.hiit.sessions + '× HIIT' : ''}`;
+
+      // 7-day grid
+      renderDaysGrid(workouts, week);
+    }
+
+    // ── Exercise card rendering ───────────────────────────────
+    const MUSCLE_COLORS = {
+      chest: '#E11D48', back: '#2563EB', shoulders: '#7C3AED',
+      quads: '#EA580C', hamstrings: '#EA580C', glutes: '#EA580C',
+      legs: '#EA580C', biceps: '#059669', triceps: '#059669',
+      arms: '#059669', core: '#CA8A04', abs: '#CA8A04', calves: '#0891B2',
+    };
+    const MUSCLE_SHORT = {
+      chest:'CH', back:'BK', shoulders:'SH', quads:'QD',
+      hamstrings:'HM', glutes:'GL', legs:'LG', biceps:'BI',
+      triceps:'TR', arms:'AR', core:'CO', abs:'AB', calves:'CA',
+    };
+
+    function muscleColor(m) { return MUSCLE_COLORS[m?.toLowerCase()] ?? '#6366F1'; }
+    function muscleShort(m) { return MUSCLE_SHORT[m?.toLowerCase()] ?? m?.slice(0,2).toUpperCase() ?? '??'; }
+
+    function renderExerciseCards(plannedSets, isDeload) {
+      const container = document.getElementById('exercise-cards');
+      if (!container) return;
+
+      // Each row = one exercise; ps.sets = number of sets to perform
+      container.innerHTML = plannedSets.map(ps => {
+        const ex   = ps.exercises ?? {};
+        const col  = muscleColor(ex.muscle_primary);
+        const abbr = muscleShort(ex.muscle_primary);
+        const reps = `${ps.reps_min}–${ps.reps_max} reps`;
+        const rest = ps.rest_seconds ? `${ps.rest_seconds}s rest` : '';
+        const rpe  = isDeload ? 'RPE ~7' : (ps.rpe_target ? `RPE ${ps.rpe_target}` : '');
+        const safeName   = (ex.name ?? 'Exercise').replace(/'/g, "\\'");
+        const safeMuscle = (ex.muscle_primary ?? '').replace(/'/g, "\\'");
+
+        return `
+          <div class="exercise-card">
+            <div class="ex-icon" style="background:${col}">${abbr}</div>
+            <div class="ex-body">
+              <div class="ex-name">${ex.name ?? 'Exercise'}</div>
+              <div class="ex-spec">${ps.sets} sets · ${reps}${rpe ? ' · ' + rpe : ''}${rest ? ' · ' + rest : ''}</div>
+              <div class="ex-last" id="last-lift-${ps.exercise_id}">
+                <span style="color:var(--text-3);font-size:0.75rem">Loading…</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+              <button class="ex-history-btn"
+                      onclick="openLiftHistory('${ps.exercise_id}','${safeName}')">
+                History
+              </button>
+              <button class="ex-history-btn"
+                      onclick="openSwapModal('${ps.id}','${safeMuscle}','${String(ex.is_compound)}')">
+                Swap
+              </button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    async function loadLastLifts(plannedSets) {
+      if (!plannedSets.length) return;
+      const exIds = [...new Set(plannedSets.map(p => p.exercise_id))];
+      try {
+        const { data } = await ApexCore.getClient()
+          .from('set_logs')
+          .select('exercise_id, weight_kg, reps, workout_logs!inner(log_date)')
+          .in('exercise_id', exIds)
+          .eq('is_warmup', false)
+          .order('id', { ascending: false })
+          .limit(exIds.length * 10);
+
+        // Most recent set per exercise (compare by log_date string YYYY-MM-DD)
+        const best = {};
+        for (const s of data ?? []) {
+          const exId   = s.exercise_id;
+          const logDate = s.workout_logs?.log_date ?? '';
+          if (!best[exId] || logDate > best[exId].date) {
+            best[exId] = {
+              wt: kgToLbs(s.weight_kg), reps: s.reps, date: logDate,
+            };
+          }
+        }
+
+        for (const [exId, last] of Object.entries(best)) {
+          const el = document.getElementById(`last-lift-${exId}`);
+          if (!el) continue;
+          const ago = last.date ? timeAgo(last.date) : '';
+          el.innerHTML = `<span style="color:var(--text-2)">Last: ${fmtLbs(last.wt)} × ${last.reps}${ago ? ' <span style="color:var(--text-3)">· ' + ago + '</span>' : ''}</span>`;
+        }
+
+        // Clear "Loading…" for exercises with no history
+        document.querySelectorAll('[id^="last-lift-"]').forEach(el => {
+          if (el.innerHTML.includes('Loading')) el.innerHTML = '<span style="color:var(--text-3)">No history yet</span>';
+        });
+      } catch(e) {
+        document.querySelectorAll('[id^="last-lift-"]').forEach(el => {
+          if (el.innerHTML.includes('Loading')) el.innerHTML = '';
+        });
+      }
+    }
+
+    function timeAgo(dateStr) {
+      const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+      if (days === 0) return 'today';
+      if (days === 1) return 'yesterday';
+      if (days < 14)  return `${days}d ago`;
+      if (days < 60)  return `${Math.floor(days/7)}w ago`;
+      return `${Math.floor(days/30)}mo ago`;
+    }
+
+    // ── Lift history ──────────────────────────────────────────
+    let _historyExId = null;
+
+    async function openLiftHistory(exerciseId, exerciseName) {
+      _historyExId = exerciseId;
+      document.getElementById('lift-history-title').textContent = exerciseName;
+      document.getElementById('lift-history-sub').textContent   = 'Loading history…';
+      document.getElementById('lift-history-body').innerHTML    = '';
+      document.getElementById('lift-history-modal').classList.remove('hidden');
+
+      try {
+        const { data, error } = await ApexCore.getClient()
+          .from('set_logs')
+          .select(`
+            id, set_number, weight_kg, reps, rpe,
+            workout_logs!inner(id, log_date)
+          `)
+          .eq('exercise_id', exerciseId)
+          .eq('is_warmup', false)
+          .order('set_number')
+          .limit(60);
+
+        if (error) throw error;
+        renderLiftHistory(data ?? [], exerciseName);
+      } catch(e) {
+        document.getElementById('lift-history-sub').textContent = 'Could not load history';
+      }
+    }
+
+    function closeLiftHistory() {
+      document.getElementById('lift-history-modal').classList.add('hidden');
+    }
+
+    function renderLiftHistory(sets, exerciseName) {
+      if (!sets.length) {
+        document.getElementById('lift-history-sub').textContent = 'No logged sets yet';
+        document.getElementById('lift-history-body').innerHTML =
+          '<div style="text-align:center;padding:2rem;color:var(--text-3)">' +
+          'Start a workout to log sets</div>';
+        return;
+      }
+
+      // Group by workout_log date
+      const sessions = {};
+      for (const s of sets) {
+        const date = s.workout_logs?.log_date ?? 'Unknown';
+        if (!sessions[date]) sessions[date] = [];
+        sessions[date].push(s);
+      }
+
+      const sortedDates = Object.keys(sessions).sort((a, b) => b.localeCompare(a));
+      document.getElementById('lift-history-sub').textContent =
+        `${sortedDates.length} session${sortedDates.length !== 1 ? 's' : ''}`;
+
+      document.getElementById('lift-history-body').innerHTML = sortedDates.map(date => {
+        const sessionSets = sessions[date].sort((a, b) => a.set_number - b.set_number);
+        const d = new Date(date + 'T12:00:00');
+        const label = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+
+        return `
+          <div class="lift-session">
+            <div class="lift-session-hdr">${label}</div>
+            ${sessionSets.map(s => `
+              <div class="lift-set-row">
+                <span class="lift-set-num">S${s.set_number}</span>
+                <span class="lift-set-val">${fmtLbs(kgToLbs(s.weight_kg))} × ${s.reps}</span>
+                ${s.rpe ? `<span class="lift-set-rpe">RPE ${s.rpe}</span>` : ''}
+                <button class="lift-set-edit"
+                        onclick="openEditSet('${s.id}',${kgToLbs(s.weight_kg)},${s.reps},${s.rpe ?? 'null'})">
+                  Edit
+                </button>
+              </div>`).join('')}
+          </div>`;
+      }).join('');
+    }
+
+    // ── Edit / delete set ─────────────────────────────────────
+    let _editSetId = null, _editSetRPE = null;
+
+    function openEditSet(id, wtLbs, reps, rpe) {
+      _editSetId  = id;
+      _editSetRPE = rpe;
+      document.getElementById('edit-set-wt').value   = Math.round(wtLbs * 4) / 4;
+      document.getElementById('edit-set-reps').value = reps;
+      document.querySelectorAll('.rpe-btn[id^="edit-rpe-"]').forEach(b => {
+        b.classList.toggle('rpe-active', parseInt(b.id.split('-').pop()) === rpe);
+      });
+      document.getElementById('edit-set-modal').classList.remove('hidden');
+    }
+
+    function closeEditSet() {
+      document.getElementById('edit-set-modal').classList.add('hidden');
+    }
+
+    function selectEditRPE(val) {
+      _editSetRPE = val;
+      document.querySelectorAll('.rpe-btn[id^="edit-rpe-"]')
+        .forEach(b => b.classList.toggle('rpe-active', parseInt(b.id.split('-').pop()) === val));
+    }
+
+    async function saveSetEdit() {
+      const wtLbs = parseFloat(document.getElementById('edit-set-wt').value);
+      const reps  = parseInt(document.getElementById('edit-set-reps').value);
+      if (isNaN(wtLbs) || isNaN(reps)) { showToast('Enter valid weight and reps', 'error'); return; }
+
+      const btn = document.querySelector('#edit-set-modal .btn-primary');
+      btn.disabled = true; btn.textContent = 'Saving…';
+
+      const { error } = await ApexCore.getClient()
+        .from('set_logs')
+        .update({ weight_kg: lbsToKg(wtLbs), reps, rpe: _editSetRPE })
+        .eq('id', _editSetId);
+
+      btn.disabled = false; btn.textContent = 'Save';
+      if (error) { showToast(error.message, 'error'); return; }
+
+      closeEditSet();
+      showToast('Set updated', 'success');
+      // Refresh history
+      if (_historyExId) {
+        const title = document.getElementById('lift-history-title').textContent;
+        openLiftHistory(_historyExId, title);
+      }
+    }
+
+    async function deleteSet() {
+      if (!confirm('Delete this set?')) return;
+      const { error } = await ApexCore.getClient()
+        .from('set_logs').delete().eq('id', _editSetId);
+      if (error) { showToast(error.message, 'error'); return; }
+      closeEditSet();
+      showToast('Set deleted', 'success');
+      if (_historyExId) {
+        const title = document.getElementById('lift-history-title').textContent;
+        openLiftHistory(_historyExId, title);
+      }
+    }
+
+    function renderDaysGrid(workouts, week) {
+      const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      const grid = document.getElementById('days-grid');
+      grid.className = 'day-strip';
+      grid.innerHTML = '';
+
+      const byDay     = new Map(workouts.map(w => [w.day_of_week, w]));
+      const todayDow  = (() => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; })();
+
+      for (let i = 0; i < 7; i++) {
+        const wo  = byDay.get(i);
+        const isRest = !wo || wo.workout_type === null;
+        const pill = document.createElement('div');
+        pill.className = 'day-pill' + (isRest ? ' rest' : '');
+        if (wo?.is_completed) pill.classList.add('done');
+        if (i === todayDow && !isRest) pill.classList.add('today-dot');
+
+        pill.innerHTML = `
+          <div class="day-pill-name">${DAY_NAMES[i]}</div>
+          <div class="day-pill-label">${isRest ? 'Rest' : wo.label}</div>
+          ${wo?.is_completed ? '<div class="day-pill-done">✓</div>' : ''}
+        `;
+
+        if (!isRest) {
+          pill.addEventListener('click', () => {
+            document.querySelectorAll('.day-pill').forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            selectWorkout(wo, pill);
+          });
+        }
+        grid.appendChild(pill);
+      }
+
+      // Auto-select today (or first workout day)
+      const autoWo = byDay.get(todayDow) || workouts.find(w => w.workout_type);
+      if (autoWo && autoWo.workout_type) {
+        const idx   = autoWo.day_of_week;
+        const pill  = grid.children[idx];
+        if (pill) { pill.classList.add('active'); selectWorkout(autoWo, pill); }
+      }
+    }
+
+    async function selectWorkout(wo, cellEl) {
+      // Highlight selected pill
+      document.querySelectorAll('.day-pill').forEach(c => c.classList.remove('active'));
+      if (cellEl) cellEl.classList.add('active');
+
+      const { workout, error } = await ApexTraining.WeeklyPlan.getWorkout(wo.id);
+      if (error) { showToast('Failed to load workout', 'error'); return; }
+      APP.selectedWorkout = workout;
+
+      const detail   = document.getElementById('workout-detail');
+      const emptyEl  = document.getElementById('training-empty');
+      const cardioEl = document.getElementById('cardio-detail');
+      const cardsEl  = document.getElementById('exercise-cards');
+      const isDeload = workout.program_weeks?.is_deload;
+      const phase    = workout.program_weeks?.programs?.phase ?? APP.profile?.phase;
+
+      detail.classList.remove('hidden');
+      emptyEl.classList.add('hidden');
+      document.getElementById('detail-workout-name').textContent = workout.label;
+      document.getElementById('detail-deload-note').classList.toggle('hidden', !isDeload);
+
+      if (workout.workout_type === 'cardio') {
+        if (cardsEl) cardsEl.innerHTML = '';
+        cardioEl.classList.remove('hidden');
+        document.getElementById('detail-workout-meta').textContent = 'Cardio · active recovery';
+        document.getElementById('detail-workout-meta').textContent = 'Cardio session';
+        const c = ApexTraining.CardioEngine.prescribe(phase, isDeload);
+        document.getElementById('cardio-prescription').innerHTML = `
+          <div class="t-label t-muted" style="margin-bottom:8px">Today's cardio</div>
+          <div class="stack gap-8">
+            <div class="row gap-8"><span class="badge badge-accent">LISS</span>
+              <span class="t-small">${c.liss.durationMin} min · ${c.liss.zone} · ${c.liss.notes}</span></div>
+            ${c.hiit.sessions > 0 ? `
+              <div class="row gap-8"><span class="badge badge-warning">HIIT</span>
+                <span class="t-small">${c.hiit.durationMin} min · ${c.hiit.notes}</span></div>` : ''}
+          </div>`;
+        document.getElementById('start-workout-btn').classList.add('hidden');
+        return;
+      }
+
+      // Strength day
+      cardioEl.classList.add('hidden');
+      document.getElementById('start-workout-btn').classList.remove('hidden');
+
+      const rpeLabel = isDeload ? 'RPE ~7 (deload)' :
+        workout.planned_sets?.[0]?.rpe_target ? `RPE target ${workout.planned_sets[0].rpe_target}` : '';
+      document.getElementById('detail-workout-meta').textContent =
+        `${workout.planned_sets?.length ?? 0} exercises · ${rpeLabel}`;
+
+      // Render exercise cards
+      renderExerciseCards(workout.planned_sets ?? [], isDeload);
+      // Fetch last lifts in background and update cards
+      loadLastLifts(workout.planned_sets ?? []);
+    }
+
+    async function generateProgram() {
+      showToast('Generating program…');
+      const { error } = await ApexTraining.ProgramBuilder.generate({ totalWeeks: 12 });
+      if (error) { showToast('Failed to generate program', 'error'); return; }
+      APP.loadedTabs.delete('training');
+      await loadTab('training');
+      showToast('Program generated!', 'success');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // WORKOUT SESSION
+    // ═══════════════════════════════════════════════════════
+    // ── Workout focus mode state ─────────────────────────────
+    const WORKOUT = {
+      exercises:   [],   // [{ps, setsTotal, setsDone, logs:[{set,wt,reps,rpe}]}]
+      curEx:       0,
+      curSet:      1,
+      selectedRPE: null,
+      _restTimer:  null,
+      _restCB:     null,
+    };
+
+    async function startWorkout() {
+      if (!APP.selectedWorkout) return;
+      const { session, error } = await ApexTraining.WorkoutSession.start(APP.selectedWorkout.id);
+      if (error) { showToast(error.message, 'error'); return; }
+
+      WORKOUT.exercises   = session.plannedSets.map(ps => ({
+        ps, setsTotal: ps.sets, setsDone: 0, logs: [],
+      }));
+      WORKOUT.curEx       = 0;
+      WORKOUT.curSet      = 1;
+      WORKOUT.selectedRPE = null;
+
+      // True focus mode — hide bottom nav completely
+      document.querySelector('.bottom-nav').style.setProperty('display','none','important');
+      document.getElementById('focus-mode').classList.remove('fm-hidden');
+      renderFocusExercise();
+
+      APP.timerInterval = setInterval(() => {
+        const s  = ApexTraining.WorkoutSession.getState();
+        const el = document.getElementById('focus-elapsed');
+        if (el) el.textContent = ApexTraining.SessionTimer.format(
+          s.timer ?? ApexTraining.SessionTimer.create()
+        );
+      }, 1000);
+    }
+
+    function renderFocusExercise() {
+      const item = WORKOUT.exercises[WORKOUT.curEx];
+      if (!item) { openCompleteModal(); return; }
+      const { ps } = item;
+      const ex = ps.exercises ?? {};
+
+      // Progress counter
+      document.getElementById('focus-ex-counter').textContent =
+        `Exercise ${WORKOUT.curEx + 1} / ${WORKOUT.exercises.length}`;
+
+      // Exercise name + meta
+      document.getElementById('focus-ex-name').textContent = ex.name ?? 'Exercise';
+      const parts = [ex.muscle_primary, `${ps.reps_min}–${ps.reps_max} reps`,
+                     `RPE ${ps.rpe_target}`,
+                     ps.rest_seconds >= 60
+                       ? `${Math.floor(ps.rest_seconds / 60)}m rest`
+                       : `${ps.rest_seconds}s rest`].filter(Boolean);
+      document.getElementById('focus-ex-meta').textContent = parts.join(' · ');
+
+      // Set dots
+      document.getElementById('focus-set-dots').innerHTML =
+        Array.from({ length: item.setsTotal }, (_, i) => {
+          const c = i < item.setsDone ? 'dot-done' : i === item.setsDone ? 'dot-cur' : '';
+          return `<div class="set-dot ${c}"></div>`;
+        }).join('');
+
+      // Pre-fill inputs from last log or program target
+      const last = item.logs.at(-1);
+      const suggestKg = ps.notes?.match(/Target:\s*([\d.]+)/)?.[1] ?? '';
+      const suggestWt = suggestKg ? Math.round(kgToLbs(parseFloat(suggestKg))) : '';
+      document.getElementById('focus-wt').value   = last?.wt ?? suggestWt ?? '';
+      document.getElementById('focus-reps').value = last?.reps ?? ps.reps_min ?? '';
+
+      // RPE
+      if (!WORKOUT.selectedRPE) WORKOUT.selectedRPE = ps.rpe_target;
+      renderRPERow();
+
+      // Log button
+      const btn = document.getElementById('log-set-btn');
+      btn.disabled    = false;
+      btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
+
+      renderCompletedSets(item.logs);
+      document.getElementById('focus-body').scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderRPERow() {
+      const rpes = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+      document.getElementById('rpe-row').innerHTML = rpes.map(r => `
+        <button class="rpe-btn${r === WORKOUT.selectedRPE ? ' rpe-active' : ''}"
+                onclick="selectRPE(${r})">${r}</button>`).join('');
+    }
+
+    function selectRPE(val) {
+      WORKOUT.selectedRPE = val;
+      document.querySelectorAll('.rpe-btn').forEach(b =>
+        b.classList.toggle('rpe-active', parseFloat(b.textContent) === val));
+    }
+
+    function adjustVal(id, delta) {
+      const inp = document.getElementById(id);
+      const cur = parseFloat(inp.value) || 0;
+      inp.value = Math.max(0, parseFloat((cur + delta).toFixed(1)));
+    }
+
+    function renderCompletedSets(logs) {
+      const el = document.getElementById('focus-history');
+      if (!logs.length) { el.innerHTML = ''; return; }
+      el.innerHTML = `
+        <div class="focus-history-header">Completed</div>
+        ${logs.map(l => `
+          <div class="focus-history-row">
+            <span class="fhr-set">Set ${l.set}</span>
+            <span class="fhr-val">${l.wt} lbs &times; ${l.reps}</span>
+            <span class="fhr-rpe">RPE ${l.rpe}</span>
+            <span class="fhr-check">&#x2713;</span>
+          </div>`).join('')}`;
+    }
+
+    async function logFocusSet() {
+      const item = WORKOUT.exercises[WORKOUT.curEx];
+      const { ps } = item;
+      const wt   = parseFloat(document.getElementById('focus-wt').value);
+      const reps = parseInt(document.getElementById('focus-reps').value);
+      const rpe  = WORKOUT.selectedRPE;
+
+      if (isNaN(wt) || isNaN(reps) || !rpe) {
+        showToast('Enter weight, reps and RPE', 'error'); return;
+      }
+
+      const btn = document.getElementById('log-set-btn');
+      btn.disabled    = true;
+      btn.textContent = 'Saving…';
+
+      const { log, overload, isPR, error } = await ApexTraining.WorkoutSession.logSet({
+        plannedSetId: ps.id, exerciseId: ps.exercise_id,
+        setNumber: WORKOUT.curSet, weightKg: lbsToKg(wt), reps, rpe,
+      });
+
+      if (error) {
+        showToast(error.message, 'error');
+        btn.disabled    = false;
+        btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
+        return;
+      }
+
+      item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
+      item.setsDone++;
+
+      if (isPR) showToast(
+        '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' lbs', 'success');
+
+      showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
+    }
+
+    function getNextSetInfo() {
+      const item = WORKOUT.exercises[WORKOUT.curEx];
+      if (WORKOUT.curSet < item.setsTotal)
+        return `Set ${WORKOUT.curSet + 1} of ${item.setsTotal} — ${item.ps.exercises?.name}`;
+      const nIdx = WORKOUT.curEx + 1;
+      if (nIdx < WORKOUT.exercises.length)
+        return WORKOUT.exercises[nIdx].ps.exercises?.name ?? 'Next exercise';
+      return 'Last set — great work!';
+    }
+
+    function advanceWorkout() {
+      const item = WORKOUT.exercises[WORKOUT.curEx];
+      if (WORKOUT.curSet < item.setsTotal) {
+        WORKOUT.curSet++;
+      } else {
+        WORKOUT.curEx++;
+        WORKOUT.curSet      = 1;
+        WORKOUT.selectedRPE = null;
+        if (WORKOUT.curEx >= WORKOUT.exercises.length) {
+          openCompleteModal(); return;
+        }
+      }
+      renderFocusExercise();
+    }
+
+    function showRestOverlay(totalSec, nextInfo, onComplete) {
+      const ringEl = document.getElementById('rest-ring');
+      const secEl  = document.getElementById('rest-sec');
+      const CIRC   = 2 * Math.PI * 88;           // ≈ 553
+
+      WORKOUT._restCB = onComplete;
+      document.getElementById('rest-next').textContent = nextInfo;
+      secEl.textContent = totalSec;
+
+      // Reset ring without transition, then re-enable
+      ringEl.style.transition      = 'none';
+      ringEl.style.strokeDasharray = `${CIRC}`;
+      ringEl.style.strokeDashoffset = '0';
+      document.getElementById('rest-overlay').classList.remove('fm-hidden');
+
+      requestAnimationFrame(() => {
+        ringEl.style.transition = 'stroke-dashoffset 1s linear';
+      });
+
+      let remaining = totalSec;
+      WORKOUT._restTimer = setInterval(() => {
+        remaining--;
+        secEl.textContent             = Math.max(0, remaining);
+        ringEl.style.strokeDashoffset = `${CIRC * (1 - remaining / totalSec)}`;
+        if (remaining <= 0) _endRest(true);
+      }, 1000);
+    }
+
+    function _endRest(vibrate) {
+      clearInterval(WORKOUT._restTimer);
+      WORKOUT._restTimer = null;
+      document.getElementById('rest-overlay').classList.add('fm-hidden');
+      if (vibrate && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      const cb = WORKOUT._restCB;
+      WORKOUT._restCB = null;
+      if (cb) cb();
+    }
+
+    function skipRest() { _endRest(false); }
+
+    function openCompleteModal() {
+      document.getElementById('complete-modal').classList.remove('hidden');
+    }
+
+    async function completeSession() {
+      const rpeVal   = parseFloat(document.getElementById('sess-rpe').value) || null;
+      const notesVal = document.getElementById('sess-notes').value.trim() || null;
+
+      const { deloadCheck, error } = await ApexTraining.WorkoutSession.completeSession({
+        rpeOverall: rpeVal, notes: notesVal,
+      });
+      if (error) { showToast(error.message, 'error'); return; }
+
+      closeFocusMode();
+      showToast('Session saved! Great work.', 'success');
+      APP.loadedTabs.delete('training');
+      await loadTab('training');
+
+      if (deloadCheck?.shouldDeload)
+        showToast(`Deload recommended: ${deloadCheck.reason}`, 'warning');
+    }
+
+    function confirmAbandon() {
+      const btn = document.querySelector('.focus-abandon-btn');
+      if (btn.dataset.confirm === '1') {
+        ApexTraining.WorkoutSession.abandon('User abandoned');
+        closeFocusMode();
+      } else {
+        btn.dataset.confirm  = '1';
+        btn.textContent      = 'Tap again to end';
+        btn.style.color      = 'var(--danger)';
+        setTimeout(() => {
+          if (btn.dataset.confirm === '1') {
+            btn.dataset.confirm = '0';
+            btn.textContent     = '&#x2715; End';
+            btn.style.color     = '';
+          }
+        }, 3000);
+      }
+    }
+
+    function closeFocusMode() {
+      clearInterval(APP.timerInterval);
+      if (WORKOUT._restTimer) { clearInterval(WORKOUT._restTimer); WORKOUT._restTimer = null; }
+      WORKOUT._restCB = null;
+      document.getElementById('focus-mode').classList.add('fm-hidden');
+      document.getElementById('rest-overlay').classList.add('fm-hidden');
+      document.getElementById('complete-modal').classList.add('hidden');
+      document.querySelector('.bottom-nav').style.removeProperty('display');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // EXERCISE SWAP MODAL (simplified)
+    // ═══════════════════════════════════════════════════════
+    // ── Exercise swap state ──────────────────────────────────
+    const SWAP = { plannedSetId: null, pool: [] };
+
+    async function openSwapModal(plannedSetId, muscle, isCompound) {
+      SWAP.plannedSetId = plannedSetId;
+      document.getElementById('swap-modal').classList.remove('hidden');
+      document.getElementById('swap-subtitle').textContent =
+        `${muscle} · ${isCompound === 'true' ? 'Compound' : 'Isolation'}`;
+      document.getElementById('swap-search').value = '';
+      document.getElementById('swap-list').innerHTML =
+        '<div style="padding:2rem;text-align:center;color:var(--text-3)">Loading alternatives…</div>';
+
+      const allEx = await ApexTraining.ExerciseLibrary.getAll();
+      SWAP.pool   = ApexTraining.ExerciseLibrary.filter(allEx, [muscle], isCompound === 'true');
+      filterSwapList();
+      setTimeout(() => document.getElementById('swap-search').focus(), 80);
+    }
+
+    function closeSwapModal() {
+      document.getElementById('swap-modal').classList.add('hidden');
+    }
+
+    function filterSwapList() {
+      const q    = document.getElementById('swap-search').value.toLowerCase().trim();
+      const list = q
+        ? SWAP.pool.filter(e => e.name.toLowerCase().includes(q) ||
+                                (e.equipment||'').toLowerCase().includes(q))
+        : SWAP.pool;
+      const el   = document.getElementById('swap-list');
+
+      if (!list.length) {
+        el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-3)">No alternatives found</div>';
+        return;
+      }
+      el.innerHTML = list.map(e => `
+        <div onclick="confirmSwap('${e.id}','${e.name.replace(/'/g,"\'")}')"
+             style="display:flex;align-items:center;justify-content:space-between;
+                    gap:10px;padding:0.875rem 1.25rem;cursor:pointer;
+                    border-bottom:0.5px solid var(--border);transition:background 0.1s"
+             onmouseenter="this.style.background='var(--surface-alt)'"
+             onmouseleave="this.style.background=''">
+          <div>
+            <div style="font-size:0.9375rem;font-weight:500">${e.name}</div>
+            <div style="font-size:0.75rem;color:var(--text-3);margin-top:2px">
+              ${e.muscle_primary||''} · ${e.equipment||''}
+            </div>
+          </div>
+          ${e.is_compound ? '<span class="badge badge-accent" style="font-size:0.65rem;flex-shrink:0">compound</span>' : ''}
+        </div>`).join('');
+    }
+
+    async function confirmSwap(exerciseId, exerciseName) {
+      const { error } = await ApexTraining.WeeklyPlan.swapExercise(SWAP.plannedSetId, exerciseId);
+      closeSwapModal();
+      if (error) { showToast('Swap failed: ' + error.message, 'error'); return; }
+      APP.loadedTabs.delete('training');
+      await loadTab('training');
+      showToast(`Swapped to ${exerciseName}`, 'success');
+    }
+
+
+    // ── Goal editing ─────────────────────────────────────────
+    function openGoalModal() {
+      const current = APP.profile?.phase || 'maintain';
+      document.querySelectorAll('.goal-opt-btn').forEach(b => {
+        const match = b.dataset.phase === current;
+        b.style.borderColor  = match ? 'var(--accent)' : '';
+        b.style.background   = match ? 'var(--accent-light)' : '';
+      });
+      document.getElementById('goal-edit-modal').classList.remove('hidden');
+    }
+
+    function closeGoalModal() {
+      document.getElementById('goal-edit-modal').classList.add('hidden');
+    }
+
+    async function selectGoal(phase) {
+      const { data: updatedProfile, error } = await ApexCore.Profile.update({ phase });
+      if (error) { showToast('Could not save goal', 'error'); return; }
+
+      // Profile.update() recalculates macros and returns the full updated row.
+      // Use it directly — never rely on getCached() here since the cache was
+      // just invalidated and a round-trip would be wasted.
+      APP.profile = updatedProfile ?? { ...APP.profile, phase };
+
+      // Update today's meal plan so cached plan.*_target values stay in sync.
+      // Use user_id + today's date — never depend on APP.mealPlanId which is
+      // only set after the diary tab has been loaded at least once.
+      if (updatedProfile) {
+        const today = new Date().toISOString().slice(0, 10);
+        const { data: updatedPlan } = await ApexCore.getClient()
+          .from('meal_plans')
+          .update({
+            phase,
+            kcal_target:    updatedProfile.calorie_target,
+            protein_target: updatedProfile.protein_target_g,
+            carb_target:    updatedProfile.carb_target_g,
+            fat_target:     updatedProfile.fat_target_g,
+          })
+          .eq('user_id', updatedProfile.id)
+          .eq('plan_date', today)
+          .select('id')
+          .maybeSingle();
+        // Cache the meal plan id if we just learned it
+        if (updatedPlan?.id) APP.mealPlanId = updatedPlan.id;
+      }
+
+      closeGoalModal();
+
+      // Refresh the phase pill in the top bar immediately
+      renderTopBar();
+
+      // Bust all tab caches so every tab reloads with the new targets
+      ['home', 'diary', 'training', 'stats'].forEach(t => APP.loadedTabs.delete(t));
+
+      // Reload whichever tab the user is currently on
+      await loadTab(APP.activeTab);
+
+      showToast(`Switched to ${phase} — targets updated`, 'success');
+    }
+
+
+    function openQuickAdd() {
+      document.getElementById('quick-add-modal').classList.remove('hidden');
+    }
+
+    function closeQuickAdd() {
+      document.getElementById('quick-add-modal').classList.add('hidden');
+    }
+
+
+    const SPLIT_META = {
+      beginner:   { icon:'&#x1F7E2;', days:'3 days/week',  freq:'3×/muscle/week',  level:'Beginner'     },
+      full_body_4:{ icon:'&#x1F535;', days:'4 days/week',  freq:'4×/muscle/week',  level:'Intermediate' },
+      intermediate:{ icon:'&#x1F7E1;',days:'4 days/week',  freq:'2×/muscle/week',  level:'Intermediate' },
+      strength:   { icon:'&#x1F7E3;', days:'4 days/week',  freq:'2×/muscle/week',  level:'Intermediate+'},
+      ppl_3:      { icon:'&#x26AA;',  days:'3 days/week',  freq:'1×/muscle/week',  level:'Any'          },
+      advanced:   { icon:'&#x1F534;', days:'6 days/week',  freq:'2×/muscle/week',  level:'Advanced'     },
+      body_part:  { icon:'&#x1F7E0;', days:'5 days/week',  freq:'1×/muscle/week',  level:'Intermediate+'},
+    };
+
+    // ═══════════════════════════════════════════════════════
+    // BACKLOG — log a past workout without live set tracking
+    // ═══════════════════════════════════════════════════════
+    let _backlogRPE = null;
+
+    function openBacklogModal() {
+      _backlogRPE = null;
+
+      // Reset RPE buttons
+      document.querySelectorAll('[id^="backlog-rpe-"]')
+        .forEach(b => b.classList.remove('rpe-active'));
+
+      // Default to yesterday
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yStr = yesterday.toISOString().slice(0, 10);
+
+      const dateInput = document.getElementById('backlog-date');
+      dateInput.value = yStr;
+      dateInput.max   = new Date().toISOString().slice(0, 10); // can't backlog future
+
+      document.getElementById('backlog-duration').value = '60';
+      document.getElementById('backlog-notes').value    = '';
+      document.getElementById('backlog-workout-label').textContent = '';
+
+      document.getElementById('backlog-modal').classList.remove('hidden');
+
+      // Fetch the workout label for yesterday
+      backlogDateChanged();
+    }
+
+    function closeBacklogModal() {
+      document.getElementById('backlog-modal').classList.add('hidden');
+    }
+
+    function selectBacklogRPE(val) {
+      _backlogRPE = val;
+      document.querySelectorAll('[id^="backlog-rpe-"]')
+        .forEach(b => b.classList.toggle('rpe-active',
+          parseInt(b.id.replace('backlog-rpe-', '')) === val));
+    }
+
+    async function backlogDateChanged() {
+      const date  = document.getElementById('backlog-date').value;
+      const label = document.getElementById('backlog-workout-label');
+      if (!date) { label.textContent = ''; return; }
+
+      label.textContent = 'Looking up workout…';
+      label.style.color = 'var(--text-3)';
+
+      try {
+        const user = await ApexCore.Auth.getUser();
+        const { data: program } = await ApexCore.getClient()
+          .from('programs')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!program) { label.textContent = 'No active program'; return; }
+
+        const { data: week } = await ApexCore.getClient()
+          .from('program_weeks')
+          .select('id')
+          .eq('program_id', program.id)
+          .lte('start_date', date)
+          .gte('end_date', date)
+          .maybeSingle();
+
+        if (!week) { label.textContent = 'Date is outside your current program'; return; }
+
+        const d   = new Date(date + 'T12:00:00').getDay(); // JS: 0=Sun…6=Sat
+        const dow = d === 0 ? 6 : d - 1; // convert to Mon=0…Sun=6 to match DB
+        const { data: pw } = await ApexCore.getClient()
+          .from('planned_workouts')
+          .select('label, workout_type')
+          .eq('program_week_id', week.id)
+          .eq('day_of_week', dow)
+          .maybeSingle();
+
+        if (pw) {
+          label.textContent = pw.label;
+          label.style.color = 'var(--accent)';
+        } else {
+          label.textContent = 'Rest day';
+          label.style.color = 'var(--text-3)';
+        }
+      } catch (e) {
+        label.textContent = 'Could not look up workout';
+        label.style.color = 'var(--danger)';
+      }
+    }
+
+    async function submitBacklog() {
+      const date     = document.getElementById('backlog-date').value;
+      const duration = parseInt(document.getElementById('backlog-duration').value) || 0;
+      const notes    = document.getElementById('backlog-notes').value.trim();
+
+      if (!date) { showToast('Please select a date', 'error'); return; }
+
+      const btn = document.querySelector('#backlog-modal .btn-primary');
+      btn.disabled    = true;
+      btn.textContent = 'Saving…';
+
+      const { workoutLogId, label, error } = await ApexTraining.WorkoutSession.backlog({
+        date,
+        durationMin: duration,
+        rpeOverall:  _backlogRPE,
+        notes:       notes || null,
+      });
+
+      btn.disabled    = false;
+      btn.textContent = 'Log Workout';
+
+      if (error) {
+        showToast('Failed to log: ' + error.message, 'error');
+        return;
+      }
+
+      closeBacklogModal();
+      showToast(label ? `${label} logged ✓` : 'Workout logged ✓', 'success');
+
+      // Refresh training tab so the day pill shows ✓
+      APP.loadedTabs.delete('training');
+      loadTab('training');
+    }
+
+    function openSplitModal() {
+      const current = APP.profile?.preferred_split
+                   || APP.profile?.experience
+                   || 'intermediate';
+      const splits  = ApexTraining.ProgramBuilder.getSplits();
+
+      document.getElementById('split-options-list').innerHTML = Object.entries(splits).map(([key, split]) => {
+        const meta    = SPLIT_META[key] ?? { icon:'&#x26AA;', days:'', freq:'', level:'' };
+        const isCur   = key === current;
+        return `
+          <div onclick="selectSplit('${key}')"
+               style="padding:1rem 1.25rem;border-bottom:0.5px solid var(--border);
+                      cursor:pointer;transition:background 0.1s;
+                      background:${isCur ? 'var(--accent-light)' : 'transparent'}"
+               onmouseenter="this.style.background='var(--surface-alt)'"
+               onmouseleave="this.style.background='${isCur ? 'var(--accent-light)' : 'transparent'}'">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <div style="font-size:0.9375rem;font-weight:600">
+                ${meta.icon} ${split.name}
+              </div>
+              ${isCur ? '<span style="font-size:0.7rem;background:var(--accent);color:#fff;padding:2px 8px;border-radius:99px">Current</span>' : ''}
+            </div>
+            <div style="display:flex;gap:12px;margin-bottom:5px">
+              <span style="font-size:0.75rem;color:var(--accent);font-weight:500">${meta.days}</span>
+              <span style="font-size:0.75rem;color:var(--text-3)">&middot; ${meta.freq}</span>
+              <span style="font-size:0.75rem;color:var(--text-3)">&middot; ${meta.level}</span>
+            </div>
+            <div style="font-size:0.8125rem;color:var(--text-3);line-height:1.5">
+              ${split.science || ''}
+            </div>
+          </div>`;
+      }).join('');
+
+      document.getElementById('split-modal').classList.remove('hidden');
+    }
+
+    function closeSplitModal() {
+      document.getElementById('split-modal').classList.add('hidden');
+    }
+
+    async function selectSplit(splitKey) {
+      closeSplitModal();
+
+      const { error } = await ApexCore.Profile.update({ preferred_split: splitKey });
+      if (error) { showToast('Could not save split', 'error'); return; }
+
+      APP.profile = { ...APP.profile, preferred_split: splitKey };
+      showToast('Regenerating program…', 'info');
+
+      const { error: genErr } = await ApexTraining.ProgramBuilder.generate({ totalWeeks: 12 });
+      if (genErr) { showToast('Program generation failed: ' + genErr.message, 'error'); return; }
+
+      APP.loadedTabs.delete('training');
+      await loadTab('training');
+      showToast('New program ready!', 'success');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // NUTRITION TAB
+    // ═══════════════════════════════════════════════════════
+    // =======================================================
+    // NUTRITION TAB
+    // =======================================================
+
+    // ── Unit conversion system ─────────────────────────────
+    const UNIT_CONFIGS = {
+      g:    { toG: 1,          label: 'g',    step: 1,    presets: [50, 100, 150, 200]           },
+      oz:   { toG: 28.3495,    label: 'oz',   step: 0.5,  presets: [1, 2, 3, 4]                 },
+      lbs:  { toG: 453.592,    label: 'lbs',  step: 0.25, presets: [0.25, 0.5, 0.75, 1]         },
+      ml:   { toG: 1,          label: 'ml',   step: 10,   presets: [100, 200, 250, 500]          },
+      tbsp: { toG: 14.787,     label: 'tbsp', step: 0.5,  presets: [1, 2, 3, 4]                 },
+      tsp:  { toG: 4.929,      label: 'tsp',  step: 0.25, presets: [1, 2, 3, 4]                 },
+      cups: { toG: 236.588,    label: 'cups', step: 0.25, presets: [0.25, 0.5, 0.75, 1]         },
+    };
+
+    function toGrams(val, unit) {
+      return val * (UNIT_CONFIGS[unit]?.toG ?? 1);
+    }
+
+    function fromGrams(g, unit) {
+      const factor = UNIT_CONFIGS[unit]?.toG ?? 1;
+      return parseFloat((g / factor).toFixed(3));
+    }
+
+    function renderPresets() {
+      const cfg = UNIT_CONFIGS[PICKER.unit] ?? UNIT_CONFIGS.g;
+      document.getElementById('picker-presets').innerHTML = cfg.presets.map(v =>
+        `<button onclick="setQuickAmount(${v})" class="gram-preset">
+           ${v}&thinsp;${cfg.label}
+         </button>`).join('');
+    }
+
+    function setUnit(unit) {
+      // Convert current qty to new unit
+      const oldRaw = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const grams  = toGrams(oldRaw, PICKER.unit);
+
+      PICKER.unit  = unit;
+
+      // Update active button
+      document.querySelectorAll('#picker-footer .unit-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.unit === unit));
+
+      // Update suffix
+      const sfx = document.getElementById('picker-unit-suffix');
+      if (sfx) sfx.textContent = unit;
+
+      // Update input: step + converted value
+      const inp = document.getElementById('picker-qty');
+      if (inp) {
+        const cfg = UNIT_CONFIGS[unit];
+        inp.step  = cfg.step;
+        inp.value = fromGrams(grams, unit);
+      }
+
+      renderPresets();
+      updatePickerPreview();
+    }
+
+    function setQuickAmount(val) {
+      const inp = document.getElementById('picker-qty');
+      if (inp) { inp.value = val; updatePickerPreview(); }
+    }
+
+    // ── State for the food picker
+    const PICKER = {
+      slotId:       null,
+      activeFilter: '',
+      selectedFood: null,
+      source:       'all',       // 'recent' | 'frequent' | 'library' | 'all'
+      cache:        new Map(),   // temp key -> food object for external results
+      multiMode:    false,
+      multiSel:     new Set(),   // selected food keys in multi-add mode
+      unit:         'g',         // active measurement unit
+      slotName:     null,          // display name of current meal slot
+    };
+
+    // Debounce handle for external search
+    const XSEARCH = { timer: null, ctrl: null };
+
+
+    // ── Home tab (goal-adaptive) ───────────────────────────────
+    async function loadHomeTab() {
+      const hr       = new Date().getHours();
+      const greeting = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+      const name     = APP.profile?.full_name?.split(' ')[0] || '';
+      document.getElementById('home-greeting').textContent =
+        name ? `${greeting}, ${name}` : greeting;
+      document.getElementById('home-date-sub').textContent =
+        new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+
+      // Goal config lookup
+      const phase  = APP.profile?.phase || 'maintain';
+      const cfg    = GOAL_CONFIGS[phase] || GOAL_CONFIGS.maintain;
+
+      // ── Inject goal banner (replaces if already exists) ───
+      let banner = document.getElementById('home-goal-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'home-goal-banner';
+        const greetEl = document.getElementById('home-greeting')?.parentElement;
+        if (greetEl) greetEl.parentElement.insertBefore(banner, greetEl.nextSibling);
+      }
+      banner.innerHTML = `
+        <div class="card" style="margin-bottom:1rem;padding:1rem 1.125rem;
+             border-left:3px solid ${cfg.accent};background:${cfg.bg}">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div>
+              <div style="font-size:0.7rem;font-weight:600;letter-spacing:.08em;
+                          text-transform:uppercase;color:${cfg.accent};margin-bottom:3px">
+                Current Phase
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+              <div style="font-size:1rem;font-weight:700">${cfg.icon} ${cfg.label}</div>
+              <button onclick="openGoalModal()"
+                      style="font-size:0.7rem;padding:3px 8px;border-radius:4px;
+                             border:0.5px solid ${cfg.accent};color:${cfg.accent};
+                             background:transparent;cursor:pointer;font-family:inherit;
+                             opacity:0.8">Edit</button>
+            </div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:0.7rem;color:var(--text-3);margin-bottom:2px">${cfg.heroLabel}</div>
+              <div id="home-hero-val" style="font-size:1.1rem;font-weight:700;color:${cfg.accent}">...</div>
+            </div>
+          </div>
+        </div>`;
+
+      // ── Inject priorities card ─────────────────────────────
+      let priCard = document.getElementById('home-priorities');
+      if (!priCard) {
+        priCard = document.createElement('div');
+        priCard.id = 'home-priorities';
+        priCard.className = 'card';
+        priCard.style.cssText = 'margin-bottom:1rem;padding:1rem 1.125rem';
+        const tileGrid = document.querySelector('#panel-home [style*="grid-template-columns:1fr 1fr"]');
+        if (tileGrid) tileGrid.parentElement.insertBefore(priCard, tileGrid);
+      }
+      priCard.innerHTML = `
+        <div style="font-size:0.75rem;font-weight:600;letter-spacing:.08em;
+                    text-transform:uppercase;color:var(--text-3);margin-bottom:0.75rem">
+          Today's Priorities
+        </div>
+        ${cfg.priorities.map(p => `
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:7px;font-size:0.875rem">
+            <span style="color:${cfg.accent};flex-shrink:0;margin-top:1px">&#x25CF;</span>
+            <span style="color:var(--text-2)">${p}</span>
+          </div>`).join('')}
+        <div style="margin-top:0.875rem;padding-top:0.875rem;border-top:0.5px solid var(--border)">
+          <div style="font-size:0.75rem;font-weight:600;color:var(--text-3);margin-bottom:4px">
+            Training Focus
+          </div>
+          <div style="font-size:0.875rem;font-weight:500;color:${cfg.accent};margin-bottom:4px">
+            ${cfg.trainingFocus}
+          </div>
+          <div style="font-size:0.8125rem;color:var(--text-3);line-height:1.5">
+            ${cfg.trainingDetail}
+          </div>
+        </div>`;
+
+      // ── Load nutrition for ring + bars ─────────────────────
+      try {
+        const { totals, plan } = await ApexNutrition.MealPlan.getOrCreateToday();
+        // Always prefer APP.profile — it has the freshly recalculated targets
+        const kcalTarget = APP.profile?.calorie_target || plan?.kcal_target || 2000;
+        const rem  = kcalTarget - Math.round(totals?.kcal || 0);
+        const pct  = Math.min(100, ((totals?.kcal || 0) / kcalTarget) * 100);
+        const circ = 2 * Math.PI * 40;
+        const tgts = {
+          proteinG: APP.profile?.protein_target_g ?? plan?.protein_target ?? 1,
+          carbsG:   APP.profile?.carb_target_g    ?? plan?.carb_target    ?? 1,
+          fatG:     APP.profile?.fat_target_g     ?? plan?.fat_target     ?? 1,
+          kcal:     kcalTarget,
+        };
+
+        // Hero value
+        const heroEl = document.getElementById('home-hero-val');
+        if (heroEl) heroEl.textContent = cfg.heroFn(totals||{}, tgts);
+
+        // Animated ring
+        const arc = document.getElementById('home-ring-arc');
+        if (arc) arc.setAttribute('stroke-dasharray', `${(pct/100)*circ} ${circ}`);
+        arc?.setAttribute('stroke', phase==='cut' ? '#EF4444' : 'var(--accent)');
+
+        // Animated counter for remaining kcal
+        const remEl = document.getElementById('home-kcal-rem');
+        animateNum(remEl, Math.max(0, rem));
+
+        // Macro bars + animated text
+        const bars = [
+          { bar:'home-p-bar', txt:'home-p-txt', val:totals?.proteinG||0, tgt:tgts.proteinG, color:'var(--accent)' },
+          { bar:'home-c-bar', txt:'home-c-txt', val:totals?.carbsG||0,   tgt:tgts.carbsG,   color:'#3B82F6' },
+          { bar:'home-f-bar', txt:'home-f-txt', val:totals?.fatG||0,     tgt:tgts.fatG,     color:'#F59E0B' },
+        ];
+        bars.forEach(b => {
+          const barEl = document.getElementById(b.bar);
+          const txtEl = document.getElementById(b.txt);
+          if (barEl) barEl.style.width = Math.min(100, (b.val/b.tgt)*100) + '%';
+          if (txtEl) txtEl.textContent = `${Math.round(b.val)}/${Math.round(b.tgt)}g`;
+        });
+
+        // Quick-action subtitles
+        const mealsSub = document.getElementById('home-meals-sub');
+        if (mealsSub) {
+          const mealCount = (await ApexNutrition.MealPlan.getOrCreateToday()).slots
+            ?.filter(s => s.meal_items?.length > 0).length || 0;
+          mealsSub.textContent = `${mealCount} meal${mealCount===1?'':'s'} logged`;
+        }
+      } catch(e) { console.warn('home nutrition:', e); }
+    }
+
+    // ── Diary date navigation ──────────────────────────────────
+    const DIARY = { date: new Date() };
+
+    function changeDate(delta) {
+      DIARY.date.setDate(DIARY.date.getDate() + delta);
+      updateDiaryDateHeader();
+      APP.loadedTabs.delete('diary');
+      loadNutritionTab();
+    }
+
+    function updateDiaryDateHeader() {
+      const now   = new Date();
+      const isToday = DIARY.date.toDateString() === now.toDateString();
+      const isYest  = new Date(now - 86400000).toDateString() === DIARY.date.toDateString();
+      const label   = isToday ? 'Today' : isYest ? 'Yesterday'
+        : DIARY.date.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+      const btn = document.getElementById('diary-date-btn');
+      if (btn) btn.textContent = label;
+      // Disable next arrow if today
+      const nextBtn = document.getElementById('diary-next-btn');
+      if (nextBtn) nextBtn.style.opacity = isToday ? '.3' : '1';
+      if (nextBtn) nextBtn.style.pointerEvents = isToday ? 'none' : 'auto';
+    }
+
+    function openDatePicker() {
+      const inp = document.getElementById('diary-date-input');
+      inp.value = DIARY.date.toISOString().slice(0,10);
+      inp.showPicker ? inp.showPicker() : inp.click();
+    }
+
+    function onDatePickerChange() {
+      const val = document.getElementById('diary-date-input').value;
+      if (!val) return;
+      DIARY.date = new Date(val + 'T12:00:00');
+      updateDiaryDateHeader();
+      APP.loadedTabs.delete('diary');
+      loadNutritionTab();
+    }
+
+    function updateCalorieBanner(totals, plan) {
+      const goal = APP.profile?.calorie_target || plan?.kcal_target || 0;
+      const food = totals?.kcal || 0;
+      const ex   = 0;
+      const rem  = goal - food + ex;
+
+      animateNum(document.getElementById('cal-goal'),      goal,     320, v=>Math.round(v).toLocaleString());
+      animateNum(document.getElementById('cal-food'),      food,     320, v=>Math.round(v).toLocaleString());
+      animateNum(document.getElementById('cal-exercise'),  ex,       320, v=>Math.round(v).toLocaleString());
+
+      const remEl = document.getElementById('cal-remaining');
+      if (remEl) {
+        animateNum(remEl, Math.abs(rem), 380, v => (rem<0?'-':'') + Math.round(v).toLocaleString());
+        setTimeout(() => { remEl.style.color = rem < 0 ? 'var(--danger)' : 'var(--accent)'; }, 10);
+      }
+    }
+
+    async function loadNutritionTab() {
+      const { plan, slots, totals, error } = await ApexNutrition.MealPlan.getOrCreateToday();
+      if (error) { showToast('Failed to load meal plan', 'error'); return; }
+
+      APP.mealPlanId = plan.id;
+      // Always prefer APP.profile targets — they reflect the current phase.
+      // plan.*_target values are snapshots from when the plan was created and
+      // may be stale if the user just changed phase.
+      const targets = {
+        proteinG: APP.profile.protein_target_g ?? plan.protein_target ?? 0,
+        carbsG:   APP.profile.carb_target_g    ?? plan.carb_target    ?? 0,
+        fatG:     APP.profile.fat_target_g     ?? plan.fat_target     ?? 0,
+        kcal:     APP.profile.calorie_target   ?? plan.kcal_target    ?? 0,
+      };
+
+      updateMacroBars(totals, targets);
+      updateCalorieBanner(totals, plan);
+      updateDiaryDateHeader();
+      renderMealSlotCards(slots);
+      requestAnimationFrame(animateMealCards);
+
+      // Render micronutrient section
+      const micros = calculateMicros(slots);
+      renderMicroSection(micros, APP.profile);
+      APP.allFoods = await ApexNutrition.FoodArchive.getAll();
+      // Pre-warm recent foods cache so picker opens instantly
+      loadRecentFoods().then(foods => { APP.recentFoodsCache = foods; });
+
+      // Macro-based food suggestions (isolated — never crashes diary load)
+      try { renderMacroSuggestions(totals, targets, slots); }
+      catch(e) { console.warn('[Apex] suggestions:', e); }
+    }
+
+    function updateMacroBars(totals, targets) {
+      const pct  = ApexNutrition.MacroAccumulator.progress(totals, targets);
+      const over = ApexNutrition.MacroAccumulator.isOverTarget(totals, targets);
+      setBar('protein', totals.proteinG, targets.proteinG, pct.proteinPct, over.protein);
+      setBar('carbs',   totals.carbsG,   targets.carbsG,   pct.carbsPct,   over.carbs);
+      setBar('fat',     totals.fatG,     targets.fatG,     pct.fatPct,     over.fat);
+      document.getElementById('nutr-kcal-summary').textContent =
+        `${Math.round(totals.kcal).toLocaleString()} / ${targets.kcal.toLocaleString()} kcal`;
+    }
+
+    function setBar(macro, val, target, pct, isOver) {
+      const bar = document.getElementById(`bar-${macro}`);
+      const valEl = document.getElementById(`val-${macro}`);
+      if (bar) { bar.style.width = pct + '%'; bar.classList.toggle('over', isOver); }
+      animateNum(valEl, val, 360, v => ApexNutrition.MealPlanUtils.formatMacro(v));
+      const tgtEl = document.getElementById(`tgt-${macro}`);
+      if (tgtEl) tgtEl.textContent = target ?? '---';
+    }
+
+    // ── Meal slot cards (collapsible) ───────────────────────
+    function renderMealSlotCards(slots) {
+      const list = document.getElementById('meal-slots-list');
+      list.innerHTML = '';
+      slots.forEach(slot => {
+        const items    = slot.meal_items ?? [];
+        const totals   = ApexNutrition.MacroAccumulator.fromItems(items);
+        const hasItems = items.length > 0;
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.cssText = 'margin-bottom:10px;padding:0;overflow:hidden';
+
+        // ── Header (tap to collapse/expand) ─────────────────
+        const header = document.createElement('div');
+        header.id    = `hdr-${slot.id}`;
+        header.style.cssText =
+          'display:flex;align-items:center;gap:10px;padding:12px 14px;' +
+          'cursor:pointer;user-select:none;-webkit-user-select:none;' +
+          'border-bottom:' + (hasItems ? '0.5px solid var(--border)' : 'none');
+        header.onclick = () => toggleMealCard(slot.id);
+
+        header.innerHTML = `
+          <span id="chev-${slot.id}"
+                style="font-size:0.75rem;color:${hasItems ? 'var(--accent)' : 'var(--border)'};
+                       transition:transform 0.2s;flex-shrink:0;display:inline-block">
+            &#x25BC;
+          </span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:0.875rem;font-weight:600">${slot.label}</div>
+            <div id="summary-${slot.id}"
+                 style="font-size:0.75rem;color:var(--text-3);margin-top:1px">
+              ${totals.kcal > 0
+                ? `${Math.round(totals.kcal)} kcal &nbsp;·&nbsp;`
+                + `P:${ApexNutrition.MealPlanUtils.formatMacro(totals.proteinG)}g `
+                + `C:${ApexNutrition.MealPlanUtils.formatMacro(totals.carbsG)}g `
+                + `F:${ApexNutrition.MealPlanUtils.formatMacro(totals.fatG)}g`
+                : ''}
+            </div>
+          </div>
+          <button class="meal-add-btn"
+                  onclick="event.stopPropagation();openFoodSearch('${slot.id}','${slot.label}')"
+                  aria-label="Add food to ${slot.label}">+</button>`;
+        card.appendChild(header);
+
+        // ── Items container ──────────────────────────────────
+        const body = document.createElement('div');
+        body.id = `body-${slot.id}`;
+        // Start collapsed if no items
+        if (!hasItems) body.style.display = 'none';
+
+        items.forEach(item => body.appendChild(buildItemRow(item, slot.id)));
+        card.appendChild(body);
+        list.appendChild(card);
+      });
+    }
+
+    function toggleMealCard(slotId) {
+      const body   = document.getElementById(`body-${slotId}`);
+      const chev   = document.getElementById(`chev-${slotId}`);
+      const hdr    = document.getElementById(`hdr-${slotId}`);
+      if (!body) return;
+      const open = body.style.display !== 'none';
+      body.style.display  = open ? 'none' : '';
+      if (chev) chev.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+      if (hdr)  hdr.style.borderBottom = (!open && body.children.length)
+        ? '0.5px solid var(--border)' : 'none';
+    }
+
+    function buildItemRow(item, slotId) {
+      const food   = item.foods;
+      const scaled = ApexNutrition.MealPlanUtils.scaleMacros(food, item.quantity_g);
+      const row    = document.createElement('div');
+      row.id = `item-${item.id}`;
+      row.style.cssText =
+        'display:flex;align-items:center;gap:10px;padding:10px 14px;' +
+        'border-bottom:0.5px solid var(--border)';
+      row.innerHTML = `
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.875rem;font-weight:500;
+                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${food?.name ?? 'Food'}
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-3);margin-top:2px">
+            P:${ApexNutrition.MealPlanUtils.formatMacro(scaled.proteinG)}g &nbsp;
+            C:${ApexNutrition.MealPlanUtils.formatMacro(scaled.carbsG)}g &nbsp;
+            F:${ApexNutrition.MealPlanUtils.formatMacro(scaled.fatG)}g &nbsp;&middot;&nbsp;
+            ${Math.round(scaled.kcal)} kcal
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <input type="number" value="${item.quantity_g}" min="1" max="2000" step="5"
+                 style="width:68px;padding:4px 8px;font-size:0.8125rem;
+                        border:0.5px solid var(--border);border-radius:var(--r-sm);
+                        text-align:center;background:var(--surface-alt)"
+                 onchange="updateItemQty('${item.id}','${slotId}',this.value)">
+          <span style="font-size:0.7rem;color:var(--text-3)">g</span>
+          <button onclick="removeItem('${item.id}','${slotId}')"
+                  style="width:26px;height:26px;border-radius:var(--r-sm);border:none;
+                         background:var(--danger-light);color:var(--danger);
+                         cursor:pointer;font-size:13px;display:flex;
+                         align-items:center;justify-content:center">
+            &times;
+          </button>
+        </div>`;
+      return row;
+    }
+
+    async function updateItemQty(itemId, slotId, qty) {
+      const g = parseFloat(qty);
+      if (!g || g < 1) return;
+      const { error } = await ApexNutrition.MealItems.updateQuantity(itemId, g, slotId);
+      if (error) { showToast(error.message, 'error'); return; }
+      APP.loadedTabs.delete('diary');
+      loadTab('diary');
+    }
+
+    // Pending deletes: itemId → { slotId, rowEl, timer }
+    const _pendingDeletes = {};
+
+    async function removeItem(itemId, slotId) {
+      const row = document.getElementById(`item-${itemId}`);
+      if (!row) return;
+
+      // If this item already has a pending delete, commit it immediately first
+      if (_pendingDeletes[itemId]) {
+        clearTimeout(_pendingDeletes[itemId].timer);
+        delete _pendingDeletes[itemId];
+      }
+
+      // Optimistically dim and disable the row
+      row.style.cssText += ';opacity:0.25;pointer-events:none;transition:opacity 0.2s';
+
+      // Schedule the actual DB delete after the undo window
+      _pendingDeletes[itemId] = {
+        slotId,
+        rowEl: row,
+        timer: setTimeout(async () => {
+          delete _pendingDeletes[itemId];
+          const { error } = await ApexNutrition.MealItems.remove(itemId, slotId);
+          if (error) {
+            showToast(error.message, 'error');
+            row.style.opacity = '1';
+            row.style.pointerEvents = '';
+          } else {
+            row.remove();
+            // Refresh macro summary without full reload
+            APP.loadedTabs.delete('diary');
+            loadTab('diary');
+          }
+        }, 4000),
+      };
+
+      showUndoToast(`Food removed`, () => undoRemoveItem(itemId));
+    }
+
+    function undoRemoveItem(itemId) {
+      const pending = _pendingDeletes[itemId];
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      delete _pendingDeletes[itemId];
+      pending.rowEl.style.opacity = '1';
+      pending.rowEl.style.pointerEvents = '';
+    }
+
+    function showUndoToast(message, onUndo) {
+      // Remove any existing undo toast
+      document.getElementById('undo-toast-el')?.remove();
+
+      const t = document.createElement('div');
+      t.id = 'undo-toast-el';
+      t.style.cssText = `
+        position:fixed;
+        bottom:calc(76px + env(safe-area-inset-bottom, 0px));
+        left:50%;transform:translateX(-50%);
+        background:#1E1E2E;color:#F1F1F3;
+        padding:11px 10px 11px 16px;
+        border-radius:var(--r-md);
+        display:flex;align-items:center;gap:14px;
+        font-size:0.875rem;font-family:var(--font);
+        box-shadow:0 4px 20px rgba(0,0,0,.35);
+        z-index:800;white-space:nowrap;
+        animation:toast-in .18s var(--ease);
+      `;
+      t.innerHTML = `
+        <span>${message}</span>
+        <button style="background:none;border:none;color:#818CF8;
+                       font-weight:700;font-size:0.875rem;
+                       cursor:pointer;padding:4px 6px;font-family:inherit">
+          Undo
+        </button>`;
+
+      t.querySelector('button').onclick = () => { onUndo(); t.remove(); };
+      document.body.appendChild(t);
+
+      // Auto-dismiss after 4 s (matches the delete timer)
+      setTimeout(() => t.remove(), 4000);
+    }
+
+
+    // ── Calculate micros from today's slots ─────────────────
+    function calculateMicros(slots) {
+      const m = { sodium:0, potassium:0, calcium:0, iron:0, vit_c:0, vit_d:0 };
+      (slots||[]).forEach(slot => {
+        (slot.meal_items||[]).forEach(item => {
+          const f = item.foods;
+          if (!f) return;
+          const r = (item.quantity_g || 0) / 100;
+          m.sodium    += (f.sodium_mg     || 0) * r;
+          m.potassium += (f.potassium_mg  || 0) * r;
+          m.calcium   += (f.calcium_mg    || 0) * r;
+          m.iron      += (f.iron_mg       || 0) * r;
+          m.vit_c     += (f.vitamin_c_mg  || 0) * r;
+          m.vit_d     += (f.vitamin_d_mcg || 0) * r;
+        });
+      });
+      return m;
+    }
+
+    // ── Render micronutrient section ─────────────────────────
+    function renderMicroSection(micros, profile) {
+      const content = document.getElementById('micro-content');
+      const badge   = document.getElementById('micro-summary-badge');
+      if (!content) return;
+
+      // Sex-adjusted iron target
+      const isMale = (profile?.sex || 'other') === 'male';
+      const rows = [
+        { label:'Sodium',     val:micros.sodium,    tgt:profile?.sodium_target_mg     || 2300, unit:'mg',  isMax:true,  color:'#6B7280' },
+        { label:'Potassium',  val:micros.potassium, tgt:profile?.potassium_target_mg  || 4700, unit:'mg',  isMax:false, color:'#10B981' },
+        { label:'Calcium',    val:micros.calcium,   tgt:profile?.calcium_target_mg    || 1000, unit:'mg',  isMax:false, color:'#3B82F6' },
+        { label:'Iron',       val:micros.iron,      tgt:profile?.iron_target_mg       || (isMale?8:18), unit:'mg', isMax:false, color:'#EF4444' },
+        { label:'Vitamin C',  val:micros.vit_c,     tgt:profile?.vitamin_c_target_mg  || (isMale?90:75), unit:'mg', isMax:false, color:'#F59E0B' },
+        { label:'Vitamin D',  val:micros.vit_d,     tgt:profile?.vitamin_d_target_mcg || 20, unit:'mcg',  isMax:false, color:'#8B5CF6' },
+      ];
+
+      // Count how many are on track (>= 80%)
+      const onTrack = rows.filter(r => {
+        const pct = r.val / r.tgt;
+        return r.isMax ? pct <= 1 : pct >= 0.8;
+      }).length;
+      if (badge) badge.textContent = `${onTrack}/${rows.length} on track`;
+
+      content.innerHTML = rows.map(r => {
+        const pct    = Math.min(110, (r.val / r.tgt) * 100);
+        const isOver = r.isMax && pct > 100;
+        const isLow  = !r.isMax && pct < 50;
+        const barPct = Math.min(100, pct);
+        const dispColor = isOver ? '#EF4444' : isLow ? '#F59E0B' : r.color;
+        const valStr = r.val < 10 ? r.val.toFixed(1) : Math.round(r.val);
+        const tgtStr = r.tgt < 10 ? r.tgt.toFixed(0) : r.tgt.toLocaleString();
+        const flag   = isOver ? ' &#x26A0;&#xFE0F;' : '';
+        return `
+          <div style="margin-bottom:0.75rem">
+            <div style="display:flex;justify-content:space-between;
+                        font-size:0.8125rem;margin-bottom:4px">
+              <span style="color:var(--text-2);font-weight:500">${r.label}</span>
+              <span style="color:${dispColor};font-weight:600">
+                ${valStr} / ${tgtStr} ${r.unit}${flag}
+              </span>
+            </div>
+            <div class="micro-bar-track">
+              <div class="micro-bar-fill"
+                   style="width:${barPct}%;background:${dispColor}"></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // ── Staggered meal card animation helper ─────────────────
+    // ── Macro-based food suggestions ─────────────────────────
+    function renderMacroSuggestions(totals, targets, slots) {
+      const el = document.getElementById('macro-suggestions');
+      if (!el) return;
+
+      const remP = Math.max(0, (targets.proteinG || 0) - ((totals && totals.proteinG) || 0));
+      const remC = Math.max(0, (targets.carbsG   || 0) - ((totals && totals.carbsG)   || 0));
+      const remF = Math.max(0, (targets.fatG     || 0) - ((totals && totals.fatG)     || 0));
+      const remK = Math.max(0, (targets.kcal     || 0) - ((totals && totals.kcal)     || 0));
+
+      // Hide once within 10% of calorie target
+      const pctDone = targets.kcal > 0 ? ((totals && totals.kcal) || 0) / targets.kcal : 0;
+      if (pctDone >= 0.90) { el.innerHTML = ''; return; }
+
+      const pctP = targets.proteinG > 0 ? remP / targets.proteinG : 0;
+      const pctC = targets.carbsG   > 0 ? remC / targets.carbsG   : 0;
+      const pctF = targets.fatG     > 0 ? remF / targets.fatG     : 0;
+      const primary = pctP >= pctC && pctP >= pctF ? 'protein'
+                    : pctC >= pctF                  ? 'carbs' : 'fat';
+
+      const pool = (APP.allFoods || []).filter(f =>
+        f.kcal > 0 && f.protein_g != null && f.carbs_g != null && f.fat_g != null
+      );
+      if (!pool.length) { el.innerHTML = ''; return; }
+
+      const scored = pool.map(f => {
+        const pScore = primary === 'protein' ? f.protein_g / (remP || 1)
+                     : primary === 'carbs'   ? f.carbs_g   / (remC || 1)
+                     :                         f.fat_g     / (remF || 1);
+        const kcalFit = remK > 0 ? Math.min(1, f.kcal / remK) : 0.5;
+        return { ...f, _score: pScore * 0.65 + kcalFit * 0.35 };
+      });
+      scored.sort((a, b) => b._score - a._score);
+      const picks = scored.slice(0, 5);
+      if (!picks.length) { el.innerHTML = ''; return; }
+
+      // Store picks and target slot so onclick can reference by safe integer index
+      APP._suggestions     = picks;
+      APP._suggestionSlot  = slots[slots.length - 1] || null;
+
+      const primaryLabel = primary === 'protein' ? `${Math.round(remP)}g protein`
+                         : primary === 'carbs'   ? `${Math.round(remC)}g carbs`
+                         :                         `${Math.round(remF)}g fat`;
+
+      el.innerHTML = `
+        <div style="margin-top:1rem">
+          <div style="font-size:0.75rem;font-weight:600;color:var(--text-3);
+                      letter-spacing:.08em;text-transform:uppercase;margin-bottom:0.625rem">
+            Suggested &middot; still need ${primaryLabel}
+          </div>
+          <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;
+                      scrollbar-width:none;-webkit-overflow-scrolling:touch">
+            ${picks.map((f, i) => `
+              <div onclick="openFoodDetailFromSuggestion(${i})"
+                   style="flex:0 0 130px;background:var(--surface);border:1px solid var(--border);
+                          border-radius:var(--r-md);padding:10px 12px;cursor:pointer;
+                          box-shadow:var(--shadow-sm)">
+                <div style="font-size:0.8125rem;font-weight:600;line-height:1.3;margin-bottom:4px;
+                             display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+                             overflow:hidden">${f.name}</div>
+                ${f.brand ? `<div style="font-size:0.6875rem;color:var(--text-3);margin-bottom:5px;
+                               white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.brand}</div>` : ''}
+                <div style="font-size:0.75rem;font-weight:700;color:var(--accent)">
+                  ${Math.round(f.kcal)} kcal
+                </div>
+                <div style="font-size:0.6875rem;color:var(--text-3);margin-top:2px">
+                  P:${Math.round(f.protein_g)}g C:${Math.round(f.carbs_g)}g F:${Math.round(f.fat_g)}g
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+
+    function openFoodDetailFromSuggestion(index) {
+      const food = (APP._suggestions || [])[index];
+      const slot = APP._suggestionSlot;
+      if (!food || !slot) { showToast('Tap + on a meal to add food', 'info'); return; }
+      PICKER.slotId   = slot.id;
+      PICKER.slotName = slot.label || 'Meal';
+      openFoodSearch(slot.id, slot.label || 'Meal');
+      setTimeout(() => {
+        const key = String(food.id ?? food._key ?? food.name);
+        PICKER.cache.set(key, food);
+        openFoodDetail(key);
+      }, 80);
+    }
+
+    function animateMealCards() {
+      document.querySelectorAll('#meal-slots-list .card').forEach((el, i) => {
+        el.classList.remove('meal-card-anim');
+        void el.offsetWidth; // reflow
+        el.style.animationDelay = `${i * 55}ms`;
+        el.classList.add('meal-card-anim');
+      });
+    }
+
+    // ── Food picker modal ───────────────────────────────────
+    // ── Food flow — page 1: Search ──────────────────────────────
+
+    function openFoodPicker(slotId, slotName) {
+      // Redirect old callers to new page flow
+      openFoodSearch(slotId, slotName);
+    }
+
+    // ── Custom food creator ───────────────────────────────────
+    function openCreateFood() {
+      // Clear all fields
+      ['cf-name','cf-brand','cf-kcal','cf-protein','cf-carbs',
+       'cf-fat','cf-fiber','cf-sugar'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('cf-serving').value = '100';
+      document.getElementById('create-food-page').classList.add('fp-open');
+      setTimeout(() => document.getElementById('cf-name').focus(), 320);
+    }
+
+    function closeCreateFood() {
+      document.getElementById('create-food-page').classList.remove('fp-open');
+      preventGhostTaps();
+    }
+
+    async function submitCreateFood(andLog = false) {
+      const name    = document.getElementById('cf-name').value.trim();
+      const brand   = document.getElementById('cf-brand').value.trim();
+      const serving = parseFloat(document.getElementById('cf-serving').value) || 100;
+      const kcal    = parseFloat(document.getElementById('cf-kcal').value);
+      const protein = parseFloat(document.getElementById('cf-protein').value);
+      const carbs   = parseFloat(document.getElementById('cf-carbs').value);
+      const fat     = parseFloat(document.getElementById('cf-fat').value);
+      const fiber   = parseFloat(document.getElementById('cf-fiber').value) || 0;
+      const sugar   = parseFloat(document.getElementById('cf-sugar').value) || 0;
+
+      if (!name)                       { showToast('Food name is required', 'error'); return; }
+      if (isNaN(kcal) || kcal < 0)    { showToast('Enter calories', 'error'); return; }
+      if (isNaN(protein) || protein < 0) { showToast('Enter protein', 'error'); return; }
+      if (isNaN(carbs)   || carbs < 0)   { showToast('Enter carbs', 'error'); return; }
+      if (isNaN(fat)     || fat < 0)     { showToast('Enter fat', 'error'); return; }
+
+      // Scale all macros to per-100g (DB stores per 100g)
+      const scale   = 100 / serving;
+      const macro_class = protein >= carbs && protein >= fat ? 'protein'
+                        : carbs >= fat                       ? 'carb' : 'fat';
+
+      const btn = document.getElementById(andLog ? 'cf-save-log-btn' : 'cf-save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      const user = await ApexCore.Auth.getUser();
+      const { data: food, error } = await ApexCore.getClient()
+        .from('foods')
+        .insert({
+          name,
+          brand:          brand || null,
+          serving_size_g: serving,
+          kcal:           Math.round(kcal    * scale * 10) / 10,
+          protein_g:      Math.round(protein * scale * 10) / 10,
+          carbs_g:        Math.round(carbs   * scale * 10) / 10,
+          fat_g:          Math.round(fat     * scale * 10) / 10,
+          fiber_g:        Math.round(fiber   * scale * 10) / 10,
+          sugar_g:        Math.round(sugar   * scale * 10) / 10,
+          macro_class,
+          is_whole_food:  false,
+          tags:           ['custom'],
+          created_by:     user.id,
+        })
+        .select()
+        .single();
+
+      btn.disabled = false;
+      btn.textContent = andLog ? 'Save & Log this food' : 'Save to My Foods only';
+
+      if (error) { showToast(error.message, 'error'); return; }
+
+      // Add to local cache
+      APP.allFoods = [...(APP.allFoods || []), food];
+      APP.recentFoodsCache = null;
+      PICKER.cache.set(String(food.id), food);
+
+      showToast(`${name} saved!`, 'success');
+      closeCreateFood();
+
+      if (andLog) {
+        // Open food detail so the user can set quantity and log immediately
+        setTimeout(() => openFoodDetail(String(food.id)), 350);
+      } else {
+        // Switch to My Foods tab so they can see it
+        const myFoodsBtn = document.querySelector('#fsp-tabs .fp-tab[data-src="library"]');
+        if (myFoodsBtn) setFspSrc(myFoodsBtn);
+      }
+    }
+
+    function openFoodSearch(slotId, slotName) {
+      PICKER.slotId       = slotId;
+      PICKER.slotName     = slotName;
+      PICKER.selectedFood = null;
+      PICKER.source       = 'all';
+
+      // Safely warm the cache — allFoods may not be loaded yet if user
+      // came from the home tab without visiting the diary first
+      (APP.allFoods || []).forEach(f => PICKER.cache.set(String(f.id), f));
+
+      document.getElementById('fsp-meal-name').textContent = slotName || 'Meal';
+      document.getElementById('fsp-query').value = '';
+      document.getElementById('fsp-clear').classList.add('fp-hidden');
+      document.querySelectorAll('#fsp-tabs .fp-tab')
+        .forEach(b => b.classList.toggle('active', b.dataset.src === 'all'));
+
+      document.getElementById('food-search-page').classList.add('fp-open');
+
+      // Show library foods immediately so the list is never blank on open.
+      // If allFoods isn't loaded yet, load it now then render.
+      const showLibrary = () => {
+        const foods = APP.allFoods || [];
+        if (foods.length) {
+          renderFspList(foods.slice(0, 30));
+        } else {
+          document.getElementById('fsp-list').innerHTML =
+            '<div class="fp-empty"><div style="font-size:2rem;margin-bottom:8px">&#x1F30E;</div>' +
+            'Type to search 3,000,000+ foods<br>' +
+            '<span style="font-size:0.8125rem;opacity:.7">Brands, packaged foods, USDA database</span></div>';
+        }
+      };
+
+      if (!APP.allFoods || !APP.allFoods.length) {
+        ApexNutrition.FoodArchive.getAll().then(foods => {
+          APP.allFoods = foods;
+          (foods || []).forEach(f => PICKER.cache.set(String(f.id), f));
+          showLibrary();
+        });
+      } else {
+        showLibrary();
+      }
+
+      setTimeout(() => document.getElementById('fsp-query').focus(), 320);
+    }
+
+    // Briefly block all touches after a page slide-out to prevent
+    // ghost taps landing on the newly-revealed content underneath.
+    function preventGhostTaps(ms = 380) {
+      document.body.style.pointerEvents = 'none';
+      setTimeout(() => { document.body.style.pointerEvents = ''; }, ms);
+    }
+
+    function closeFoodSearch() {
+      document.getElementById('food-search-page').classList.remove('fp-open');
+      preventGhostTaps();
+      // Defer diary refresh until AFTER the slide animation (320ms) completes.
+      // Firing it immediately makes the network request compete with the animation,
+      // causing both to feel sluggish.
+      setTimeout(() => {
+        APP.loadedTabs.delete('diary');
+        loadTab('diary');
+      }, 340);
+    }
+
+    function setFspSrc(btn) {
+      PICKER.source = btn.dataset.src;
+      document.querySelectorAll('#fsp-tabs .fp-tab')
+        .forEach(b => b.classList.toggle('active', b === btn));
+      fspLoad();
+    }
+
+    function fspOnInput() {
+      const q = document.getElementById('fsp-query').value.trim();
+      document.getElementById('fsp-clear').classList.toggle('fp-hidden', !q);
+      fspLoad();
+    }
+
+    function fspClear() {
+      document.getElementById('fsp-query').value = '';
+      document.getElementById('fsp-clear').classList.add('fp-hidden');
+      fspLoad();
+      document.getElementById('fsp-query').focus();
+    }
+
+    async function fspLoad() {
+      const q    = document.getElementById('fsp-query').value.trim();
+      const list = document.getElementById('fsp-list');
+
+      if (PICKER.source === 'all') {
+        if (q.length < 2) {
+          list.innerHTML =
+            '<div class="fp-empty"><div style="font-size:2rem;margin-bottom:8px">&#x1F30E;</div>' +
+            'Type to search 3,000,000+ foods<br>' +
+            '<span style="font-size:0.8125rem;opacity:.7">Brands, packaged foods, restaurant items</span></div>';
+          return;
+        }
+        clearTimeout(XSEARCH.timer);
+        list.innerHTML = '<div class="fp-empty">Searching…</div>';
+        XSEARCH.timer = setTimeout(() => fspSearchExternal(q), 200);
+        return;
+      }
+
+      list.innerHTML = '<div class="fp-empty">Loading…</div>';
+      let foods = [];
+      if (PICKER.source === 'recent')   foods = await loadRecentFoods();
+      if (PICKER.source === 'frequent') foods = await loadFrequentFoods();
+      if (PICKER.source === 'library') {
+        const u = await ApexCore.Auth.getUser();
+        foods = (APP.allFoods || []).filter(f => f.created_by && f.created_by === u?.id);
+      }
+      if (q) foods = ApexNutrition.FoodArchive.search(foods, q);
+      renderFspList(foods.length ? foods : (PICKER.source === 'recent' ? APP.allFoods.slice(0,20) : []));
+    }
+
+    // ── Relevance scorer ────────────────────────────────────
+    function scoreRelevance(food, query) {
+      const q     = query.toLowerCase().trim();
+      const name  = (food.name  || '').toLowerCase();
+      const brand = (food.brand || '').toLowerCase();
+      const qWords = q.split(/\s+/).filter(Boolean);
+
+      // Exact full name match
+      if (name === q)                         return 100;
+      // Name starts with full query
+      if (name.startsWith(q))                 return 95;
+      // Every query word appears at the start of a word in the name
+      const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (qWords.every(w => new RegExp(`\\b${esc(w)}`).test(name))) return 85;
+      // Brand exact match (e.g. typing "Kroger")
+      if (brand === q)                        return 80;
+      // Brand starts with query
+      if (brand.startsWith(q))                return 75;
+      // Name contains full query as substring
+      if (name.includes(q))                   return 65;
+      // Brand contains query
+      if (brand.includes(q))                  return 55;
+      // All query words appear somewhere in name
+      if (qWords.every(w => name.includes(w))) return 45;
+      // Most query words appear
+      const hits = qWords.filter(w => name.includes(w) || brand.includes(w)).length;
+      if (hits > 0) return 10 + Math.round((hits / qWords.length) * 25);
+      return 5;
+    }
+
+    async function fspSearchExternal(query) {
+      if (XSEARCH.ctrl) XSEARCH.ctrl.abort();
+      XSEARCH.ctrl = new AbortController();
+      const sig = XSEARCH.ctrl.signal;
+      const results = [];
+
+      try {
+        const r = await fetch(
+          'https://world.openfoodfacts.org/cgi/search.pl?' +
+          'search_terms=' + encodeURIComponent(query) +
+          '&search_simple=1&action=process&json=1&page_size=20' +
+          '&fields=product_name,product_name_en,brands,nutriments',
+          { signal: sig }
+        );
+        const d = await r.json();
+        (d.products || []).map(normalizeOFF).filter(f => f && f.kcal > 0 && f.name && f.name !== 'Unknown')
+          .forEach(f => results.push(f));
+      } catch(e) { if (e.name !== 'AbortError') console.warn('OFF:', e.message); }
+
+      if (typeof FDC_KEY !== 'undefined' && FDC_KEY) {
+        try {
+          const r = await fetch(
+            'https://api.nal.usda.gov/fdc/v1/foods/search?' +
+            'query=' + encodeURIComponent(query) +
+            '&dataType=Branded,Foundation,SR%20Legacy&pageSize=20' +
+            '&api_key=' + FDC_KEY,
+            { signal: sig }
+          );
+          const d = await r.json();
+          (d.foods || []).map(normalizeFDC).filter(f => f && f.kcal > 0)
+            .forEach(f => results.push(f));
+        } catch(e) { if (e.name !== 'AbortError') console.warn('USDA:', e.message); }
+      }
+
+      // Sort by relevance to the query before rendering
+      results.sort((a, b) => scoreRelevance(b, query) - scoreRelevance(a, query));
+      renderFspList(results.slice(0, 40));
+    }
+
+    function renderFspList(foods) {
+      const list = document.getElementById('fsp-list');
+      if (!foods.length) {
+        list.innerHTML = '<div class="fp-empty">No foods found</div>';
+        return;
+      }
+      const badge = s =>
+        s === 'usda'   ? '<span class="fp-badge fp-badge-usda">USDA</span>'  :
+        s === 'brands' ? '<span class="fp-badge fp-badge-brand">Brand</span>' : '';
+
+      list.innerHTML = foods.map(f => {
+        const key = String(f._key || f.id || Math.random().toString(36).slice(2));
+        PICKER.cache.set(key, f);
+        const rHint = f._recentQty
+          ? `<span style="color:var(--accent);font-size:0.7rem"> · last: ${f._recentQty}g</span>` : '';
+        return `
+          <div class="fp-row" onclick="openFoodDetail('${key.replace(/'/g,"\'")}')">
+            <div class="fp-row-info">
+              <div class="fp-row-name">${f.name}${badge(f.source)}${rHint}</div>
+              ${f.brand ? `<div class="fp-row-brand">${f.brand}</div>` : ''}
+              <div class="fp-row-macros">
+                ${Math.round(f.kcal)} kcal &nbsp;·&nbsp;
+                P:${f.protein_g}g &nbsp;C:${f.carbs_g}g &nbsp;F:${f.fat_g}g
+              </div>
+            </div>
+            <span class="fp-row-chevron">&#x203A;</span>
+          </div>`;
+      }).join('');
+    }
+
+    // ── Food flow — page 2: Detail ───────────────────────────────
+
+    function openFoodDetail(key) {
+      const food = PICKER.cache.get(key)
+                || PICKER.cache.get(Number(key))
+                || APP.allFoods.find(f => String(f.id) === key);
+      if (!food) return;
+      PICKER.selectedFood = food;
+
+      document.getElementById('fdp-name').textContent  = food.name;
+      document.getElementById('fdp-brand').textContent = food.brand || '';
+      document.getElementById('fdp-log-btn').textContent =
+        `Add to ${PICKER.slotName || 'Meal'}`;
+
+      // Pre-fill qty from last log
+      const recentG = food._recentQty || 100;
+      document.getElementById('fdp-qty').value = fromGrams(recentG, PICKER.unit);
+
+      // Sync unit buttons
+      document.querySelectorAll('#fdp-unit-row .unit-btn')
+        .forEach(b => b.classList.toggle('active', b.dataset.unit === (PICKER.unit || 'g')));
+      document.getElementById('fdp-unit-lbl').textContent = PICKER.unit || 'g';
+
+      fdpRenderPresets();
+      fdpPreview();
+
+      document.getElementById('food-detail-page').classList.add('fp-open');
+    }
+
+    function closeFoodDetail() {
+      document.getElementById('food-detail-page').classList.remove('fp-open');
+      PICKER.selectedFood = null;
+      preventGhostTaps();
+    }
+
+    function fdpSetUnit(unit) {
+      const grams = toGrams(parseFloat(document.getElementById('fdp-qty').value) || 0, PICKER.unit);
+      PICKER.unit = unit;
+      document.querySelectorAll('#fdp-unit-row .unit-btn')
+        .forEach(b => b.classList.toggle('active', b.dataset.unit === unit));
+      document.getElementById('fdp-unit-lbl').textContent = unit;
+      const cfg = UNIT_CONFIGS[unit];
+      const inp = document.getElementById('fdp-qty');
+      inp.step  = cfg.step;
+      inp.value = fromGrams(grams, unit);
+      fdpRenderPresets();
+      fdpPreview();
+    }
+
+    function fdpRenderPresets() {
+      const cfg = UNIT_CONFIGS[PICKER.unit] ?? UNIT_CONFIGS.g;
+      document.getElementById('fdp-presets').innerHTML = cfg.presets.map(v =>
+        `<button class="gram-preset" onclick="fdpSetQty(${v})">${v} ${cfg.label}</button>`
+      ).join('');
+    }
+
+    function fdpSetQty(v) {
+      document.getElementById('fdp-qty').value = v;
+      fdpPreview();
+    }
+
+    function fdpAdj(dir) {
+      const cfg = UNIT_CONFIGS[PICKER.unit] ?? UNIT_CONFIGS.g;
+      const inp = document.getElementById('fdp-qty');
+      inp.value = Math.max(0, parseFloat(((parseFloat(inp.value)||0) + cfg.step * dir).toFixed(3)));
+      fdpPreview();
+    }
+
+    function fdpPreview() {
+      const food = PICKER.selectedFood;
+      if (!food) return;
+      const g = toGrams(parseFloat(document.getElementById('fdp-qty').value) || 0, PICKER.unit);
+      const r = g / 100;
+      const p = food.protein_g * r, c = food.carbs_g * r,
+            fa = food.fat_g * r,   k = food.kcal    * r;
+      const tot = p*4 + c*4 + fa*9 || 1;
+      document.getElementById('fdp-kcal').textContent = Math.round(k) + ' kcal';
+      document.getElementById('fdp-p').textContent = p.toFixed(1) + 'g';
+      document.getElementById('fdp-c').textContent = c.toFixed(1) + 'g';
+      document.getElementById('fdp-f').textContent = fa.toFixed(1) + 'g';
+      document.getElementById('fdp-bar-p').style.width = (p*4/tot*100).toFixed(1) + '%';
+      document.getElementById('fdp-bar-c').style.width = (c*4/tot*100).toFixed(1) + '%';
+      document.getElementById('fdp-bar-f').style.width = (fa*9/tot*100).toFixed(1) + '%';
+    }
+
+    async function logSelectedFood() {
+      const food   = PICKER.selectedFood;
+      const rawAmt = parseFloat(document.getElementById('fdp-qty').value) || 0;
+      const g      = Math.round(toGrams(rawAmt, PICKER.unit));
+      if (!food || g < 1) { showToast('Enter a valid amount', 'error'); return; }
+
+      const slotId   = PICKER.slotId;
+      const slotName = PICKER.slotName;
+      const foodSnap = { ...food };
+      let   foodId   = food.id;
+
+      // Close detail immediately — feels instant
+      closeFoodDetail();
+      APP.recentFoodsCache = null;
+
+      // ── Resolve external food id if needed ───────────────────
+      if (!foodId) {
+        const { data, error: saveErr } = await saveExternalFood(foodSnap);
+        if (saveErr && saveErr.code !== '23505') {
+          showToast('Could not save food: ' + saveErr.message, 'error'); return;
+        }
+        if (data) {
+          foodId = data.id;
+          APP.allFoods.push({ ...foodSnap, id: data.id });
+        } else {
+          const user = await ApexCore.Auth.getUser();
+          const { data: ex } = await ApexCore.getClient()
+            .from('foods').select('id')
+            .eq('name', foodSnap.name).eq('created_by', user.id).maybeSingle();
+          if (ex) foodId = ex.id;
+        }
+        if (!foodId) { showToast('Could not resolve food', 'error'); return; }
+      }
+
+      // ── Write to DB — wait for this before marking success ───
+      const { error } = await ApexNutrition.MealItems.add(slotId, foodId, g);
+      if (error) {
+        showToast(error.message, 'error');
+        return;
+      }
+
+      // Confirmed saved — show toast and mark diary stale
+      showToast(`${foodSnap.name} added`, 'success');
+      APP.loadedTabs.delete('diary');
+
+      // If food search is already closed, refresh diary immediately;
+      // otherwise closeFoodSearch() will handle it via its timer.
+      if (!document.getElementById('food-search-page').classList.contains('fp-open')) {
+        loadTab('diary');
+      }
+    }
+
+    function closeFoodPicker() {
+      closeFoodSearch(); // legacy alias
+    }
+
+    // ── Barcode scanner ─────────────────────────────────────────
+    async function startBarcodeScanner() {
+      if (!('BarcodeDetector' in window)) {
+        showToast('Barcode scanning requires Chrome or Edge on Android', 'info');
+        return;
+      }
+      // Show camera stream for scanning
+      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e'] });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
+      } catch(e) { showToast('Camera access denied', 'error'); return; }
+
+      const video = document.createElement('video');
+      video.srcObject = stream; video.play();
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px';
+      overlay.innerHTML = '<div style="font-size:1rem;color:#fff;font-weight:500">Point camera at barcode</div><button style="padding:10px 24px;background:var(--danger);color:#fff;border:none;border-radius:8px;font-size:1rem;cursor:pointer">Cancel</button>';
+      overlay.appendChild(video);
+      video.style.cssText = 'width:min(320px,90vw);border-radius:12px;order:-1';
+      overlay.querySelector('button').onclick = () => { stream.getTracks().forEach(t=>t.stop()); overlay.remove(); };
+      document.body.appendChild(overlay);
+
+      const scanLoop = async () => {
+        if (!document.body.contains(overlay)) return;
+        try {
+          const codes = await detector.detect(video);
+          if (codes.length) {
+            const barcode = codes[0].rawValue;
+            stream.getTracks().forEach(t => t.stop());
+            overlay.remove();
+            // Look up on Open Food Facts
+            const r = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+            const d = await r.json();
+            if (d.status === 1 && d.product?.nutriments?.['energy-kcal_100g'] > 0) {
+              const food = normalizeOFF(d.product);
+              if (food) {
+                PICKER.cache.set(food._key, food);
+                openFoodDetail(food._key);
+                return;
+              }
+            }
+            showToast('Barcode not found in database', 'error');
+            return;
+          }
+        } catch(e) {}
+        requestAnimationFrame(scanLoop);
+      };
+      video.onloadedmetadata = () => requestAnimationFrame(scanLoop);
+    }
+
+    async function loadRecentFoods() {
+      if (APP.recentFoodsCache) return APP.recentFoodsCache;
+      if (PICKER._recentCache) return PICKER._recentCache;
+      const { data } = await ApexCore.getClient()
+        .from('meal_items')
+        .select('food_id, quantity_g, created_at, foods(*)')
+        .order('created_at', { ascending: false })
+        .limit(150);
+      const seen = new Set();
+      const foods = (data || [])
+        .filter(r => r.foods && !seen.has(r.food_id) && seen.add(r.food_id))
+        .slice(0, 30)
+        .map(r => ({ ...r.foods, _recentQty: r.quantity_g }));
+      // Cache for this picker session
+      PICKER._recentCache = foods;
+      APP.recentFoodsCache  = foods;
+      foods.forEach(f => PICKER.cache.set(String(f.id), f));
+      return foods;
+    }
+
+    // Load frequently used foods from DB
+    async function loadFrequentFoods() {
+      if (PICKER._freqCache) return PICKER._freqCache;
+      const { data } = await ApexCore.getClient()
+        .from('meal_items')
+        .select('food_id, foods(*)')
+        .limit(200);
+      const counts = {};
+      (data || []).forEach(r => {
+        if (!r.foods) return;
+        if (!counts[r.food_id]) counts[r.food_id] = { food: r.foods, n: 0 };
+        counts[r.food_id].n++;
+      });
+      const foods = Object.values(counts)
+        .sort((a, b) => b.n - a.n)
+        .slice(0, 30)
+        .map(c => c.food);
+      PICKER._freqCache = foods;
+      foods.forEach(f => PICKER.cache.set(String(f.id), f));
+      return foods;
+    }
+
+    // ── External search (Open Food Facts + optional USDA FDC) ───
+    function normalizeOFF(p) {
+      if (!p) return null;
+      const n = p.nutriments || {};
+      const kcal    = n['energy-kcal_100g'] || Math.round((n['energy_100g'] || 0) / 4.184);
+      const protein = +(n['proteins_100g']       || 0).toFixed(1);
+      const carbs   = +(n['carbohydrates_100g']  || 0).toFixed(1);
+      const fat     = +(n['fat_100g']            || 0).toFixed(1);
+      const fiber   = +(n['fiber_100g']          || 0).toFixed(1);
+      const sugar   = +(n['sugars_100g']         || 0).toFixed(1);
+      const name    = (p.product_name || p.product_name_en || '').trim();
+      if (!name) return null;
+      const pCal = protein*4, cCal = carbs*4, fCal = fat*9;
+      const macro = fCal>pCal && fCal>cCal ? 'fat' : pCal>=cCal ? 'protein' : 'carb';
+      const _key  = 'off-' + Math.random().toString(36).slice(2);
+      const food  = { _key, name, brand: (p.brands||'').trim()||null,
+                      serving_size_g:100, kcal:Math.round(kcal),
+                      protein_g:protein, carbs_g:carbs, fat_g:fat,
+                      fiber_g:fiber, sugar_g:sugar, macro_class:macro,
+                      is_whole_food:false, tags:[], source:'brands' };
+      PICKER.cache.set(_key, food);
+      return food;
+    }
+
+    // ── Normalize USDA FDC food object ──────────────────────────
+    function normalizeFDC(f) {
+      const get = name => {
+        const n = (f.foodNutrients||[]).find(n=>n.nutrientName===name);
+        return +(n?.value||0);
+      };
+      const kcal    = get('Energy') || get('Energy (Atwater General Factors)');
+      const protein = +get('Protein').toFixed(1);
+      const carbs   = +get('Carbohydrate, by difference').toFixed(1);
+      const fat     = +get('Total lipid (fat)').toFixed(1);
+      const fiber   = +get('Fiber, total dietary').toFixed(1);
+      const sugar   = +(get('Sugars, total including NLEA')||get('Sugars, total')).toFixed(1);
+      const pCal = protein*4, cCal = carbs*4, fCal = fat*9;
+      const macro = fCal>pCal && fCal>cCal ? 'fat' : pCal>=cCal ? 'protein' : 'carb';
+      const _key  = 'fdc-' + f.fdcId;
+      const food  = { _key, name: f.description||'Unknown',
+                      brand: f.brandOwner||f.brandName||null,
+                      serving_size_g:100, kcal:Math.round(kcal),
+                      protein_g:protein, carbs_g:carbs, fat_g:fat,
+                      fiber_g:fiber, sugar_g:sugar, macro_class:macro,
+                      is_whole_food:!f.brandOwner&&!f.brandName,
+                      tags:[], source:'usda' };
+      PICKER.cache.set(_key, food);
+      return food;
+    }
+
+    // ── Save an external food to user's library (foods table) ───
+    async function saveExternalFood(food) {
+      const user = await ApexCore.Auth.getUser();
+      if (!user) return { data:null, error:new Error('Not authenticated') };
+      const { data, error } = await ApexCore.getClient()
+        .from('foods')
+        .insert({
+          name:          food.name,
+          brand:         food.brand || null,
+          serving_size_g:100,
+          kcal:          food.kcal,
+          protein_g:     food.protein_g,
+          carbs_g:       food.carbs_g,
+          fat_g:         food.fat_g,
+          fiber_g:       food.fiber_g || 0,
+          sugar_g:       food.sugar_g || 0,
+          macro_class:   food.macro_class,
+          is_whole_food: food.is_whole_food || false,
+          tags:          food.tags || [],
+          created_by:    user.id,
+        })
+        .select()
+        .single();
+      return { data, error };
+    }
+
+    // ── Render food list (library + external + multi-add) ───────
+    function changeServings(delta) {
+      const inp = document.getElementById('picker-servings');
+      const val = Math.max(0.25, Math.round((parseFloat(inp.value) + delta) * 4) / 4);
+      inp.value = val;
+      onServingsChange();
+    }
+
+    function onServingsChange() {
+      // servings changes qty readout but keeps grams-per-serving intact
+      updatePickerPreview();
+    }
+
+    function onGramsChange() {
+      updatePickerPreview();
+    }
+
+    function updatePickerPreview() {
+      const food = PICKER.selectedFood;
+      if (!food) return;
+      const raw = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const g   = toGrams(raw, PICKER.unit);   // always grams internally
+      const r   = g / 100;
+      const el  = id => document.getElementById(id);
+      el('pp-p').textContent = (food.protein_g * r).toFixed(1) + 'g';
+      el('pp-c').textContent = (food.carbs_g   * r).toFixed(1) + 'g';
+      el('pp-f').textContent = (food.fat_g     * r).toFixed(1) + 'g';
+      el('pp-k').textContent = Math.round(food.kcal * r) + ' kcal';
+    }
+
+    // ── Bulk add (multi-add mode) ───────────────────────────────
+    async function addMultiSelected() {
+      if (!PICKER.multiSel.size) return;
+      const btn = document.querySelector('#multi-add-footer .btn-primary');
+      btn.textContent = 'Adding...'; btn.disabled = true;
+
+      for (const key of PICKER.multiSel) {
+        const food = PICKER.cache.get(key)
+                   || APP.allFoods.find(f => String(f.id) === String(key));
+        if (!food) continue;
+        let foodId = food.id;
+        if (!foodId) {
+          const { data } = await saveExternalFood(food);
+          if (data) { foodId = data.id; APP.allFoods.push({...food, id:data.id}); }
+        }
+        if (foodId) await ApexNutrition.MealItems.add(PICKER.slotId, foodId, food._recentQty || 100);
+      }
+
+      btn.textContent = 'Add items'; btn.disabled = false;
+      closeFoodPicker();
+      showToast(`${PICKER.multiSel.size} items added`, 'success');
+      APP.loadedTabs.delete('diary');
+      loadTab('diary');
+    }
+
+    // ── Add selected food to meal ────────────────────────────────
+    async function addSelectedFood() {
+      const food   = PICKER.selectedFood;
+      const rawAmt = parseFloat(document.getElementById('picker-qty').value) || 0;
+      const g      = Math.round(toGrams(rawAmt, PICKER.unit));
+      if (!food || g < 1) { showToast('Enter a valid amount', 'error'); return; }
+
+      const btn = document.querySelector('#picker-footer .btn-primary');
+      btn.textContent = 'Adding...';
+      btn.disabled    = true;
+
+      // External food (no DB id) — save to library first
+      let foodId = food.id;
+      if (!foodId) {
+        const { data, error: saveErr } = await saveExternalFood(food);
+        if (saveErr && saveErr.code !== '23505') {
+          showToast('Could not save food: ' + saveErr.message, 'error');
+          btn.textContent = 'Add to meal';
+          btn.disabled    = false;
+          return;
+        }
+        if (data) {
+          foodId = data.id;
+          APP.allFoods.push({ ...food, id: data.id }); // cache locally
+        } else {
+          // Duplicate — find the existing row
+          const user = await ApexCore.Auth.getUser();
+          const { data: existing } = await ApexCore.getClient()
+            .from('foods').select('id')
+            .eq('name', food.name).eq('created_by', user.id).maybeSingle();
+          if (existing) foodId = existing.id;
+        }
+        if (!foodId) {
+          showToast('Could not resolve food id', 'error');
+          btn.textContent = 'Add to meal';
+          btn.disabled    = false;
+          return;
+        }
+      }
+
+      const { error } = await ApexNutrition.MealItems.add(PICKER.slotId, foodId, g);
+      btn.textContent = 'Add to meal';
+      btn.disabled    = false;
+
+      if (error) { showToast(error.message, 'error'); return; }
+
+      closeFoodPicker();
+      showToast(`${food.name} added`, 'success');
+      APP.loadedTabs.delete('diary');
+      loadTab('diary');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // STATS TAB
+    // ═══════════════════════════════════════════════════════
+    async function loadStatsTab() {
+      const data = await ApexStats.Dashboard.getSummary(90);
+
+      renderStatCards(data);
+      renderCharts(data);
+      renderPRTable(data.strength.summary);
+    }
+
+    function renderStatCards(data) {
+      // Weight
+      const wt = data.weight.latest;
+      const wTrends = data.weight.trends;
+      document.getElementById('sc-weight').innerHTML =
+        `${wt?.weight_kg != null ? Math.round(kgToLbs(wt.weight_kg)) : '—'}<span class="stat-unit">lbs</span>`;
+      if (wTrends.weeklyRateKg !== null) {
+        const d = document.getElementById('sc-weight-d');
+        const sign = wTrends.weeklyRateKg >= 0 ? '+' : '';
+        d.textContent   = `${sign}${Math.round(kgToLbs(wTrends.weeklyRateKg) * 10) / 10} lbs/week`;
+        d.className     = `stat-delta ${wTrends.direction === 'up' ? 'up' : wTrends.direction === 'down' ? 'down' : 'flat'}`;
+      }
+
+      // Balance
+      const bs = data.balance.summary;
+      const bEl = document.getElementById('sc-balance');
+      const sign = bs.avgDailyBalance >= 0 ? '+' : '';
+      bEl.innerHTML = `${sign}${bs.avgDailyBalance}<span class="stat-unit">kcal</span>`;
+      document.getElementById('sc-balance-d').textContent   = `${bs.adherencePct}% on target`;
+      document.getElementById('sc-balance-d').className     = 'stat-delta flat';
+
+      // Streak
+      document.getElementById('sc-streak').innerHTML =
+        `${data.training.streak}<span class="stat-unit">days</span>`;
+      document.getElementById('sc-streak-d').textContent = 'Current streak';
+      document.getElementById('sc-streak-d').className   = 'stat-delta up';
+
+      // Best squat PR
+      const squatPR = data.strength.summary.find(s => s.name?.toLowerCase().includes('squat'));
+      if (squatPR) {
+        document.getElementById('sc-squat').innerHTML =
+          `${Math.round(kgToLbs(squatPR.bestKg))}<span class="stat-unit">lbs</span>`;
+        const dEl  = document.getElementById('sc-squat-d');
+        dEl.textContent = squatPR.deltaKg >= 0 ? `+${Math.round(kgToLbs(squatPR.deltaKg))} lbs gained` : `${Math.round(kgToLbs(squatPR.deltaKg))} lbs`;
+        dEl.className   = `stat-delta ${squatPR.deltaKg >= 0 ? 'up' : 'down'}`;
+      }
+    }
+
+    function renderCharts(data) {
+      const OPTS = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 10 }, maxTicksLimit: 7 }, grid: { display: false } },
+          y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
+        },
+      };
+
+      // Weight trend
+      if (APP.charts.weight) APP.charts.weight.destroy();
+      const wData = ApexStats.ChartHelpers.weightTrendDataset(data.weight.logs);
+      if (wData.labels.length) {
+        APP.charts.weight = new Chart(document.getElementById('chart-weight'), {
+          type: 'line', data: wData,
+          options: { ...OPTS, plugins: { legend: { display: true, labels: { font: { size: 11 } } } } },
+        });
+      }
+
+      // Calorie balance
+      if (APP.charts.balance) APP.charts.balance.destroy();
+      const bData = ApexStats.ChartHelpers.calorieBalanceDataset(data.balance.daily);
+      if (bData.labels.length) {
+        APP.charts.balance = new Chart(document.getElementById('chart-balance'), {
+          type: 'bar', data: bData, options: OPTS,
+        });
+      }
+
+      // Weekly volume
+      if (APP.charts.volume) APP.charts.volume.destroy();
+      const vData = ApexStats.ChartHelpers.weeklyVolumeDataset(data.training.weeklyVolume);
+      if (vData.labels.length) {
+        APP.charts.volume = new Chart(document.getElementById('chart-volume'), {
+          type: 'bar', data: vData,
+          options: {
+            ...OPTS,
+            plugins: { legend: { display: true, labels: { font: { size: 10 }, boxWidth: 10 } } },
+            scales: {
+              ...OPTS.scales,
+              x: { ...OPTS.scales.x, stacked: true },
+              y: { ...OPTS.scales.y, stacked: true },
+            },
+          },
+        });
+      }
+    }
+
+    function renderPRTable(summary) {
+      const tbody = document.getElementById('pr-tbody');
+      tbody.innerHTML = '';
+      if (!summary?.length) {
+        document.getElementById('pr-empty-hint').hidden = false; return;
+      }
+
+      ApexStats.StrengthStats.topMovers(summary, 8).forEach(ex => {
+        const tr = document.createElement('tr');
+        const isUp = ex.deltaKg > 0;
+        tr.innerHTML = `
+          <td><strong>${ex.name}</strong><br><span class="t-hint" style="font-size:0.75rem">${ex.muscle ?? ''}</span></td>
+          <td>${ex.bestKg   != null ? Math.round(kgToLbs(ex.bestKg))   : '—'} lbs</td>
+          <td>${ex.latestKg != null ? Math.round(kgToLbs(ex.latestKg)) : '—'} lbs</td>
+          <td class="${isUp ? 'pr-delta-up' : 'pr-delta-flat'}">
+            ${ex.deltaKg !== null ? (isUp ? '+' : '') + Math.round(kgToLbs(ex.deltaKg)) + ' lbs' : '—'}
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // WEIGHT LOG MODAL
+    // ═══════════════════════════════════════════════════════
+    function openWeightModal() {
+      document.getElementById('weight-modal').classList.remove('hidden');
+      document.getElementById('wt-input').focus();
+    }
+
+    async function logWeight() {
+      const lbsIn = parseFloat(document.getElementById('wt-input').value);
+      const kg     = lbsToKg(lbsIn);
+      const notes = document.getElementById('wt-notes').value.trim() || null;
+      if (isNaN(lbsIn)) { showToast('Enter a valid weight', 'error'); return; }
+
+      const { error } = await ApexStats.WeightStats.log(kg, notes);
+      if (error) { showToast(error.message, 'error'); return; }
+
+      document.getElementById('weight-modal').classList.add('hidden');
+      document.getElementById('wt-input').value  = '';
+      document.getElementById('wt-notes').value  = '';
+      showToast('Weight logged ✓', 'success');
+
+      if (APP.activeTab === 'stats') {
+        APP.loadedTabs.delete('stats');
+        loadTab('stats');
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // UTILITIES
+    // ═══════════════════════════════════════════════════════
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    function showToast(msg, type = '') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = msg;
+      document.getElementById('toast-container').appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+  </script>
+</body>
+</html>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Apex Fitness</title>
