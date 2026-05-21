@@ -30,8 +30,8 @@ window.ApexCore = (function () {
   // -------------------------------------------------------------------------
 
   const CONFIG = {
-    SUPABASE_URL:     'https://YOUR_PROJECT.supabase.co', // <- replace
-    SUPABASE_ANON:    'YOUR_ANON_KEY',                    // <- replace
+    SUPABASE_URL:     'https://iedeghnykrigeensamcj.supabase.co', // <- replace
+    SUPABASE_ANON:    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImllZGVnaG55a3JpZ2VlbnNhbWNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MzIwMTMsImV4cCI6MjA5NDUwODAxM30.xfSKLPqofpHLSKFieUepFqvbVjHGgGGC6nRn2HvMOz8',                    // <- replace
     APP_NAME:         'Apex Fitness',
     HUB_PAGE:         'hub.html',
     LOGIN_PAGE:       'index.html',
