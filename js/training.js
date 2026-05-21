@@ -1023,26 +1023,10 @@ window.ApexTraining = (function () {
       const { workout, error } = await WeeklyPlan.getWorkout(plannedWorkoutId);
       if (error || !workout) return { session: null, error: error ?? new Error('Workout not found') };
 
-      // Create the workout_log row immediately so every set can be
-      // persisted in real-time — no data lost if the app is closed mid-workout.
-      const user = await Core.Auth.getUser();
-      const { data: wlRow, error: wlErr } = await Core.getClient()
-        .from('workout_logs')
-        .insert({
-          user_id:            user.id,
-          planned_workout_id: plannedWorkoutId,
-          log_date:           Core.utils.isoToday(),
-          duration_min:       0,
-          notes:              null,
-        })
-        .select('id')
-        .single();
-      if (wlErr) return { session: null, error: wlErr };
-
       _state = {
         status:           _STATES.ACTIVE,
         plannedWorkoutId,
-        workoutLogId:     wlRow.id,   // available immediately for logSet()
+        workoutLogId:     null,   // set on completeSession()
         plannedSets:      workout.planned_sets ?? [],
         setLogs:          [],
         skipped:          new Set(),
@@ -1051,6 +1035,9 @@ window.ApexTraining = (function () {
       };
 
       SessionTimer.start(_state.timer);
+
+      // Persist to localStorage immediately as crash protection
+      _persistToStorage();
 
       console.log(`[ApexTraining] Session started — ${workout.label}`);
       return { session: _snapshot(), error: null };
@@ -1078,23 +1065,9 @@ window.ApexTraining = (function () {
       const validationError = _validateSetLog({ weightKg, reps, rpe, setNumber });
       if (validationError) return { log: null, overload: null, isPR: false, error: validationError };
 
-      // Persist to DB immediately — no data lost if the app closes mid-workout
-      const { error: slErr } = await Core.getClient()
-        .from('set_logs')
-        .insert({
-          workout_log_id: _state.workoutLogId,
-          exercise_id:    exerciseId,
-          set_number:     setNumber,
-          weight_kg:      weightKg,
-          reps,
-          rpe,
-          is_warmup:      isWarmup,
-        });
-      if (slErr) return { log: null, overload: null, isPR: false, error: slErr };
-
-      // Keep a local copy for snapshot / UI state
+      // Keep in memory (persisted to DB in completeSession batch)
       const logEntry = {
-        planned_set_id: plannedSetId,   // local-only reference for UI tracking
+        planned_set_id: plannedSetId,   // local-only, not a DB column
         exercise_id:    exerciseId,
         set_number:     setNumber,
         weight_kg:      weightKg,
@@ -1104,6 +1077,9 @@ window.ApexTraining = (function () {
         logged_at:      new Date().toISOString(),
       };
       _state.setLogs.push(logEntry);
+
+      // Update localStorage after every set — crash protection
+      _persistToStorage();
 
       // Overload evaluation (only for working sets)
       let overloadResult = { flag: null, nextWeightKg: weightKg, message: null };
@@ -1149,12 +1125,10 @@ window.ApexTraining = (function () {
 
       SessionTimer.stop(_state.timer);
       const durationMin = Math.round(SessionTimer.elapsedSeconds(_state.timer) / 60);
+      const user        = await Core.Auth.getUser();
 
-      const user = await Core.Auth.getUser();
-
-      // INSERT the final complete workout_log row — uses the INSERT RLS policy
-      // which is guaranteed to exist, unlike UPDATE.
-      const { data: finalWl, error: wlErr } = await Core.getClient()
+      // Write workout_log header (INSERT — RLS policy always exists)
+      const { data: workoutLog, error: wlErr } = await Core.getClient()
         .from('workout_logs')
         .insert({
           user_id:            user.id,
@@ -1168,42 +1142,24 @@ window.ApexTraining = (function () {
         .single();
 
       if (wlErr) return { workoutLogId: null, deloadCheck: null, error: wlErr };
+      const workoutLogId = workoutLog.id;
 
-      const finalId = finalWl.id;
-
-      // The set_logs were already inserted in real-time pointing to the
-      // placeholder workoutLogId from start(). Re-point them to the final row.
-      // If this UPDATE fails (RLS), fall back to inserting them fresh.
-      const { error: mvErr } = await Core.getClient()
-        .from('set_logs')
-        .update({ workout_log_id: finalId })
-        .eq('workout_log_id', _state.workoutLogId);
-
-      if (mvErr) {
-        // UPDATE policy missing — insert set_logs fresh from in-memory log
-        if (_state.setLogs.length > 0) {
-          const rows = _state.setLogs.map(({ planned_set_id: _, logged_at: __, ...row }) => ({
-            ...row, workout_log_id: finalId,
-          }));
-          await Core.getClient().from('set_logs').insert(rows);
-        }
+      // Batch-insert set_logs
+      if (_state.setLogs.length > 0) {
+        const rows = _state.setLogs.map(({ planned_set_id: _, logged_at: __, ...row }) => ({
+          ...row, workout_log_id: workoutLogId,
+        }));
+        const { error: slErr } = await Core.getClient().from('set_logs').insert(rows);
+        if (slErr) console.error('[ApexTraining] set_logs insert failed:', slErr);
       }
 
-      // Clean up the placeholder workout_log from start()
-      // (ignore errors — it will be a dangling row at worst)
-      await Core.getClient()
-        .from('workout_logs')
-        .delete()
-        .eq('id', _state.workoutLogId)
-        .neq('id', finalId); // safety: never delete the final row
+      // Clear localStorage crash backup
+      try { localStorage.removeItem('apex_active_session'); } catch(e) {}
 
-      // Fetch active program for deload check
+      // Deload check
       const { data: program } = await Core.getClient()
-        .from('programs')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single();
+        .from('programs').select('id')
+        .eq('user_id', user.id).eq('is_active', true).single();
 
       let deloadCheck = null;
       if (program) {
@@ -1216,10 +1172,10 @@ window.ApexTraining = (function () {
       }
 
       _state.status      = _STATES.COMPLETE;
-      _state.workoutLogId = finalId;
+      _state.workoutLogId = workoutLogId;
 
       console.log(`[ApexTraining] Session completed — ${durationMin} min, ${_state.setLogs.length} sets logged`);
-      return { workoutLogId: finalId, deloadCheck, error: null };
+      return { workoutLogId, deloadCheck, error: null };
     }
 
     /**
@@ -1288,7 +1244,7 @@ window.ApexTraining = (function () {
         .from('workout_logs')
         .insert({
           user_id:            user.id,
-          planned_workout_id: plannedWorkoutId,
+          planned_workout_id: plannedWorkoutId ?? undefined, // omit if null — avoids NOT NULL violation
           log_date:           date,
           duration_min:       durationMin,
           rpe_overall:        rpeOverall,
@@ -1347,6 +1303,20 @@ window.ApexTraining = (function () {
         return new Error('setNumber must be a positive integer');
       }
       return null;
+    }
+
+    // ── Crash protection ──────────────────────────────────────
+    function _persistToStorage() {
+      try {
+        if (_state.status !== _STATES.ACTIVE) return;
+        localStorage.setItem('apex_active_session', JSON.stringify({
+          plannedWorkoutId: _state.plannedWorkoutId,
+          sets:             _state.setLogs,
+          startedAt:        _state.startedAt instanceof Date
+                              ? _state.startedAt.toISOString()
+                              : _state.startedAt,
+        }));
+      } catch(e) { /* storage unavailable */ }
     }
 
     return {
