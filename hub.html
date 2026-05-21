@@ -1924,6 +1924,132 @@
       body_part:  { icon:'&#x1F7E0;', days:'5 days/week',  freq:'1×/muscle/week',  level:'Intermediate+'},
     };
 
+    // ═══════════════════════════════════════════════════════
+    // BACKLOG — log a past workout without live set tracking
+    // ═══════════════════════════════════════════════════════
+    let _backlogRPE = null;
+
+    function openBacklogModal() {
+      _backlogRPE = null;
+
+      // Reset RPE buttons
+      document.querySelectorAll('[id^="backlog-rpe-"]')
+        .forEach(b => b.classList.remove('rpe-active'));
+
+      // Default to yesterday
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yStr = yesterday.toISOString().slice(0, 10);
+
+      const dateInput = document.getElementById('backlog-date');
+      dateInput.value = yStr;
+      dateInput.max   = new Date().toISOString().slice(0, 10); // can't backlog future
+
+      document.getElementById('backlog-duration').value = '60';
+      document.getElementById('backlog-notes').value    = '';
+      document.getElementById('backlog-workout-label').textContent = '';
+
+      document.getElementById('backlog-modal').classList.remove('hidden');
+
+      // Fetch the workout label for yesterday
+      backlogDateChanged();
+    }
+
+    function closeBacklogModal() {
+      document.getElementById('backlog-modal').classList.add('hidden');
+    }
+
+    function selectBacklogRPE(val) {
+      _backlogRPE = val;
+      document.querySelectorAll('[id^="backlog-rpe-"]')
+        .forEach(b => b.classList.toggle('rpe-active',
+          parseInt(b.id.replace('backlog-rpe-', '')) === val));
+    }
+
+    async function backlogDateChanged() {
+      const date  = document.getElementById('backlog-date').value;
+      const label = document.getElementById('backlog-workout-label');
+      if (!date) { label.textContent = ''; return; }
+
+      label.textContent = 'Looking up workout…';
+      label.style.color = 'var(--text-3)';
+
+      try {
+        const user = await ApexCore.Auth.getUser();
+        const { data: program } = await ApexCore.getClient()
+          .from('programs')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!program) { label.textContent = 'No active program'; return; }
+
+        const { data: week } = await ApexCore.getClient()
+          .from('program_weeks')
+          .select('id')
+          .eq('program_id', program.id)
+          .lte('start_date', date)
+          .gte('end_date', date)
+          .maybeSingle();
+
+        if (!week) { label.textContent = 'Date is outside your current program'; return; }
+
+        const dow = new Date(date + 'T12:00:00').getDay(); // 0=Sun … 6=Sat
+        const { data: pw } = await ApexCore.getClient()
+          .from('planned_workouts')
+          .select('label, workout_type')
+          .eq('program_week_id', week.id)
+          .eq('day_of_week', dow)
+          .maybeSingle();
+
+        if (pw) {
+          label.textContent = pw.label;
+          label.style.color = 'var(--accent)';
+        } else {
+          label.textContent = 'Rest day';
+          label.style.color = 'var(--text-3)';
+        }
+      } catch (e) {
+        label.textContent = 'Could not look up workout';
+        label.style.color = 'var(--danger)';
+      }
+    }
+
+    async function submitBacklog() {
+      const date     = document.getElementById('backlog-date').value;
+      const duration = parseInt(document.getElementById('backlog-duration').value) || 0;
+      const notes    = document.getElementById('backlog-notes').value.trim();
+
+      if (!date) { showToast('Please select a date', 'error'); return; }
+
+      const btn = document.querySelector('#backlog-modal .btn-primary');
+      btn.disabled    = true;
+      btn.textContent = 'Saving…';
+
+      const { workoutLogId, label, error } = await ApexTraining.WorkoutSession.backlog({
+        date,
+        durationMin: duration,
+        rpeOverall:  _backlogRPE,
+        notes:       notes || null,
+      });
+
+      btn.disabled    = false;
+      btn.textContent = 'Log Workout';
+
+      if (error) {
+        showToast('Failed to log: ' + error.message, 'error');
+        return;
+      }
+
+      closeBacklogModal();
+      showToast(label ? `${label} logged ✓` : 'Workout logged ✓', 'success');
+
+      // Refresh training tab so the day pill shows ✓
+      APP.loadedTabs.delete('training');
+      loadTab('training');
+    }
+
     function openSplitModal() {
       const current = APP.profile?.preferred_split
                    || APP.profile?.experience
