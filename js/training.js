@@ -1056,7 +1056,7 @@ window.ApexTraining = (function () {
      * @param {boolean} [params.isWarmup]   — warm-up sets are logged but excluded from overload eval
      * @returns {{ log, overload, isPR, error }}
      */
-    async function logSet({ plannedSetId, exerciseId, setNumber, weightKg, reps, rpe, isWarmup = false }) {
+    function logSet({ plannedSetId, exerciseId, setNumber, weightKg, reps, rpe, isWarmup = false }) {
       if (_state.status !== _STATES.ACTIVE) {
         return { log: null, overload: null, isPR: false, error: new Error('No active session') };
       }
@@ -1081,28 +1081,16 @@ window.ApexTraining = (function () {
       // Update localStorage after every set — crash protection
       _persistToStorage();
 
-      // Overload evaluation (only for working sets)
+      // Overload evaluation — synchronous only, zero network calls during set logging
       let overloadResult = { flag: null, nextWeightKg: weightKg, message: null };
       let isPR = false;
 
       if (!isWarmup) {
-        // Find the planned set to get reps_max and muscle group
-        const planned       = _state.plannedSets.find(s => s.id === plannedSetId);
-        const repsMax       = planned?.reps_max ?? reps;
-        const muscleGroup   = planned?.exercises?.muscle_primary ?? 'chest';
-
-        overloadResult = Core.Overload.evaluate({ weightKg, reps, rpe, repsMax, muscleGroup });
-
-        // PR check — non-critical, 4 s timeout so it never blocks the set log
-        try {
-          const prResult = await Promise.race([
-            Core.Overload.upsertPR(exerciseId, weightKg, reps),
-            new Promise(resolve => setTimeout(() => resolve({ isPR: false }), 4000)),
-          ]);
-          isPR = prResult?.isPR ?? false;
-        } catch(e) {
-          console.warn('[ApexTraining] PR check failed (non-fatal):', e.message);
-        }
+        const planned     = _state.plannedSets.find(s => s.id === plannedSetId);
+        const repsMax     = planned?.reps_max ?? reps;
+        const muscleGroup = planned?.exercises?.muscle_primary ?? 'chest';
+        overloadResult    = Core.Overload.evaluate({ weightKg, reps, rpe, repsMax, muscleGroup });
+        // PR tracking happens after session saves — never during set logging
       }
 
       return { log: logEntry, overload: overloadResult, isPR, error: null };
