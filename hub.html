@@ -1954,89 +1954,117 @@
     }
 
     async function openWorkoutSummary(setLogs, plannedSets, timer) {
-      // ── Stats ────────────────────────────────────────────
-      const durationMin = timer ? Math.round(ApexTraining.SessionTimer.elapsedSeconds(timer) / 60) : 0;
-      const totalSets   = setLogs.filter(s => !s.is_warmup).length;
-      const totalVol    = setLogs.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
-      const volLbs      = Math.round(totalVol * 2.20462);
+      // setLogs come from training.js _state.setLogs — camelCase:
+      // exerciseId, isWarmup, weightKg (NOT exercise_id / is_warmup / weight_kg)
+
+      // ── Stats ─────────────────────────────────────────────
+      const durationMin = timer
+        ? Math.round(ApexTraining.SessionTimer.elapsedSeconds(timer) / 60) : 0;
+      const workingSets = setLogs.filter(s => !s.isWarmup);
+      const totalSets   = workingSets.length;
+      const totalVol    = workingSets.reduce((sum, s) =>
+        sum + (s.weightKg || 0) * (s.reps || 0), 0);
+      const volLbs = Math.round(totalVol * 2.20462);
 
       document.getElementById('ws-duration').textContent =
         durationMin >= 60
           ? `${Math.floor(durationMin/60)}h ${durationMin%60}m`
-          : `${durationMin}m`;
+          : `${durationMin || '—'}m`;
 
       document.getElementById('ws-stats-row').innerHTML = `
-        <div class="ws-stat"><div class="ws-stat-val">${totalSets}</div><div class="ws-stat-lbl">Sets</div></div>
-        <div class="ws-stat"><div class="ws-stat-val">${volLbs.toLocaleString()}</div><div class="ws-stat-lbl">lbs lifted</div></div>
+        <div class="ws-stat">
+          <div class="ws-stat-val">${totalSets}</div>
+          <div class="ws-stat-lbl">Sets</div>
+        </div>
+        <div class="ws-stat">
+          <div class="ws-stat-val">${volLbs.toLocaleString()}</div>
+          <div class="ws-stat-lbl">lbs lifted</div>
+        </div>
       `;
 
-      // ── Per-exercise breakdown + comparison ──────────────
+      // ── Per-exercise breakdown ─────────────────────────────
       const byEx = {};
-      for (const s of setLogs) {
-        if (s.is_warmup) continue;
-        if (!byEx[s.exercise_id]) byEx[s.exercise_id] = { sets: [], weightLbs: 0, reps: 0 };
-        byEx[s.exercise_id].sets.push(s);
-        byEx[s.exercise_id].weightLbs = Math.max(byEx[s.exercise_id].weightLbs, Math.round((s.weight_kg||0)*2.20462));
+      for (const s of workingSets) {
+        const id = s.exerciseId;
+        if (!id) continue;
+        if (!byEx[id]) byEx[id] = { sets: 0, topWeightLbs: 0 };
+        byEx[id].sets++;
+        byEx[id].topWeightLbs = Math.max(
+          byEx[id].topWeightLbs,
+          Math.round((s.weightKg || 0) * 2.20462)
+        );
       }
 
       const exIds = Object.keys(byEx);
+
+      // plannedSets ARE DB rows → snake_case (exercise_id, ps.exercises.name)
       const exMap = {};
       for (const ps of plannedSets) {
         if (ps.exercise_id && ps.exercises) exMap[ps.exercise_id] = ps.exercises;
       }
 
-      // Fetch previous bests for these exercises
+      // ── Previous bests from DB ─────────────────────────────
       let prevBest = {};
-      try {
-        const user = await ApexCore.Auth.getUser();
-        const today = new Date().toISOString().slice(0,10);
-        const { data: prev } = await ApexCore.getClient()
-          .from('set_logs')
-          .select('exercise_id, weight_kg, reps, workout_logs!inner(log_date)')
-          .in('exercise_id', exIds)
-          .eq('is_warmup', false)
-          .lt('workout_logs.log_date', today)
-          .order('weight_kg', { ascending: false })
-          .limit(exIds.length * 8);
+      if (exIds.length > 0) {
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const { data: prev } = await ApexCore.getClient()
+            .from('set_logs')
+            .select('exercise_id, weight_kg, workout_logs!inner(log_date)')
+            .in('exercise_id', exIds)
+            .eq('is_warmup', false)
+            .lt('workout_logs.log_date', today)
+            .order('weight_kg', { ascending: false })
+            .limit(exIds.length * 8);
 
-        for (const s of prev || []) {
-          const lbs = Math.round((s.weight_kg||0)*2.20462);
-          if (!prevBest[s.exercise_id] || lbs > prevBest[s.exercise_id]) {
-            prevBest[s.exercise_id] = lbs;
+          for (const s of prev || []) {
+            const lbs = Math.round((s.weight_kg || 0) * 2.20462);
+            if (!prevBest[s.exercise_id] || lbs > prevBest[s.exercise_id]) {
+              prevBest[s.exercise_id] = lbs;
+            }
           }
-        }
-      } catch(e) { /* non-critical */ }
+        } catch(e) { /* non-critical — delta badges just won't show */ }
+      }
 
+      // ── Render exercise cards ──────────────────────────────
       const exEl = document.getElementById('ws-exercises');
-      exEl.innerHTML = exIds.map(exId => {
-        const data = byEx[exId];
-        const ex   = exMap[exId] || {};
-        const name = ex.name || 'Exercise';
-        const sets = data.sets.length;
-        const topWt = data.weightLbs;
-        const prev  = prevBest[exId];
+      if (!exIds.length) {
+        exEl.innerHTML =
+          '<div style="color:rgba(255,255,255,.35);text-align:center;padding:1rem">No sets recorded</div>';
+      } else {
+        exEl.innerHTML = exIds.map((exId, i) => {
+          const data  = byEx[exId];
+          const ex    = exMap[exId] || {};
+          const name  = ex.name || 'Exercise';
+          const prev  = prevBest[exId];
+          const topWt = data.topWeightLbs;
 
-        let delta = '';
-        if (prev !== undefined && prev > 0) {
-          const diff = topWt - prev;
-          if (diff > 0)      delta = `<span class="ws-delta ws-delta-up">&#x25B2; ${diff} lbs</span>`;
-          else if (diff < 0) delta = `<span class="ws-delta ws-delta-dn">&#x25BC; ${Math.abs(diff)} lbs</span>`;
-          else               delta = `<span class="ws-delta ws-delta-eq">&#x2015; Same</span>`;
-        } else {
-          delta = `<span class="ws-delta ws-delta-new">&#x2605; First time</span>`;
-        }
+          let delta = '';
+          if (prev !== undefined && prev > 0) {
+            const diff = topWt - prev;
+            if (diff > 0)
+              delta = `<span class="ws-delta ws-delta-up">&#x25B2; ${diff} lbs</span>`;
+            else if (diff < 0)
+              delta = `<span class="ws-delta ws-delta-dn">&#x25BC; ${Math.abs(diff)} lbs</span>`;
+            else
+              delta = `<span class="ws-delta ws-delta-eq">&#x2015; Same</span>`;
+          } else {
+            delta = `<span class="ws-delta ws-delta-new">&#x2605; First time</span>`;
+          }
 
-        return `
-          <div class="ws-ex-card">
-            <div class="ws-ex-name">${name}</div>
-            <div class="ws-ex-row">
-              <div class="ws-ex-stat"><span class="ws-ex-val">${sets}</span> sets</div>
-              <div class="ws-ex-stat"><span class="ws-ex-val">${topWt}</span> lbs top weight</div>
-              ${delta}
-            </div>
-          </div>`;
-      }).join('');
+          return `
+            <div class="ws-ex-card" style="animation-delay:${0.36 + i * 0.07}s">
+              <div class="ws-ex-name">${name}</div>
+              <div class="ws-ex-row">
+                <div class="ws-ex-stat"><span class="ws-ex-val">${data.sets}</span> sets</div>
+                <div class="ws-ex-stat"><span class="ws-ex-val">${topWt}</span> lbs peak</div>
+                ${delta}
+              </div>
+            </div>`;
+        }).join('');
+      }
 
+      // ── Show the screen ────────────────────────────────────
       document.getElementById('workout-summary').classList.remove('fm-hidden');
       // Render wolf mascot in summary hero
       const wolfEl = document.getElementById('ws-wolf');
