@@ -1205,119 +1205,179 @@
     // ═══════════════════════════════════════════════════════
     // TRAINING TAB
     // ═══════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
+    //  TRAINING — complete clean rebuild
+    //
+    //  Design rules:
+    //  • SESS object holds all workout state — never training.js
+    //  • logFocusSet() is 100% synchronous — zero network calls
+    //  • DB writes happen ONLY in completeSession() — two inserts total
+    //  • No async/await in the hot path (set logging + UI updates)
+    // ═══════════════════════════════════════════════════════════
+
+    // ── Workout session state ────────────────────────────────
+    let SESS = null;   // null when no session active
+
+    function _sessExercise()   { return SESS?.exercises[SESS.curEx]; }
+    function _sessIsLastSet()  { const ex = _sessExercise(); return ex && SESS.curSet >= ex.setsTotal; }
+    function _sessIsLastEx()   { return SESS && SESS.curEx >= SESS.exercises.length - 1; }
+
+    // ─────────────────────────────────────────────────────────
+    //  TRAINING TAB
+    // ─────────────────────────────────────────────────────────
+
     async function loadTrainingTab() {
       const { week, workouts, program, error } = await ApexTraining.WeeklyPlan.getCurrent();
 
-      if (error || !program) {
+      document.getElementById('week-title').textContent =
+        program ? `Week ${week?.week_number ?? '—'}` : 'No program';
+      document.getElementById('week-sub').textContent =
+        program ? `${program.name}` : '';
+
+      const deloadBadge = document.getElementById('deload-badge');
+      if (week?.is_deload) deloadBadge.classList.remove('hidden');
+      else deloadBadge.classList.add('hidden');
+
+      if (!program || !workouts?.length) {
         document.getElementById('training-empty').classList.remove('hidden');
-      const emptyWolf = document.getElementById('training-empty-wolf');
-      if (emptyWolf && window.WolfMascot) WolfMascot.render(emptyWolf, 100, { bg: '#4F46E5' });
+        document.getElementById('days-grid').innerHTML = '';
+        const emptyWolf = document.getElementById('training-empty-wolf');
+        if (emptyWolf && window.WolfMascot) WolfMascot.render(emptyWolf, 100, { bg:'#4F46E5' });
         return;
       }
-
-      APP.trainingData = { week, workouts, program };
-
-      // Week header
-      const phaseLabel = program.phase.charAt(0).toUpperCase() + program.phase.slice(1);
-      document.getElementById('week-title').textContent = `Week ${week.week_number} — ${phaseLabel}`;
-      document.getElementById('week-sub').textContent   =
-        `${program.name} · Calorie target: ${APP.profile.calorie_target?.toLocaleString() ?? '—'} kcal`;
-
-      if (week.is_deload) {
-        document.getElementById('deload-badge').classList.remove('hidden');
-      } else {
-        const weeksLeft = program.deload_interval -
-          ((week.week_number) % program.deload_interval || program.deload_interval);
-        if (weeksLeft === 1) {
-          const nb = document.getElementById('next-deload-badge');
-          nb.textContent = 'Deload next week';
-          nb.classList.remove('hidden');
-        }
-      }
-
-      // Cardio prescription note
-      const cardio = ApexTraining.CardioEngine.prescribe(program.phase, week.is_deload);
-      document.getElementById('week-sub').textContent +=
-        ` · Cardio: ${cardio.liss.sessions}× LISS${cardio.hiit.sessions > 0 ? ' + ' + cardio.hiit.sessions + '× HIIT' : ''}`;
-
-      // 7-day grid
+      document.getElementById('training-empty').classList.add('hidden');
       renderDaysGrid(workouts, week);
     }
 
-    // ── Exercise card rendering ───────────────────────────────
-    const MUSCLE_COLORS = {
-      chest: '#E11D48', back: '#2563EB', shoulders: '#7C3AED',
-      quads: '#EA580C', hamstrings: '#EA580C', glutes: '#EA580C',
-      legs: '#EA580C', biceps: '#059669', triceps: '#059669',
-      arms: '#059669', core: '#CA8A04', abs: '#CA8A04', calves: '#0891B2',
-    };
-    const MUSCLE_SHORT = {
-      chest:'CH', back:'BK', shoulders:'SH', quads:'QD',
-      hamstrings:'HM', glutes:'GL', legs:'LG', biceps:'BI',
-      triceps:'TR', arms:'AR', core:'CO', abs:'AB', calves:'CA',
-    };
+    // ── Day strip ────────────────────────────────────────────
+    const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
-    function muscleColor(m) { return MUSCLE_COLORS[m?.toLowerCase()] ?? '#6366F1'; }
-    function muscleShort(m) { return MUSCLE_SHORT[m?.toLowerCase()] ?? m?.slice(0,2).toUpperCase() ?? '??'; }
+    function renderDaysGrid(workouts, week) {
+      const grid = document.getElementById('days-grid');
+      const todayDow = (() => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; })();
+
+      const byDow = {};
+      for (const wo of (workouts || [])) byDow[wo.day_of_week] = wo;
+
+      grid.innerHTML = `<div class="day-strip">${DAY_NAMES.map((name, i) => {
+        const wo   = byDow[i];
+        const isToday = i === todayDow;
+        const done    = wo?.is_completed;
+        const cls     = ['day-pill',
+          isToday && !done ? 'active' : '',
+          done ? 'done' : '',
+          !wo ? 'rest-day' : ''
+        ].filter(Boolean).join(' ');
+        const label = wo ? wo.label : 'Rest';
+        return `<div class="${cls}" onclick="selectWorkout(${wo ? `'${wo.id}'` : 'null'}, this)">
+          <div class="day-pill-name">${name}</div>
+          <div class="day-pill-label">${label}</div>
+          ${done ? '<div class="day-pill-done">✓</div>' : ''}
+          ${isToday ? '<div class="day-pill-dot"></div>' : ''}
+        </div>`;
+      }).join('')}</div>`;
+
+      // Auto-select today's workout
+      const todayWo = byDow[todayDow];
+      if (todayWo) {
+        const pill = grid.querySelector('.day-pill.active');
+        if (pill) selectWorkout(todayWo.id, pill);
+      }
+    }
+
+    let _selectedWorkoutId   = null;
+    let _selectedWorkoutData = null;
+
+    async function selectWorkout(workoutId, pillEl) {
+      // Clear active pill
+      document.querySelectorAll('.day-pill').forEach(p => p.classList.remove('active'));
+      if (pillEl) pillEl.classList.add('active');
+
+      const detail = document.getElementById('workout-detail');
+
+      if (!workoutId) {
+        detail.classList.add('hidden');
+        return;
+      }
+
+      detail.classList.remove('hidden');
+      document.getElementById('detail-workout-name').textContent = 'Loading…';
+      document.getElementById('exercise-cards').innerHTML = '';
+
+      const { workout, error } = await ApexTraining.WeeklyPlan.getWorkout(workoutId);
+      if (error || !workout) {
+        document.getElementById('detail-workout-name').textContent = 'Error loading workout';
+        return;
+      }
+
+      _selectedWorkoutId   = workoutId;
+      _selectedWorkoutData = workout;
+
+      const isDeload = false; // deload calculated by training.js getWorkout() — already applied to sets
+      document.getElementById('detail-workout-name').textContent = workout.label;
+
+      const ps = workout.planned_sets || [];
+      const rpeLabel = isDeload ? 'Deload — RPE ~7'
+        : ps[0]?.rpe_target ? `RPE target ${ps[0].rpe_target}` : '';
+      document.getElementById('detail-workout-meta').textContent =
+        workout.workout_type === 'cardio'
+          ? 'Cardio session'
+          : `${ps.length} exercises${rpeLabel ? ' · ' + rpeLabel : ''}`;
+
+      document.getElementById('detail-deload-note').classList.toggle('hidden', !isDeload);
+      document.getElementById('start-workout-btn').classList.toggle('hidden',
+        workout.workout_type === 'cardio');
+
+      renderExerciseCards(ps, isDeload);
+      loadLastLifts(ps);
+    }
 
     function renderExerciseCards(plannedSets, isDeload) {
       const container = document.getElementById('exercise-cards');
-      if (!container) return;
 
-      // Each row = one exercise; ps.sets = number of sets to perform
-      // Show estimated total session burn above the cards
-      const energyEst = ApexCore.SessionEnergy.fromPlan(
-        plannedSets, APP.profile?.weight_kg, 'strength'
-      );
-      const burnBadge = energyEst
-        ? `<div style="font-size:0.8rem;color:var(--text-3);margin-bottom:10px;
-                        display:flex;align-items:center;gap:6px">
-             <span style="font-size:1rem">🔥</span>
-             <span>Est. <strong style="color:var(--text-2)">${energyEst.kcal} kcal</strong>
-               burned · ${energyEst.durationMin} min · MET ${energyEst.met}
-               <span style="color:var(--text-3)">(incl. ${energyEst.epocKcal} kcal EPOC)</span>
-             </span>
-           </div>`
-        : '';
-      container.innerHTML = burnBadge;
-      container.innerHTML += plannedSets.map(ps => {
+      // Estimated burn badge
+      const est = window.ApexCore?.SessionEnergy?.fromPlan(
+        plannedSets, APP.profile?.weight_kg, 'strength');
+      const burnHtml = est ? `
+        <div class="burn-badge">
+          <span>🔥</span>
+          <span>Est. <strong>${est.kcal} kcal</strong> · ${est.durationMin} min · incl. ${est.epocKcal} kcal EPOC</span>
+        </div>` : '';
+
+      container.innerHTML = burnHtml + plannedSets.map(ps => {
         const ex   = ps.exercises ?? {};
         const col  = muscleColor(ex.muscle_primary);
         const abbr = muscleShort(ex.muscle_primary);
         const reps = `${ps.reps_min}–${ps.reps_max} reps`;
         const rest = ps.rest_seconds ? `${ps.rest_seconds}s rest` : '';
         const rpe  = isDeload ? 'RPE ~7' : (ps.rpe_target ? `RPE ${ps.rpe_target}` : '');
-        const safeName   = (ex.name ?? 'Exercise').replace(/'/g, "\\'");
+        const safeName   = (ex.name   ?? 'Exercise').replace(/'/g, "\\'");
         const safeMuscle = (ex.muscle_primary ?? '').replace(/'/g, "\\'");
-
         return `
           <div class="exercise-card" data-muscle="${(ex.muscle_primary||'').toLowerCase()}">
             <div class="ex-icon" style="background:${col}">${abbr}</div>
             <div class="ex-body">
               <div class="ex-name">${ex.name ?? 'Exercise'}</div>
-              <div class="ex-spec">${ps.sets} sets · ${reps}${rpe ? ' · ' + rpe : ''}${rest ? ' · ' + rest : ''}</div>
+              <div class="ex-spec">${ps.sets} sets · ${reps}${rpe ? ' · '+rpe : ''}${rest ? ' · '+rest : ''}</div>
               <div class="ex-last" id="last-lift-${ps.exercise_id}">
                 <span style="color:var(--text-3);font-size:0.75rem">Loading…</span>
               </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
               <button class="ex-history-btn"
-                      onclick="openLiftHistory('${ps.exercise_id}','${safeName}')">
-                History
-              </button>
+                      onclick="openLiftHistory('${ps.exercise_id}','${safeName}')">History</button>
               <button class="ex-history-btn"
-                      onclick="openSwapModal('${ps.id}','${safeMuscle}','${String(ex.is_compound)}')">
-                Swap
-              </button>
+                      onclick="openSwapModal('${ps.id}','${safeMuscle}','${String(ex.is_compound)}')">Swap</button>
             </div>
           </div>`;
       }).join('');
     }
 
     async function loadLastLifts(plannedSets) {
-      if (!plannedSets.length) return;
       const exIds = [...new Set(plannedSets.map(p => p.exercise_id))];
+      if (!exIds.length) return;
       try {
+        const user = await ApexCore.Auth.getUser();
         const { data } = await ApexCore.getClient()
           .from('set_logs')
           .select('exercise_id, weight_kg, reps, workout_logs!inner(log_date)')
@@ -1326,328 +1386,78 @@
           .order('id', { ascending: false })
           .limit(exIds.length * 10);
 
-        // Most recent set per exercise (compare by log_date string YYYY-MM-DD)
         const best = {};
         for (const s of data ?? []) {
-          const exId   = s.exercise_id;
-          const logDate = s.workout_logs?.log_date ?? '';
-          if (!best[exId] || logDate > best[exId].date) {
-            best[exId] = {
-              wt: kgToLbs(s.weight_kg), reps: s.reps, date: logDate,
-            };
+          const ld = s.workout_logs?.log_date ?? '';
+          if (!best[s.exercise_id] || ld > best[s.exercise_id].date) {
+            best[s.exercise_id] = { wt: kgToLbs(s.weight_kg), reps: s.reps, date: ld };
           }
         }
-
-        for (const [exId, last] of Object.entries(best)) {
+        for (const [exId, b] of Object.entries(best)) {
           const el = document.getElementById(`last-lift-${exId}`);
-          if (!el) continue;
-          const ago = last.date ? timeAgo(last.date) : '';
-          el.innerHTML = `<span style="color:var(--text-2)">Last: ${fmtLbs(last.wt)} × ${last.reps}${ago ? ' <span style="color:var(--text-3)">· ' + ago + '</span>' : ''}</span>`;
+          if (el) el.innerHTML =
+            `<span style="color:var(--text-3);font-size:0.75rem">Last: ${Math.round(b.wt)} lbs × ${b.reps}</span>`;
         }
-
-        // Clear "Loading…" for exercises with no history
-        document.querySelectorAll('[id^="last-lift-"]').forEach(el => {
-          if (el.innerHTML.includes('Loading')) el.innerHTML = '<span style="color:var(--text-3)">No history yet</span>';
-        });
-      } catch(e) {
-        document.querySelectorAll('[id^="last-lift-"]').forEach(el => {
-          if (el.innerHTML.includes('Loading')) el.innerHTML = '';
-        });
-      }
-    }
-
-    function timeAgo(dateStr) {
-      const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
-      if (days === 0) return 'today';
-      if (days === 1) return 'yesterday';
-      if (days < 14)  return `${days}d ago`;
-      if (days < 60)  return `${Math.floor(days/7)}w ago`;
-      return `${Math.floor(days/30)}mo ago`;
-    }
-
-    // ── Lift history ──────────────────────────────────────────
-    let _historyExId = null;
-
-    async function openLiftHistory(exerciseId, exerciseName) {
-      _historyExId = exerciseId;
-      document.getElementById('lift-history-title').textContent = exerciseName;
-      document.getElementById('lift-history-sub').textContent   = 'Loading history…';
-      document.getElementById('lift-history-body').innerHTML    = '';
-      document.getElementById('lift-history-modal').classList.remove('hidden');
-
-      try {
-        const { data, error } = await ApexCore.getClient()
-          .from('set_logs')
-          .select(`
-            id, set_number, weight_kg, reps, rpe,
-            workout_logs!inner(id, log_date)
-          `)
-          .eq('exercise_id', exerciseId)
-          .eq('is_warmup', false)
-          .order('set_number')
-          .limit(60);
-
-        if (error) throw error;
-        renderLiftHistory(data ?? [], exerciseName);
-      } catch(e) {
-        document.getElementById('lift-history-sub').textContent = 'Could not load history';
-      }
-    }
-
-    function closeLiftHistory() {
-      document.getElementById('lift-history-modal').classList.add('hidden');
-    }
-
-    function renderLiftHistory(sets, exerciseName) {
-      if (!sets.length) {
-        document.getElementById('lift-history-sub').textContent = 'No logged sets yet';
-        document.getElementById('lift-history-body').innerHTML =
-          '<div style="text-align:center;padding:2rem;color:var(--text-3)">' +
-          'Start a workout to log sets</div>';
-        return;
-      }
-
-      // Group by workout_log date
-      const sessions = {};
-      for (const s of sets) {
-        const date = s.workout_logs?.log_date ?? 'Unknown';
-        if (!sessions[date]) sessions[date] = [];
-        sessions[date].push(s);
-      }
-
-      const sortedDates = Object.keys(sessions).sort((a, b) => b.localeCompare(a));
-      document.getElementById('lift-history-sub').textContent =
-        `${sortedDates.length} session${sortedDates.length !== 1 ? 's' : ''}`;
-
-      document.getElementById('lift-history-body').innerHTML = sortedDates.map(date => {
-        const sessionSets = sessions[date].sort((a, b) => a.set_number - b.set_number);
-        const d = new Date(date + 'T12:00:00');
-        const label = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
-
-        return `
-          <div class="lift-session">
-            <div class="lift-session-hdr">${label}</div>
-            ${sessionSets.map(s => `
-              <div class="lift-set-row">
-                <span class="lift-set-num">S${s.set_number}</span>
-                <span class="lift-set-val">${fmtLbs(kgToLbs(s.weight_kg))} × ${s.reps}</span>
-                ${s.rpe ? `<span class="lift-set-rpe">RPE ${s.rpe}</span>` : ''}
-                <button class="lift-set-edit"
-                        onclick="openEditSet('${s.id}',${kgToLbs(s.weight_kg)},${s.reps},${s.rpe ?? 'null'})">
-                  Edit
-                </button>
-              </div>`).join('')}
-          </div>`;
-      }).join('');
-    }
-
-    // ── Edit / delete set ─────────────────────────────────────
-    let _editSetId = null, _editSetRPE = null;
-
-    function openEditSet(id, wtLbs, reps, rpe) {
-      _editSetId  = id;
-      _editSetRPE = rpe;
-      document.getElementById('edit-set-wt').value   = Math.round(wtLbs * 4) / 4;
-      document.getElementById('edit-set-reps').value = reps;
-      document.querySelectorAll('.rpe-btn[id^="edit-rpe-"]').forEach(b => {
-        b.classList.toggle('rpe-active', parseInt(b.id.split('-').pop()) === rpe);
-      });
-      document.getElementById('edit-set-modal').classList.remove('hidden');
-    }
-
-    function closeEditSet() {
-      document.getElementById('edit-set-modal').classList.add('hidden');
-    }
-
-    function selectEditRPE(val) {
-      _editSetRPE = val;
-      document.querySelectorAll('.rpe-btn[id^="edit-rpe-"]')
-        .forEach(b => b.classList.toggle('rpe-active', parseInt(b.id.split('-').pop()) === val));
-    }
-
-    async function saveSetEdit() {
-      const wtLbs = parseFloat(document.getElementById('edit-set-wt').value);
-      const reps  = parseInt(document.getElementById('edit-set-reps').value);
-      if (isNaN(wtLbs) || isNaN(reps)) { showToast('Enter valid weight and reps', 'error'); return; }
-
-      const btn = document.querySelector('#edit-set-modal .btn-primary');
-      btn.disabled = true; btn.textContent = 'Saving…';
-
-      const { error } = await ApexCore.getClient()
-        .from('set_logs')
-        .update({ weight_kg: lbsToKg(wtLbs), reps, rpe: _editSetRPE })
-        .eq('id', _editSetId);
-
-      btn.disabled = false; btn.textContent = 'Save';
-      if (error) { showToast(error.message, 'error'); return; }
-
-      closeEditSet();
-      showToast('Set updated', 'success');
-      // Refresh history
-      if (_historyExId) {
-        const title = document.getElementById('lift-history-title').textContent;
-        openLiftHistory(_historyExId, title);
-      }
-    }
-
-    async function deleteSet() {
-      if (!confirm('Delete this set?')) return;
-      const { error } = await ApexCore.getClient()
-        .from('set_logs').delete().eq('id', _editSetId);
-      if (error) { showToast(error.message, 'error'); return; }
-      closeEditSet();
-      showToast('Set deleted', 'success');
-      if (_historyExId) {
-        const title = document.getElementById('lift-history-title').textContent;
-        openLiftHistory(_historyExId, title);
-      }
-    }
-
-    function renderDaysGrid(workouts, week) {
-      const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-      const grid = document.getElementById('days-grid');
-      grid.className = 'day-strip';
-      grid.innerHTML = '';
-
-      const byDay     = new Map(workouts.map(w => [w.day_of_week, w]));
-      const todayDow  = (() => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; })();
-
-      for (let i = 0; i < 7; i++) {
-        const wo  = byDay.get(i);
-        const isRest = !wo || wo.workout_type === null;
-        const pill = document.createElement('div');
-        pill.className = 'day-pill' + (isRest ? ' rest' : '');
-        if (wo?.is_completed) pill.classList.add('done');
-        if (i === todayDow && !isRest) pill.classList.add('today-dot');
-
-        pill.innerHTML = `
-          <div class="day-pill-name">${DAY_NAMES[i]}</div>
-          <div class="day-pill-label">${isRest ? 'Rest' : wo.label}</div>
-          ${wo?.is_completed ? '<div class="day-pill-done">✓</div>' : ''}
-        `;
-
-        if (!isRest) {
-          pill.addEventListener('click', () => {
-            document.querySelectorAll('.day-pill').forEach(p => p.classList.remove('active'));
-            pill.classList.add('active');
-            selectWorkout(wo, pill);
-          });
-        }
-        grid.appendChild(pill);
-      }
-
-      // Auto-select today (or first workout day)
-      const autoWo = byDay.get(todayDow) || workouts.find(w => w.workout_type);
-      if (autoWo && autoWo.workout_type) {
-        const idx   = autoWo.day_of_week;
-        const pill  = grid.children[idx];
-        if (pill) { pill.classList.add('active'); selectWorkout(autoWo, pill); }
-      }
-    }
-
-    async function selectWorkout(wo, cellEl) {
-      // Highlight selected pill
-      document.querySelectorAll('.day-pill').forEach(c => c.classList.remove('active'));
-      if (cellEl) cellEl.classList.add('active');
-
-      const { workout, error } = await ApexTraining.WeeklyPlan.getWorkout(wo.id);
-      if (error) { showToast('Failed to load workout', 'error'); return; }
-      APP.selectedWorkout = workout;
-
-      const detail   = document.getElementById('workout-detail');
-      const emptyEl  = document.getElementById('training-empty');
-      const cardioEl = document.getElementById('cardio-detail');
-      const cardsEl  = document.getElementById('exercise-cards');
-      const isDeload = workout.program_weeks?.is_deload;
-      const phase    = workout.program_weeks?.programs?.phase ?? APP.profile?.phase;
-
-      detail.classList.remove('hidden');
-      emptyEl.classList.add('hidden');
-      document.getElementById('detail-workout-name').textContent = workout.label;
-      document.getElementById('detail-deload-note').classList.toggle('hidden', !isDeload);
-
-      if (workout.workout_type === 'cardio') {
-        if (cardsEl) cardsEl.innerHTML = '';
-        cardioEl.classList.remove('hidden');
-        document.getElementById('detail-workout-meta').textContent = 'Cardio · active recovery';
-        document.getElementById('detail-workout-meta').textContent = 'Cardio session';
-        const c = ApexTraining.CardioEngine.prescribe(phase, isDeload);
-        document.getElementById('cardio-prescription').innerHTML = `
-          <div class="t-label t-muted" style="margin-bottom:8px">Today's cardio</div>
-          <div class="stack gap-8">
-            <div class="row gap-8"><span class="badge badge-accent">LISS</span>
-              <span class="t-small">${c.liss.durationMin} min · ${c.liss.zone} · ${c.liss.notes}</span></div>
-            ${c.hiit.sessions > 0 ? `
-              <div class="row gap-8"><span class="badge badge-warning">HIIT</span>
-                <span class="t-small">${c.hiit.durationMin} min · ${c.hiit.notes}</span></div>` : ''}
-          </div>`;
-        document.getElementById('start-workout-btn').classList.add('hidden');
-        return;
-      }
-
-      // Strength day
-      cardioEl.classList.add('hidden');
-      document.getElementById('start-workout-btn').classList.remove('hidden');
-
-      const rpeLabel = isDeload ? 'RPE ~7 (deload)' :
-        workout.planned_sets?.[0]?.rpe_target ? `RPE target ${workout.planned_sets[0].rpe_target}` : '';
-      document.getElementById('detail-workout-meta').textContent =
-        `${workout.planned_sets?.length ?? 0} exercises · ${rpeLabel}`;
-
-      // Render exercise cards
-      renderExerciseCards(workout.planned_sets ?? [], isDeload);
-      // Fetch last lifts in background and update cards
-      loadLastLifts(workout.planned_sets ?? []);
+      } catch(e) { /* non-critical */ }
     }
 
     async function generateProgram() {
-      showToast('Generating program…');
-      const { error } = await ApexTraining.ProgramBuilder.generate({ totalWeeks: 12 });
-      if (error) { showToast('Failed to generate program', 'error'); return; }
-      APP.loadedTabs.delete('training');
-      await loadTab('training');
-      showToast('Program generated!', 'success');
+      const btn = document.querySelector('#training-empty .btn-primary');
+      if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+      try {
+        const { error } = await ApexTraining.ProgramBuilder.generate({
+          userId:    (await ApexCore.Auth.getUser()).id,
+          profile:   APP.profile,
+          startDate: new Date().toISOString().slice(0,10),
+        });
+        if (error) throw error;
+        APP.loadedTabs.delete('training');
+        await loadTab('training');
+      } catch(e) {
+        showToast(e.message || 'Could not generate program', 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate My Program'; }
+      }
     }
 
-    // ═══════════════════════════════════════════════════════
-    // WORKOUT SESSION
-    // ═══════════════════════════════════════════════════════
-    // ── Workout focus mode state ─────────────────────────────
-    const WORKOUT = {
-      exercises:   [],   // [{ps, setsTotal, setsDone, logs:[{set,wt,reps,rpe}]}]
-      curEx:       0,
-      curSet:      1,
-      selectedRPE: null,
-      _restTimer:  null,
-      _restCB:     null,
-    };
+    // ─────────────────────────────────────────────────────────
+    //  WORKOUT FOCUS MODE
+    // ─────────────────────────────────────────────────────────
 
     async function startWorkout() {
-      if (!APP.selectedWorkout) return;
-      const { session, error } = await ApexTraining.WorkoutSession.start(APP.selectedWorkout.id);
-      if (error) { showToast(error.message, 'error'); return; }
+      if (!_selectedWorkoutData) return;
+      const workout = _selectedWorkoutData;
 
-      WORKOUT.exercises   = session.plannedSets.map(ps => ({
-        ps, setsTotal: ps.sets, setsDone: 0, logs: [],
-      }));
-      WORKOUT.curEx       = 0;
-      WORKOUT.curSet      = 1;
-      WORKOUT.selectedRPE = null;
+      SESS = {
+        workoutId:   workout.id,
+        workoutLabel: workout.label,
+        workoutType:  workout.workout_type ?? 'strength',
+        exercises:    (workout.planned_sets || []).map(ps => ({
+          ps,
+          setsTotal: ps.sets,
+          setsDone:  0,
+          logs:      [],
+        })),
+        curEx:       0,
+        curSet:      1,
+        selectedRPE: null,
+        startedAt:   new Date(),
+        timerHandle: null,
+        restHandle:  null,
+        restCallback:null,
+      };
 
-      // Hide bottom nav, reveal dark focus shell
+      // Hide nav, show dark focus shell
       document.querySelector('.bottom-nav').style.setProperty('display','none','important');
       document.getElementById('focus-mode').classList.remove('fm-hidden');
 
-      // Show the intro overlay — workout name + "get ready" for 1.4 s
+      // Intro overlay
       const intro = document.getElementById('focus-intro');
-      document.getElementById('fi-name').textContent =
-        APP.selectedWorkout.label || 'Workout';
+      document.getElementById('fi-name').textContent    = workout.label;
       document.getElementById('fi-excount').textContent =
-        `${WORKOUT.exercises.length} exercise${WORKOUT.exercises.length !== 1 ? 's' : ''}`;
-      intro.classList.remove('fm-hidden');
-      intro.classList.remove('fi-exit');
+        `${SESS.exercises.length} exercise${SESS.exercises.length !== 1 ? 's' : ''}`;
+      intro.classList.remove('fm-hidden', 'fi-exit');
 
-      // After 1.4 s, slide the intro away and reveal the first exercise
       setTimeout(() => {
         intro.classList.add('fi-exit');
         setTimeout(() => {
@@ -1657,340 +1467,376 @@
         }, 380);
       }, 1400);
 
-      APP.timerInterval = setInterval(() => {
-        const s  = ApexTraining.WorkoutSession.getState();
+      // Elapsed timer
+      SESS.timerHandle = setInterval(() => {
         const el = document.getElementById('focus-elapsed');
-        if (el) el.textContent = ApexTraining.SessionTimer.format(
-          s.timer ?? ApexTraining.SessionTimer.create()
-        );
+        if (!el || !SESS) return;
+        const secs = Math.round((Date.now() - SESS.startedAt.getTime()) / 1000);
+        const m = Math.floor(secs / 60), s = secs % 60;
+        el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
       }, 1000);
     }
 
     function renderFocusExercise() {
-      const item = WORKOUT.exercises[WORKOUT.curEx];
-      if (!item) { openCompleteModal(); return; }
-      const { ps } = item;
-      const ex = ps.exercises ?? {};
+      if (!SESS) return;
+      const ex = SESS.exercises[SESS.curEx];
+      if (!ex) { openCompleteModal(); return; }
+      const { ps } = ex;
+      const exData = ps.exercises ?? {};
 
-      // Set ambient glow colour to match the muscle group
-      const muscleGlowMap = {
+      // Progress bar
+      const total = SESS.exercises.reduce((s,e) => s + e.setsTotal, 0);
+      const done  = SESS.exercises.reduce((s,e,i) =>
+        s + (i < SESS.curEx ? e.setsTotal : i === SESS.curEx ? ex.setsDone : 0), 0);
+      const fill = document.getElementById('focus-progress-fill');
+      if (fill) fill.style.width = (total ? (done/total)*100 : 0) + '%';
+
+      // Counter
+      document.getElementById('focus-ex-counter').textContent =
+        `Exercise ${SESS.curEx + 1} / ${SESS.exercises.length}`;
+
+      // Ambient glow by muscle group
+      const glowMap = {
         chest:'rgba(248,113,113,0.18)', back:'rgba(96,165,250,0.18)',
         shoulders:'rgba(251,191,36,0.18)', quads:'rgba(52,211,153,0.18)',
         hamstrings:'rgba(52,211,153,0.18)', glutes:'rgba(16,185,129,0.18)',
         biceps:'rgba(167,139,250,0.18)', triceps:'rgba(192,132,252,0.18)',
         core:'rgba(251,146,60,0.18)', calves:'rgba(56,189,248,0.18)',
       };
-      const glowColor = muscleGlowMap[(ps.exercises?.muscle_primary||'').toLowerCase()]
-                     || 'rgba(99,102,241,0.18)';
-      document.getElementById('focus-mode').style.setProperty('--fm-glow', glowColor);
+      document.getElementById('focus-mode')
+        .style.setProperty('--fm-glow',
+          glowMap[(exData.muscle_primary||'').toLowerCase()] || 'rgba(99,102,241,0.18)');
 
-      // Overall workout progress bar
-      const totalSets = WORKOUT.exercises.reduce((s, e) => s + e.setsTotal, 0);
-      const doneSets  = WORKOUT.exercises.reduce((s, e, i) =>
-        s + (i < WORKOUT.curEx ? e.setsTotal : i === WORKOUT.curEx ? item.setsDone : 0), 0);
-      const pct = totalSets > 0 ? (doneSets / totalSets) * 100 : 0;
-      const fill = document.getElementById('focus-progress-fill');
-      if (fill) fill.style.width = pct + '%';
-
-      // Progress counter
-      document.getElementById('focus-ex-counter').textContent =
-        `Exercise ${WORKOUT.curEx + 1} / ${WORKOUT.exercises.length}`;
-
-      // Muscle group chip
-      const chipEl = document.getElementById('focus-muscle-chip');
-      if (chipEl) {
-        const col   = typeof muscleColor === 'function' ? muscleColor(ex.muscle_primary) : '#6366F1';
-        const label = ex.muscle_primary
-          ? ex.muscle_primary.charAt(0).toUpperCase() + ex.muscle_primary.slice(1)
-          : '';
-        chipEl.textContent  = label;
-        chipEl.style.display    = label ? 'inline-block' : 'none';
-        chipEl.style.background = col + '22';
-        chipEl.style.color      = col;
-        chipEl.style.borderColor = col + '55';
+      // Muscle chip
+      const chip = document.getElementById('focus-muscle-chip');
+      if (chip && exData.muscle_primary) {
+        const col   = muscleColor(exData.muscle_primary);
+        chip.textContent     = exData.muscle_primary.charAt(0).toUpperCase() + exData.muscle_primary.slice(1);
+        chip.style.display   = 'inline-block';
+        chip.style.background = col + '22';
+        chip.style.color      = col;
+        chip.style.borderColor = col + '55';
       }
 
-      // Exercise name + meta
-      document.getElementById('focus-ex-name').textContent = ex.name ?? 'Exercise';
-      const parts = [`${ps.reps_min}–${ps.reps_max} reps`,
-                     `RPE ${ps.rpe_target}`,
-                     ps.rest_seconds >= 60
-                       ? `${Math.floor(ps.rest_seconds / 60)}m rest`
-                       : `${ps.rest_seconds}s rest`].filter(Boolean);
+      // Name + meta
+      document.getElementById('focus-ex-name').textContent = exData.name ?? 'Exercise';
+      const parts = [
+        `${ps.reps_min}–${ps.reps_max} reps`,
+        ps.rpe_target ? `RPE ${ps.rpe_target}` : '',
+        ps.rest_seconds >= 60 ? `${Math.floor(ps.rest_seconds/60)}m rest` : ps.rest_seconds ? `${ps.rest_seconds}s rest` : '',
+      ].filter(Boolean);
       document.getElementById('focus-ex-meta').textContent = parts.join(' · ');
 
       // Set dots
       document.getElementById('focus-set-dots').innerHTML =
-        Array.from({ length: item.setsTotal }, (_, i) => {
-          const c = i < item.setsDone ? 'dot-done' : i === item.setsDone ? 'dot-cur' : '';
-          return `<div class="set-dot ${c}"></div>`;
+        Array.from({ length: ex.setsTotal }, (_,i) => {
+          const cls = i < ex.setsDone ? 'dot-done' : i === ex.setsDone ? 'dot-cur' : '';
+          return `<div class="set-dot ${cls}"></div>`;
         }).join('');
 
-      // Pre-fill inputs from last log or program target
-      const last = item.logs.at(-1);
-      const suggestKg = ps.notes?.match(/Target:\s*([\d.]+)/)?.[1] ?? '';
-      const suggestWt = suggestKg ? Math.round(kgToLbs(parseFloat(suggestKg))) : '';
-      document.getElementById('focus-wt').value   = last?.wt ?? suggestWt ?? '';
-      document.getElementById('focus-reps').value = last?.reps ?? ps.reps_min ?? '';
+      // Pre-fill from last log
+      const last = ex.logs.at(-1);
+      document.getElementById('focus-wt').value   = last?.wt   ?? '';
+      document.getElementById('focus-reps').value = last?.reps ?? (ps.reps_min ?? '');
 
       // RPE
-      if (!WORKOUT.selectedRPE) WORKOUT.selectedRPE = ps.rpe_target;
+      if (!SESS.selectedRPE) SESS.selectedRPE = ps.rpe_target ?? null;
       renderRPERow();
 
       // Log button
-      const btn = document.getElementById('log-set-btn');
-      btn.disabled    = false;
-      btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
-      btn.classList.remove('focus-log-flash');
+      document.getElementById('log-set-btn').textContent =
+        `Log Set ${SESS.curSet} / ${ex.setsTotal}`;
 
-      renderCompletedSets(item.logs);
-      document.getElementById('focus-body').scrollTo({ top: 0, behavior: 'smooth' });
+      // Completed sets
+      renderCompletedSets(ex.logs);
+      document.getElementById('focus-body')?.scrollTo({ top:0, behavior:'smooth' });
+    }
+
+    // ── Set logging — 100% synchronous, zero network ─────────
+    function logFocusSet() {
+      if (!SESS) return;
+      const ex = SESS.exercises[SESS.curEx];
+      if (!ex) { openCompleteModal(); return; }
+
+      const wt   = parseFloat(document.getElementById('focus-wt').value);
+      const reps = parseInt(document.getElementById('focus-reps').value);
+      const rpe  = SESS.selectedRPE;
+
+      if (isNaN(wt) || isNaN(reps) || !rpe) {
+        showToast('Enter weight, reps and RPE', 'error');
+        return;
+      }
+
+      // Record in memory
+      ex.logs.push({ set: SESS.curSet, wt, reps, rpe });
+      ex.setsDone++;
+      SESS.selectedRPE = null;
+
+      // Haptic + flash
+      const btn = document.getElementById('log-set-btn');
+      if (btn) { void btn.offsetWidth; btn.classList.add('focus-log-flash'); }
+      if (navigator.vibrate) navigator.vibrate(40);
+
+      // Decide: done with workout, or rest before next set?
+      const isLastSet = SESS.curSet >= ex.setsTotal;
+      const isLastEx  = SESS.curEx  >= SESS.exercises.length - 1;
+
+      if (isLastSet && isLastEx) {
+        // Finished — go straight to complete modal
+        advanceWorkout();
+      } else {
+        showRestOverlay(ex.ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
+      }
     }
 
     function renderRPERow() {
-      const rpes = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
-      document.getElementById('rpe-row').innerHTML = rpes.map(r => `
-        <button class="rpe-btn${r === WORKOUT.selectedRPE ? ' rpe-active' : ''}"
-                onclick="selectRPE(${r})">${r}</button>`).join('');
+      const values = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+      document.getElementById('rpe-row').innerHTML = values.map(v =>
+        `<button class="rpe-btn ${SESS?.selectedRPE === v ? 'rpe-active' : ''}"
+                 onclick="selectFocusRPE(${v})">${v}</button>`
+      ).join('');
     }
 
-    function selectRPE(val) {
-      WORKOUT.selectedRPE = val;
-      document.querySelectorAll('.rpe-btn').forEach(b =>
-        b.classList.toggle('rpe-active', parseFloat(b.textContent) === val));
-    }
-
-    function adjustVal(id, delta) {
-      const inp = document.getElementById(id);
-      const cur = parseFloat(inp.value) || 0;
-      inp.value = Math.max(0, parseFloat((cur + delta).toFixed(1)));
+    function selectFocusRPE(val) {
+      if (SESS) SESS.selectedRPE = val;
+      renderRPERow();
     }
 
     function renderCompletedSets(logs) {
       const el = document.getElementById('focus-history');
-      if (!logs.length) { el.innerHTML = ''; return; }
+      if (!logs?.length) { el.innerHTML = ''; return; }
       el.innerHTML = `
         <div class="focus-history-header">Completed</div>
         ${logs.map(l => `
           <div class="focus-history-row">
             <span class="fhr-set">Set ${l.set}</span>
-            <span class="fhr-val">${l.wt} lbs &times; ${l.reps}</span>
+            <span class="fhr-val">${l.wt} lbs × ${l.reps}</span>
             <span class="fhr-rpe">RPE ${l.rpe}</span>
-            <span class="fhr-check">&#x2713;</span>
+            <span class="fhr-check">✓</span>
           </div>`).join('')}`;
     }
 
-    function logFocusSet() {
-      const item = WORKOUT.exercises[WORKOUT.curEx];
-      if (!item) { openCompleteModal(); return; }
-
-      const btn  = document.getElementById('log-set-btn');
-      const wt   = parseFloat(document.getElementById('focus-wt').value);
-      const reps = parseInt(document.getElementById('focus-reps').value);
-      const rpe  = WORKOUT.selectedRPE;
-
-      if (isNaN(wt) || isNaN(reps) || !rpe) {
-        showToast('Enter weight, reps and RPE', 'error'); return;
-      }
-
-      const { ps } = item;
-
-      // logSet is synchronous — no network call, no await needed
-      const result = ApexTraining.WorkoutSession.logSet({
-        plannedSetId: ps.id,
-        exerciseId:   ps.exercise_id,
-        setNumber:    WORKOUT.curSet,
-        weightKg:     lbsToKg(wt),
-        reps, rpe,
-      });
-
-      if (result?.error) {
-        showToast(result.error.message, 'error');
-        return;
-      }
-
-      // Record locally
-      item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
-      item.setsDone++;
-
-      // Haptic + flash
-      if (btn) { void btn.offsetWidth; btn.classList.add('focus-log-flash'); }
-      if (navigator.vibrate) navigator.vibrate(40);
-
-      // Advance: last set of last exercise → complete; otherwise → rest
-      const isWorkoutDone = WORKOUT.curSet >= item.setsTotal &&
-                            WORKOUT.curEx  >= WORKOUT.exercises.length - 1;
-      if (isWorkoutDone) {
-        advanceWorkout();
-      } else {
-        showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
-      }
-    }
-
     function getNextSetInfo() {
-      const item = WORKOUT.exercises[WORKOUT.curEx];
-      if (WORKOUT.curSet < item.setsTotal)
-        return `Set ${WORKOUT.curSet + 1} of ${item.setsTotal} — ${item.ps.exercises?.name}`;
-      const nIdx = WORKOUT.curEx + 1;
-      if (nIdx < WORKOUT.exercises.length)
-        return WORKOUT.exercises[nIdx].ps.exercises?.name ?? 'Next exercise';
-      return 'Last set — great work!';
+      if (!SESS) return '';
+      const ex = SESS.exercises[SESS.curEx];
+      if (!ex) return '';
+      if (SESS.curSet < ex.setsTotal)
+        return `Set ${SESS.curSet + 1} of ${ex.setsTotal} — ${ex.ps.exercises?.name ?? ''}`;
+      const next = SESS.exercises[SESS.curEx + 1];
+      return next?.ps.exercises?.name ?? 'Last set — great work!';
     }
 
     function advanceWorkout() {
-      const item = WORKOUT.exercises[WORKOUT.curEx];
-      if (WORKOUT.curSet < item.setsTotal) {
-        WORKOUT.curSet++;
+      if (!SESS) return;
+      const ex = SESS.exercises[SESS.curEx];
+      if (!ex) { openCompleteModal(); return; }
+
+      if (SESS.curSet < ex.setsTotal) {
+        SESS.curSet++;
       } else {
-        WORKOUT.curEx++;
-        WORKOUT.curSet      = 1;
-        WORKOUT.selectedRPE = null;
-        if (WORKOUT.curEx >= WORKOUT.exercises.length) {
+        SESS.curEx++;
+        SESS.curSet       = 1;
+        SESS.selectedRPE  = null;
+        if (SESS.curEx >= SESS.exercises.length) {
           openCompleteModal(); return;
         }
       }
       renderFocusExercise();
     }
 
+    // ── Rest overlay ─────────────────────────────────────────
+    const RING_CIRC = 2 * Math.PI * 96;   // r=96 → 603
+
     function showRestOverlay(totalSec, nextInfo, onComplete) {
-      const ringEl = document.getElementById('rest-ring');
-      const secEl  = document.getElementById('rest-sec');
-      const CIRC   = 2 * Math.PI * 96;           // ≈ 603 (ring r=96)
+      if (!SESS) return;
+      if (SESS.restHandle) clearInterval(SESS.restHandle);
+      SESS.restCallback = onComplete;
 
-      WORKOUT._restCB = onComplete;
-      document.getElementById('rest-next').textContent = nextInfo;
-      secEl.textContent = totalSec;
+      document.getElementById('rest-next').textContent = nextInfo ?? '';
+      document.getElementById('rest-sec').textContent  = totalSec;
 
-      // Reset ring without transition, then re-enable
-      ringEl.style.transition      = 'none';
-      ringEl.style.strokeDasharray = `${CIRC}`;
-      ringEl.style.strokeDashoffset = '0';
+      const ring = document.getElementById('rest-ring');
+      ring.classList.remove('rest-ring-low');
+      ring.style.stroke           = 'url(#ring-grad)';
+      ring.style.strokeDasharray  = String(RING_CIRC);
+      ring.style.strokeDashoffset = '0';
+
       document.getElementById('rest-overlay').classList.remove('fm-hidden');
 
-      requestAnimationFrame(() => {
-        ringEl.style.transition = 'stroke-dashoffset 1s linear';
-      });
-
       let remaining = totalSec;
-      WORKOUT._restTimer = setInterval(() => {
+      SESS.restHandle = setInterval(() => {
         remaining--;
-        secEl.textContent             = Math.max(0, remaining);
-        ringEl.style.strokeDashoffset = `${CIRC * (1 - remaining / totalSec)}`;
-        // Pulse red when time is almost up
+        document.getElementById('rest-sec').textContent  = Math.max(0, remaining);
+        ring.style.strokeDashoffset = String(RING_CIRC * (1 - remaining / totalSec));
         if (remaining <= 10) {
-          ringEl.style.stroke = 'var(--danger)';
-          if (remaining === 10) ringEl.classList.add('rest-ring-low');
+          ring.classList.add('rest-ring-low');
+          ring.style.stroke = 'var(--danger)';
         }
-        if (remaining <= 0) _endRest(true);
+        if (remaining <= 0) _endRest();
       }, 1000);
     }
 
-    function _endRest(vibrate) {
-      clearInterval(WORKOUT._restTimer);
-      WORKOUT._restTimer = null;
-      // Reset ring to accent gradient
-      const ringEl = document.getElementById('rest-ring');
-      if (ringEl) {
-        ringEl.classList.remove('rest-ring-low');
-        ringEl.style.stroke = 'url(#ring-grad)';
-      }
+    function _endRest() {
+      if (!SESS) return;
+      clearInterval(SESS.restHandle);
+      SESS.restHandle = null;
+      const ring = document.getElementById('rest-ring');
+      if (ring) { ring.classList.remove('rest-ring-low'); ring.style.stroke = 'url(#ring-grad)'; }
       document.getElementById('rest-overlay').classList.add('fm-hidden');
-      if (vibrate && navigator.vibrate) navigator.vibrate([200, 100, 200]);
-      const cb = WORKOUT._restCB;
-      WORKOUT._restCB = null;
+      const cb = SESS.restCallback;
+      SESS.restCallback = null;
       if (cb) cb();
     }
 
-    function skipRest() { _endRest(false); }
+    function skipRest() { _endRest(); }
 
+    // ── Complete session modal ────────────────────────────────
     function openCompleteModal() {
       document.getElementById('complete-modal').classList.remove('hidden');
     }
 
     async function completeSession() {
-      const rpeVal   = parseFloat(document.getElementById('sess-rpe').value) || null;
-      const notesVal = document.getElementById('sess-notes').value.trim() || null;
-      const saveBtn  = document.querySelector('#complete-modal .btn-primary');
-      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+      if (!SESS) return;
+      const btn = document.querySelector('#complete-modal .btn-primary');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
       try {
         const user = await ApexCore.Auth.getUser();
         if (!user) throw new Error('Not signed in');
 
-        // Parse duration from the on-screen timer (avoids any internal timer state issues)
-        const elapsedText = document.getElementById('focus-elapsed')?.textContent || '00:00';
-        const parts       = elapsedText.split(':').map(Number);
-        const totalSecs   = parts.length === 3
-          ? parts[0]*3600 + parts[1]*60 + parts[2]
-          : parts[0]*60  + (parts[1] || 0);
-        const durationMin = Math.max(1, Math.round(totalSecs / 60));
+        const durationMin = Math.max(1,
+          Math.round((Date.now() - SESS.startedAt.getTime()) / 60000));
+        const rpe   = parseFloat(document.getElementById('sess-rpe').value) || null;
+        const notes = document.getElementById('sess-notes').value.trim() || null;
 
-        // Collect all logged sets directly from WORKOUT (local hub.html state)
-        const allLogs = [];
-        for (const ex of (WORKOUT.exercises || [])) {
-          for (const log of (ex.logs || [])) {
-            allLogs.push({
-              exercise_id:    ex.ps.exercise_id,
-              planned_set_id: ex.ps.id,
-              set_number:     log.set,
-              weight_kg:      lbsToKg(log.wt),
-              reps:           log.reps,
-              rpe:            log.rpe ?? null,
-              is_warmup:      false,
-            });
-          }
-        }
-
-        // ── 1. INSERT workout_log ──────────────────────────
+        // 1 — INSERT workout_log
         const { data: wl, error: wlErr } = await ApexCore.getClient()
           .from('workout_logs')
           .insert({
             user_id:            user.id,
-            planned_workout_id: APP.selectedWorkout?.id ?? null,
-            log_date:           new Date().toISOString().slice(0, 10),
+            workout_day_id: SESS.workoutId,
+            log_date:           new Date().toISOString().slice(0,10),
             duration_min:       durationMin,
-            rpe_overall:        rpeVal,
-            notes:              notesVal || null,
+            rpe_overall:        rpe,
+            notes:              notes,
           })
-          .select('id')
-          .single();
+          .select('id').single();
 
         if (wlErr) throw new Error('Could not save workout: ' + wlErr.message);
-        const workoutLogId = wl.id;
 
-        // ── 2. INSERT set_logs ─────────────────────────────
-        if (allLogs.length > 0) {
-          const rows = allLogs.map(l => ({ ...l, workout_log_id: workoutLogId }));
+        // 2 — Batch INSERT set_logs
+        const rows = [];
+        for (const ex of SESS.exercises) {
+          for (const log of ex.logs) {
+            rows.push({
+              workout_log_id:  wl.id,
+              exercise_id:     ex.ps.exercise_id,
+              planned_set_id:  ex.ps.id,
+              set_number:      log.set,
+              weight_kg:       lbsToKg(log.wt),
+              reps:            log.reps,
+              rpe:             log.rpe ?? null,
+              is_warmup:       false,
+            });
+          }
+        }
+        if (rows.length) {
           const { error: slErr } = await ApexCore.getClient()
             .from('set_logs').insert(rows);
-          if (slErr) console.warn('[Apex] set_logs insert partial failure:', slErr.message);
+          if (slErr) console.warn('[Apex] set_logs:', slErr.message);
         }
 
-        // ── 3. Fire-and-forget training.js cleanup ─────────
-        try { ApexTraining.WorkoutSession.abandon('handled by hub'); } catch(e) {}
-        try { localStorage.removeItem('apex_active_session'); } catch(e) {}
-
-        // ── 4. Build typed snapshot for summary ────────────
-        const setLogsForSummary = allLogs.map(l => ({
-          exerciseId: l.exercise_id,
-          weightKg:   l.weight_kg,
-          reps:       l.reps,
-          rpe:        l.rpe,
-          isWarmup:   false,
-        }));
-        const plannedSetsForSummary = (WORKOUT.exercises || []).map(ex => ex.ps);
+        // Show summary — pass snapshot before clearing SESS
+        const snapshot = {
+          exercises: SESS.exercises.map(ex => ({ ...ex })),
+          durationMin,
+          workoutLabel: SESS.workoutLabel,
+        };
 
         document.getElementById('complete-modal').classList.add('hidden');
-        await openWorkoutSummary(setLogsForSummary, plannedSetsForSummary, null);
+        await openWorkoutSummary(snapshot, rows);
 
         APP.loadedTabs.delete('training');
 
       } catch(e) {
-        console.error('[Apex] completeSession failed:', e);
+        console.error('[Apex] completeSession:', e);
         showToast(e.message || 'Could not save — please try again', 'error');
       } finally {
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save session'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Save session'; }
       }
+    }
+
+    // ── Workout summary ───────────────────────────────────────
+    async function openWorkoutSummary(snapshot, savedRows) {
+      const { exercises, durationMin } = snapshot;
+
+      // Duration
+      document.getElementById('ws-duration').textContent =
+        durationMin >= 60
+          ? `${Math.floor(durationMin/60)}h ${durationMin%60}m`
+          : `${durationMin}m`;
+
+      // Totals
+      const totalSets = exercises.reduce((s,ex) => s + ex.logs.length, 0);
+      const totalVol  = exercises.reduce((s,ex) =>
+        s + ex.logs.reduce((a,l) => a + lbsToKg(l.wt) * l.reps, 0), 0);
+      document.getElementById('ws-stats-row').innerHTML = `
+        <div class="ws-stat"><div class="ws-stat-val">${totalSets}</div><div class="ws-stat-lbl">Sets</div></div>
+        <div class="ws-stat"><div class="ws-stat-val">${Math.round(totalVol * 2.20462).toLocaleString()}</div><div class="ws-stat-lbl">lbs lifted</div></div>
+      `;
+
+      // Previous bests
+      const exIds = exercises.map(ex => ex.ps.exercise_id).filter(Boolean);
+      let prevBest = {};
+      if (exIds.length) {
+        try {
+          const today = new Date().toISOString().slice(0,10);
+          const { data } = await ApexCore.getClient()
+            .from('set_logs')
+            .select('exercise_id, weight_kg, workout_logs!inner(log_date)')
+            .in('exercise_id', exIds)
+            .eq('is_warmup', false)
+            .lt('workout_logs.log_date', today)
+            .order('weight_kg', { ascending: false })
+            .limit(exIds.length * 8);
+          for (const s of data || []) {
+            const lbs = Math.round((s.weight_kg||0) * 2.20462);
+            if (!prevBest[s.exercise_id] || lbs > prevBest[s.exercise_id])
+              prevBest[s.exercise_id] = lbs;
+          }
+        } catch(e) {}
+      }
+
+      // Exercise cards
+      const exEl = document.getElementById('ws-exercises');
+      exEl.innerHTML = exercises.map((ex, i) => {
+        if (!ex.logs.length) return '';
+        const name   = ex.ps.exercises?.name ?? 'Exercise';
+        const topWt  = Math.max(...ex.logs.map(l => l.wt));
+        const prev   = prevBest[ex.ps.exercise_id];
+        let delta = '';
+        if (prev !== undefined) {
+          const diff = topWt - prev;
+          if (diff > 0)      delta = `<span class="ws-delta ws-delta-up">▲ ${diff} lbs</span>`;
+          else if (diff < 0) delta = `<span class="ws-delta ws-delta-dn">▼ ${Math.abs(diff)} lbs</span>`;
+          else               delta = `<span class="ws-delta ws-delta-eq">— Same</span>`;
+        } else {
+          delta = `<span class="ws-delta ws-delta-new">★ First time</span>`;
+        }
+        return `
+          <div class="ws-ex-card" style="animation-delay:${0.3 + i * 0.07}s">
+            <div class="ws-ex-name">${name}</div>
+            <div class="ws-ex-row">
+              <div class="ws-ex-stat"><span class="ws-ex-val">${ex.logs.length}</span> sets</div>
+              <div class="ws-ex-stat"><span class="ws-ex-val">${topWt}</span> lbs peak</div>
+              ${delta}
+            </div>
+          </div>`;
+      }).join('');
+
+      document.getElementById('workout-summary').classList.remove('fm-hidden');
+      const wolfEl = document.getElementById('ws-wolf');
+      if (wolfEl && window.WolfMascot) WolfMascot.render(wolfEl, 110);
     }
 
     function closeSummary() {
@@ -2000,388 +1846,243 @@
       loadTab('training');
     }
 
-    async function openWorkoutSummary(setLogs, plannedSets, timer) {
-      // setLogs come from training.js _state.setLogs — camelCase:
-      // exerciseId, isWarmup, weightKg (NOT exercise_id / is_warmup / weight_kg)
-
-      // ── Stats ─────────────────────────────────────────────
-      const durationMin = timer
-        ? Math.round(ApexTraining.SessionTimer.elapsedSeconds(timer) / 60) : 0;
-      const workingSets = setLogs.filter(s => !s.isWarmup);
-      const totalSets   = workingSets.length;
-      const totalVol    = workingSets.reduce((sum, s) =>
-        sum + (s.weightKg || 0) * (s.reps || 0), 0);
-      const volLbs = Math.round(totalVol * 2.20462);
-
-      document.getElementById('ws-duration').textContent =
-        durationMin >= 60
-          ? `${Math.floor(durationMin/60)}h ${durationMin%60}m`
-          : `${durationMin || '—'}m`;
-
-      document.getElementById('ws-stats-row').innerHTML = `
-        <div class="ws-stat">
-          <div class="ws-stat-val">${totalSets}</div>
-          <div class="ws-stat-lbl">Sets</div>
-        </div>
-        <div class="ws-stat">
-          <div class="ws-stat-val">${volLbs.toLocaleString()}</div>
-          <div class="ws-stat-lbl">lbs lifted</div>
-        </div>
-      `;
-
-      // ── Per-exercise breakdown ─────────────────────────────
-      const byEx = {};
-      for (const s of workingSets) {
-        const id = s.exerciseId;
-        if (!id) continue;
-        if (!byEx[id]) byEx[id] = { sets: 0, topWeightLbs: 0 };
-        byEx[id].sets++;
-        byEx[id].topWeightLbs = Math.max(
-          byEx[id].topWeightLbs,
-          Math.round((s.weightKg || 0) * 2.20462)
-        );
-      }
-
-      const exIds = Object.keys(byEx);
-
-      // plannedSets ARE DB rows → snake_case (exercise_id, ps.exercises.name)
-      const exMap = {};
-      for (const ps of plannedSets) {
-        if (ps.exercise_id && ps.exercises) exMap[ps.exercise_id] = ps.exercises;
-      }
-
-      // ── Previous bests from DB ─────────────────────────────
-      let prevBest = {};
-      if (exIds.length > 0) {
-        try {
-          const today = new Date().toISOString().slice(0, 10);
-          const { data: prev } = await ApexCore.getClient()
-            .from('set_logs')
-            .select('exercise_id, weight_kg, workout_logs!inner(log_date)')
-            .in('exercise_id', exIds)
-            .eq('is_warmup', false)
-            .lt('workout_logs.log_date', today)
-            .order('weight_kg', { ascending: false })
-            .limit(exIds.length * 8);
-
-          for (const s of prev || []) {
-            const lbs = Math.round((s.weight_kg || 0) * 2.20462);
-            if (!prevBest[s.exercise_id] || lbs > prevBest[s.exercise_id]) {
-              prevBest[s.exercise_id] = lbs;
-            }
-          }
-        } catch(e) { /* non-critical — delta badges just won't show */ }
-      }
-
-      // ── Render exercise cards ──────────────────────────────
-      const exEl = document.getElementById('ws-exercises');
-      if (!exIds.length) {
-        exEl.innerHTML =
-          '<div style="color:rgba(255,255,255,.35);text-align:center;padding:1rem">No sets recorded</div>';
-      } else {
-        exEl.innerHTML = exIds.map((exId, i) => {
-          const data  = byEx[exId];
-          const ex    = exMap[exId] || {};
-          const name  = ex.name || 'Exercise';
-          const prev  = prevBest[exId];
-          const topWt = data.topWeightLbs;
-
-          let delta = '';
-          if (prev !== undefined && prev > 0) {
-            const diff = topWt - prev;
-            if (diff > 0)
-              delta = `<span class="ws-delta ws-delta-up">&#x25B2; ${diff} lbs</span>`;
-            else if (diff < 0)
-              delta = `<span class="ws-delta ws-delta-dn">&#x25BC; ${Math.abs(diff)} lbs</span>`;
-            else
-              delta = `<span class="ws-delta ws-delta-eq">&#x2015; Same</span>`;
-          } else {
-            delta = `<span class="ws-delta ws-delta-new">&#x2605; First time</span>`;
-          }
-
-          return `
-            <div class="ws-ex-card" style="animation-delay:${0.36 + i * 0.07}s">
-              <div class="ws-ex-name">${name}</div>
-              <div class="ws-ex-row">
-                <div class="ws-ex-stat"><span class="ws-ex-val">${data.sets}</span> sets</div>
-                <div class="ws-ex-stat"><span class="ws-ex-val">${topWt}</span> lbs peak</div>
-                ${delta}
-              </div>
-            </div>`;
-        }).join('');
-      }
-
-      // ── Show the screen ────────────────────────────────────
-      document.getElementById('workout-summary').classList.remove('fm-hidden');
-      // Render wolf mascot in summary hero
-      const wolfEl = document.getElementById('ws-wolf');
-      if (wolfEl && window.WolfMascot) WolfMascot.render(wolfEl, 110);
-    }
-
-    function confirmAbandon() {
-      const btn = document.querySelector('.focus-abandon-btn');
-      if (btn.dataset.confirm === '1') {
-        ApexTraining.WorkoutSession.abandon('User abandoned');
-        closeFocusMode();
-      } else {
-        btn.dataset.confirm  = '1';
-        btn.textContent      = 'Tap again to end';
-        btn.style.color      = 'var(--danger)';
-        setTimeout(() => {
-          if (btn.dataset.confirm === '1') {
-            btn.dataset.confirm = '0';
-            btn.textContent     = '&#x2715; End';
-            btn.style.color     = '';
-          }
-        }, 3000);
-      }
-    }
-
+    // ── Focus mode close ─────────────────────────────────────
     function closeFocusMode() {
-      clearInterval(APP.timerInterval);
-      if (WORKOUT._restTimer) { clearInterval(WORKOUT._restTimer); WORKOUT._restTimer = null; }
-      WORKOUT._restCB = null;
+      clearInterval(SESS?.timerHandle);
+      clearInterval(SESS?.restHandle);
+      SESS = null;
       document.getElementById('focus-mode').classList.add('fm-hidden');
       document.getElementById('rest-overlay').classList.add('fm-hidden');
+      document.getElementById('workout-summary').classList.add('fm-hidden');
       document.getElementById('complete-modal').classList.add('hidden');
       document.querySelector('.bottom-nav').style.removeProperty('display');
     }
 
-    // ═══════════════════════════════════════════════════════
-    // EXERCISE SWAP MODAL (simplified)
-    // ═══════════════════════════════════════════════════════
-    // ── Exercise swap state ──────────────────────────────────
-    const SWAP = { plannedSetId: null, pool: [] };
+    function confirmAbandon() {
+      if (!confirm('End this workout? Your progress will be lost.')) return;
+      closeFocusMode();
+    }
 
-    async function openSwapModal(plannedSetId, muscle, isCompound) {
-      SWAP.plannedSetId = plannedSetId;
-      document.getElementById('swap-modal').classList.remove('hidden');
-      document.getElementById('swap-subtitle').textContent =
-        `${muscle} · ${isCompound === 'true' ? 'Compound' : 'Isolation'}`;
-      document.getElementById('swap-search').value = '';
+    // ─────────────────────────────────────────────────────────
+    //  LIFT HISTORY
+    // ─────────────────────────────────────────────────────────
+
+    let _historyExId = null;
+
+    async function openLiftHistory(exerciseId, name) {
+      _historyExId = exerciseId;
+      const modal  = document.getElementById('lift-history-modal');
+      if (!modal) return;
+      document.getElementById('history-title').textContent = name ?? 'Lift History';
+      document.getElementById('history-body').innerHTML =
+        '<div style="color:var(--text-3);text-align:center;padding:2rem">Loading…</div>';
+      modal.classList.remove('hidden');
+
+      try {
+        const { data, error } = await ApexCore.getClient()
+          .from('set_logs')
+          .select('id, set_number, weight_kg, reps, rpe, workout_logs!inner(id, log_date)')
+          .eq('exercise_id', exerciseId)
+          .eq('is_warmup', false)
+          .order('set_number')
+          .limit(60);
+
+        if (error || !data?.length) {
+          document.getElementById('history-body').innerHTML =
+            '<div style="color:var(--text-3);text-align:center;padding:2rem">No history yet</div>';
+          return;
+        }
+
+        // Group by date
+        const sessions = {};
+        for (const s of data) {
+          const date = s.workout_logs?.log_date ?? '?';
+          if (!sessions[date]) sessions[date] = [];
+          sessions[date].push(s);
+        }
+        const dates = Object.keys(sessions).sort((a,b) => b.localeCompare(a));
+
+        document.getElementById('history-body').innerHTML = dates.map(date => `
+          <div style="margin-bottom:1.25rem">
+            <div style="font-size:0.75rem;font-weight:700;letter-spacing:0.06em;
+                        text-transform:uppercase;color:var(--text-3);
+                        margin-bottom:8px">${date}</div>
+            ${sessions[date].map(s => `
+              <div class="focus-history-row" style="padding:8px 0;border-bottom:0.5px solid var(--border)">
+                <span class="fhr-set">Set ${s.set_number}</span>
+                <span class="fhr-val">${Math.round(kgToLbs(s.weight_kg))} lbs × ${s.reps}</span>
+                <span class="fhr-rpe">${s.rpe ? 'RPE ' + s.rpe : ''}</span>
+              </div>`).join('')}
+          </div>`).join('');
+      } catch(e) {
+        document.getElementById('history-body').innerHTML =
+          '<div style="color:var(--danger);padding:1rem">Error loading history</div>';
+      }
+    }
+
+    function closeLiftHistory() {
+      document.getElementById('lift-history-modal')?.classList.add('hidden');
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  EXERCISE SWAP
+    // ─────────────────────────────────────────────────────────
+
+    let _swap = { plannedSetId: null, muscle: null, isCompound: false, pool: [], allEx: [] };
+
+    async function openSwapModal(plannedSetId, muscle, isCompoundStr) {
+      _swap.plannedSetId = plannedSetId;
+      _swap.muscle       = muscle;
+      _swap.isCompound   = isCompoundStr === 'true';
+      const modal = document.getElementById('swap-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
       document.getElementById('swap-list').innerHTML =
-        '<div style="padding:2rem;text-align:center;color:var(--text-3)">Loading alternatives…</div>';
+        '<div style="color:var(--text-3);text-align:center;padding:2rem">Loading…</div>';
 
-      const allEx = await ApexTraining.ExerciseLibrary.getAll();
-      SWAP.pool   = ApexTraining.ExerciseLibrary.filter(allEx, [muscle], isCompound === 'true');
-      filterSwapList();
-      setTimeout(() => document.getElementById('swap-search').focus(), 80);
+      if (!_swap.allEx.length)
+        _swap.allEx = await ApexTraining.ExerciseLibrary.getAll();
+
+      filterSwapList('');
+    }
+
+    function filterSwapList(query) {
+      _swap.pool = ApexTraining.ExerciseLibrary.filter(
+        _swap.allEx, [_swap.muscle], _swap.isCompound);
+      const q = query.trim().toLowerCase();
+      const results = q
+        ? _swap.pool.filter(ex => ex.name.toLowerCase().includes(q))
+        : _swap.pool;
+
+      document.getElementById('swap-list').innerHTML = results.slice(0,30).map(ex => `
+        <div class="food-row" onclick="confirmSwap('${ex.id}')">
+          <div class="fp-row-info">
+            <div class="fp-row-name">${ex.name}</div>
+            <div class="fp-row-brand">${ex.equipment ?? ''} · ${ex.difficulty ?? ''}</div>
+          </div>
+          <span class="fp-row-chevron">›</span>
+        </div>`).join('') || '<div style="color:var(--text-3);text-align:center;padding:2rem">No matches</div>';
+    }
+
+    async function confirmSwap(newExerciseId) {
+      try {
+        const { error } = await ApexTraining.WeeklyPlan.swapExercise(
+          _swap.plannedSetId, newExerciseId);
+        if (error) throw error;
+        document.getElementById('swap-modal')?.classList.add('hidden');
+        if (_selectedWorkoutId) selectWorkout(_selectedWorkoutId, null);
+        showToast('Exercise swapped ✓', 'success');
+      } catch(e) {
+        showToast(e.message || 'Could not swap', 'error');
+      }
     }
 
     function closeSwapModal() {
-      document.getElementById('swap-modal').classList.add('hidden');
+      document.getElementById('swap-modal')?.classList.add('hidden');
     }
 
-    function filterSwapList() {
-      const q    = document.getElementById('swap-search').value.toLowerCase().trim();
-      const list = q
-        ? SWAP.pool.filter(e => e.name.toLowerCase().includes(q) ||
-                                (e.equipment||'').toLowerCase().includes(q))
-        : SWAP.pool;
-      const el   = document.getElementById('swap-list');
-
-      if (!list.length) {
-        el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-3)">No alternatives found</div>';
-        return;
-      }
-      el.innerHTML = list.map(e => `
-        <div onclick="confirmSwap('${e.id}','${e.name.replace(/'/g,"\'")}')"
-             style="display:flex;align-items:center;justify-content:space-between;
-                    gap:10px;padding:0.875rem 1.25rem;cursor:pointer;
-                    border-bottom:0.5px solid var(--border);transition:background 0.1s"
-             onmouseenter="this.style.background='var(--surface-alt)'"
-             onmouseleave="this.style.background=''">
-          <div>
-            <div style="font-size:0.9375rem;font-weight:500">${e.name}</div>
-            <div style="font-size:0.75rem;color:var(--text-3);margin-top:2px">
-              ${e.muscle_primary||''} · ${e.equipment||''}
-            </div>
-          </div>
-          ${e.is_compound ? '<span class="badge badge-accent" style="font-size:0.65rem;flex-shrink:0">compound</span>' : ''}
-        </div>`).join('');
-    }
-
-    async function confirmSwap(exerciseId, exerciseName) {
-      const { error } = await ApexTraining.WeeklyPlan.swapExercise(SWAP.plannedSetId, exerciseId);
-      closeSwapModal();
-      if (error) { showToast('Swap failed: ' + error.message, 'error'); return; }
-      APP.loadedTabs.delete('training');
-      await loadTab('training');
-      showToast(`Swapped to ${exerciseName}`, 'success');
-    }
-
-
-    // ── Goal editing ─────────────────────────────────────────
-    function openGoalModal() {
-      const current = APP.profile?.phase || 'maintain';
-      document.querySelectorAll('.goal-opt-btn').forEach(b => {
-        const match = b.dataset.phase === current;
-        b.style.borderColor  = match ? 'var(--accent)' : '';
-        b.style.background   = match ? 'var(--accent-light)' : '';
-      });
-      document.getElementById('goal-edit-modal').classList.remove('hidden');
-    }
-
-    function closeGoalModal() {
-      document.getElementById('goal-edit-modal').classList.add('hidden');
-    }
-
-    async function selectGoal(phase) {
-      // Disable the selected button while saving
-      const btn = document.querySelector(`[data-phase="${phase}"]`);
-      if (btn) btn.style.opacity = '0.5';
-
-      const { data: updatedProfile, error } = await ApexCore.Profile.update({ phase });
-      if (btn) btn.style.opacity = '1';
-
-      if (error) {
-        showToast('Could not save goal: ' + error.message, 'error');
-        return;
-      }
-
-      // If the upsert returned the full row, use it.
-      // Otherwise do an explicit fresh fetch — never rely on stale cache.
-      if (updatedProfile && updatedProfile.calorie_target) {
-        APP.profile = updatedProfile;
-      } else {
-        const fresh = await ApexCore.Profile.get();
-        if (fresh) APP.profile = fresh;
-      }
-
-      // Sync today's meal plan targets with the new phase
-      const today = new Date().toISOString().slice(0, 10);
-      await ApexCore.getClient()
-        .from('meal_plans')
-        .update({
-          phase,
-          kcal_target:    APP.profile.calorie_target,
-          protein_target: APP.profile.protein_target_g,
-          carb_target:    APP.profile.carb_target_g,
-          fat_target:     APP.profile.fat_target_g,
-        })
-        .eq('user_id', APP.profile.id)
-        .eq('plan_date', today);
-
-      closeGoalModal();
-      renderTopBar();
-
-      // Force every tab to reload with the new targets
-      ['home', 'diary', 'training', 'stats'].forEach(t => APP.loadedTabs.delete(t));
-      await loadTab(APP.activeTab);
-
-      const label = phase === 'bulk' ? 'Lean Bulk' : phase === 'cut' ? 'Cut' : 'Maintain';
-      showToast(`${label} — targets updated to ${APP.profile.calorie_target?.toLocaleString() ?? '?'} kcal`, 'success');
-    }
-
-    function openQuickAdd() {
-      document.getElementById('quick-add-modal').classList.remove('hidden');
-    }
-
-    function closeQuickAdd() {
-      document.getElementById('quick-add-modal').classList.add('hidden');
-    }
-
+    // ─────────────────────────────────────────────────────────
+    //  SPLIT SELECTOR
+    // ─────────────────────────────────────────────────────────
 
     const SPLIT_META = {
-      beginner:   { icon:'&#x1F7E2;', days:'3 days/week',  freq:'3×/muscle/week',  level:'Beginner'     },
-      full_body_4:{ icon:'&#x1F535;', days:'4 days/week',  freq:'4×/muscle/week',  level:'Intermediate' },
-      intermediate:{ icon:'&#x1F7E1;',days:'4 days/week',  freq:'2×/muscle/week',  level:'Intermediate' },
-      strength:   { icon:'&#x1F7E3;', days:'4 days/week',  freq:'2×/muscle/week',  level:'Intermediate+'},
-      ppl_3:      { icon:'&#x26AA;',  days:'3 days/week',  freq:'1×/muscle/week',  level:'Any'          },
-      advanced:   { icon:'&#x1F534;', days:'6 days/week',  freq:'2×/muscle/week',  level:'Advanced'     },
-      body_part:  { icon:'&#x1F7E0;', days:'5 days/week',  freq:'1×/muscle/week',  level:'Intermediate+'},
+      beginner:    { icon:'🟢', days:'3 days/week',  level:'Beginner'     },
+      full_body_4: { icon:'🔵', days:'4 days/week',  level:'Intermediate' },
+      intermediate:{ icon:'🟡', days:'4 days/week',  level:'Intermediate' },
+      strength:    { icon:'🔴', days:'4 days/week',  level:'Intermediate' },
+      ppl_3:       { icon:'🟠', days:'3 days/week',  level:'Intermediate' },
+      advanced:    { icon:'🟣', days:'6 days/week',  level:'Advanced'     },
+      body_part:   { icon:'⚫', days:'5 days/week',  level:'Advanced'     },
     };
 
-    // ═══════════════════════════════════════════════════════
-    // BACKLOG — log a past workout without live set tracking
-    // ═══════════════════════════════════════════════════════
+    function openSplitModal() {
+      const modal = document.getElementById('split-modal');
+      if (!modal) return;
+      const splits  = ApexTraining.ProgramBuilder.getSplits();
+      const current = APP.profile?.preferred_split;
+      document.getElementById('split-list').innerHTML =
+        Object.entries(splits).map(([key, s]) => {
+          const m = SPLIT_META[key] || {};
+          return `
+            <div class="food-row ${key === current ? 'fp-tab active' : ''}"
+                 onclick="selectSplit('${key}')">
+              <div class="fp-row-info">
+                <div class="fp-row-name">${m.icon ?? '•'} ${s.name}</div>
+                <div class="fp-row-brand">${m.days ?? ''} · ${m.level ?? ''}</div>
+              </div>
+              ${key === current ? '<span style="color:var(--accent)">✓</span>' : ''}
+            </div>`;
+        }).join('');
+      modal.classList.remove('hidden');
+    }
+
+    function closeSplitModal() {
+      document.getElementById('split-modal')?.classList.add('hidden');
+    }
+
+    async function selectSplit(splitKey) {
+      closeSplitModal();
+      const { data, error } = await ApexCore.Profile.update({ preferred_split: splitKey });
+      if (error) { showToast('Could not update split', 'error'); return; }
+      if (data) APP.profile = data;
+      showToast('Split updated — regenerating program…', 'success');
+      await generateProgram();
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  BACKLOG
+    // ─────────────────────────────────────────────────────────
+
     let _backlogRPE = null;
 
     function openBacklogModal() {
       _backlogRPE = null;
-
-      // Reset RPE buttons
       document.querySelectorAll('[id^="backlog-rpe-"]')
         .forEach(b => b.classList.remove('rpe-active'));
-
-      // Default to yesterday
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const yStr = yesterday.toISOString().slice(0, 10);
-
-      const dateInput = document.getElementById('backlog-date');
-      dateInput.value = yStr;
-      dateInput.max   = new Date().toISOString().slice(0, 10); // can't backlog future
-
+      const yStr = yesterday.toISOString().slice(0,10);
+      const inp  = document.getElementById('backlog-date');
+      inp.value  = yStr;
+      inp.max    = new Date().toISOString().slice(0,10);
       document.getElementById('backlog-duration').value = '60';
       document.getElementById('backlog-notes').value    = '';
       document.getElementById('backlog-workout-label').textContent = '';
-
-      document.getElementById('backlog-modal').classList.remove('hidden');
-
-      // Fetch the workout label for yesterday
+      document.getElementById('backlog-modal')?.classList.remove('hidden');
       backlogDateChanged();
     }
 
     function closeBacklogModal() {
-      document.getElementById('backlog-modal').classList.add('hidden');
+      document.getElementById('backlog-modal')?.classList.add('hidden');
     }
 
     function selectBacklogRPE(val) {
       _backlogRPE = val;
       document.querySelectorAll('[id^="backlog-rpe-"]')
         .forEach(b => b.classList.toggle('rpe-active',
-          parseInt(b.id.replace('backlog-rpe-', '')) === val));
+          parseInt(b.id.replace('backlog-rpe-','')) === val));
     }
 
     async function backlogDateChanged() {
       const date  = document.getElementById('backlog-date').value;
-      const label = document.getElementById('backlog-workout-label');
-      if (!date) { label.textContent = ''; return; }
-
-      label.textContent = 'Looking up workout…';
-      label.style.color = 'var(--text-3)';
-
+      const lbl   = document.getElementById('backlog-workout-label');
+      if (!date) { lbl.textContent = ''; return; }
+      lbl.textContent = 'Looking up…';
       try {
         const user = await ApexCore.Auth.getUser();
-        const { data: program } = await ApexCore.getClient()
-          .from('programs')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .maybeSingle();
-
-        if (!program) { label.textContent = 'No active program'; return; }
-
-        const { data: week } = await ApexCore.getClient()
-          .from('program_weeks')
-          .select('id')
-          .eq('program_id', program.id)
-          .lte('start_date', date)
-          .gte('end_date', date)
-          .maybeSingle();
-
-        if (!week) { label.textContent = 'Date is outside your current program'; return; }
-
-        const d   = new Date(date + 'T12:00:00').getDay(); // JS: 0=Sun…6=Sat
-        const dow = d === 0 ? 6 : d - 1; // convert to Mon=0…Sun=6 to match DB
+        const { data: prog } = await ApexCore.getClient()
+          .from('programs').select('id').eq('user_id', user.id).eq('is_active', true).maybeSingle();
+        if (!prog) { lbl.textContent = 'No active program'; return; }
+        const dow = new Date(date + 'T12:00:00').getDay();
+        const dowMon = dow === 0 ? 6 : dow - 1;
         const { data: pw } = await ApexCore.getClient()
-          .from('planned_workouts')
-          .select('label, workout_type')
-          .eq('program_week_id', week.id)
-          .eq('day_of_week', dow)
-          .maybeSingle();
-
-        if (pw) {
-          label.textContent = pw.label;
-          label.style.color = 'var(--accent)';
-        } else {
-          label.textContent = 'Rest day';
-          label.style.color = 'var(--text-3)';
-        }
-      } catch (e) {
-        label.textContent = 'Could not look up workout';
-        label.style.color = 'var(--danger)';
+          .from('workout_days').select('label, workout_type')
+          .eq('program_id', prog.id).eq('day_of_week', dowMon).maybeSingle();
+        lbl.textContent       = pw ? pw.label : 'Rest day';
+        lbl.style.color       = pw ? 'var(--accent)' : 'var(--text-3)';
+      } catch(e) {
+        lbl.textContent = 'Could not look up';
+        lbl.style.color = 'var(--danger)';
       }
     }
 
@@ -2389,364 +2090,51 @@
       const date     = document.getElementById('backlog-date').value;
       const duration = parseInt(document.getElementById('backlog-duration').value) || 0;
       const notes    = document.getElementById('backlog-notes').value.trim();
-
-      if (!date) { showToast('Please select a date', 'error'); return; }
+      if (!date) { showToast('Select a date', 'error'); return; }
 
       const btn = document.querySelector('#backlog-modal .btn-primary');
-      btn.disabled    = true;
-      btn.textContent = 'Saving…';
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
-      const { workoutLogId, label, error } = await ApexTraining.WorkoutSession.backlog({
-        date,
-        durationMin: duration,
-        rpeOverall:  _backlogRPE,
-        notes:       notes || null,
-      });
-
-      btn.disabled    = false;
-      btn.textContent = 'Log Workout';
-
-      if (error) {
-        showToast('Failed to log: ' + error.message, 'error');
-        return;
-      }
-
-      closeBacklogModal();
-      showToast(label ? `${label} logged ✓` : 'Workout logged ✓', 'success');
-
-      // Refresh training tab so the day pill shows ✓
-      APP.loadedTabs.delete('training');
-      loadTab('training');
-    }
-
-    function openSplitModal() {
-      const current = APP.profile?.preferred_split
-                   || APP.profile?.experience
-                   || 'intermediate';
-      const splits  = ApexTraining.ProgramBuilder.getSplits();
-
-      document.getElementById('split-options-list').innerHTML = Object.entries(splits).map(([key, split]) => {
-        const meta    = SPLIT_META[key] ?? { icon:'&#x26AA;', days:'', freq:'', level:'' };
-        const isCur   = key === current;
-        return `
-          <div onclick="selectSplit('${key}')"
-               style="padding:1rem 1.25rem;border-bottom:0.5px solid var(--border);
-                      cursor:pointer;transition:background 0.1s;
-                      background:${isCur ? 'var(--accent-light)' : 'transparent'}"
-               onmouseenter="this.style.background='var(--surface-alt)'"
-               onmouseleave="this.style.background='${isCur ? 'var(--accent-light)' : 'transparent'}'">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <div style="font-size:0.9375rem;font-weight:600">
-                ${meta.icon} ${split.name}
-              </div>
-              ${isCur ? '<span style="font-size:0.7rem;background:var(--accent);color:#fff;padding:2px 8px;border-radius:99px">Current</span>' : ''}
-            </div>
-            <div style="display:flex;gap:12px;margin-bottom:5px">
-              <span style="font-size:0.75rem;color:var(--accent);font-weight:500">${meta.days}</span>
-              <span style="font-size:0.75rem;color:var(--text-3)">&middot; ${meta.freq}</span>
-              <span style="font-size:0.75rem;color:var(--text-3)">&middot; ${meta.level}</span>
-            </div>
-            <div style="font-size:0.8125rem;color:var(--text-3);line-height:1.5">
-              ${split.science || ''}
-            </div>
-          </div>`;
-      }).join('');
-
-      document.getElementById('split-modal').classList.remove('hidden');
-    }
-
-    function closeSplitModal() {
-      document.getElementById('split-modal').classList.add('hidden');
-    }
-
-    async function selectSplit(splitKey) {
-      closeSplitModal();
-
-      const { error } = await ApexCore.Profile.update({ preferred_split: splitKey });
-      if (error) { showToast('Could not save split', 'error'); return; }
-
-      APP.profile = { ...APP.profile, preferred_split: splitKey };
-      showToast('Regenerating program…', 'info');
-
-      const { error: genErr } = await ApexTraining.ProgramBuilder.generate({ totalWeeks: 12 });
-      if (genErr) { showToast('Program generation failed: ' + genErr.message, 'error'); return; }
-
-      APP.loadedTabs.delete('training');
-      await loadTab('training');
-      showToast('New program ready!', 'success');
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // NUTRITION TAB
-    // ═══════════════════════════════════════════════════════
-    // =======================================================
-    // NUTRITION TAB
-    // =======================================================
-
-    // ── Unit conversion system ─────────────────────────────
-    const UNIT_CONFIGS = {
-      g:    { toG: 1,          label: 'g',    step: 1,    presets: [50, 100, 150, 200]           },
-      oz:   { toG: 28.3495,    label: 'oz',   step: 0.5,  presets: [1, 2, 3, 4]                 },
-      lbs:  { toG: 453.592,    label: 'lbs',  step: 0.25, presets: [0.25, 0.5, 0.75, 1]         },
-      ml:   { toG: 1,          label: 'ml',   step: 10,   presets: [100, 200, 250, 500]          },
-      tbsp: { toG: 14.787,     label: 'tbsp', step: 0.5,  presets: [1, 2, 3, 4]                 },
-      tsp:  { toG: 4.929,      label: 'tsp',  step: 0.25, presets: [1, 2, 3, 4]                 },
-      cups: { toG: 236.588,    label: 'cups', step: 0.25, presets: [0.25, 0.5, 0.75, 1]         },
-    };
-
-    function toGrams(val, unit) {
-      return val * (UNIT_CONFIGS[unit]?.toG ?? 1);
-    }
-
-    function fromGrams(g, unit) {
-      const factor = UNIT_CONFIGS[unit]?.toG ?? 1;
-      return parseFloat((g / factor).toFixed(3));
-    }
-
-    function renderPresets() {
-      const cfg = UNIT_CONFIGS[PICKER.unit] ?? UNIT_CONFIGS.g;
-      document.getElementById('picker-presets').innerHTML = cfg.presets.map(v =>
-        `<button onclick="setQuickAmount(${v})" class="gram-preset">
-           ${v}&thinsp;${cfg.label}
-         </button>`).join('');
-    }
-
-    function setUnit(unit) {
-      // Convert current qty to new unit
-      const oldRaw = parseFloat(document.getElementById('picker-qty').value) || 0;
-      const grams  = toGrams(oldRaw, PICKER.unit);
-
-      PICKER.unit  = unit;
-
-      // Update active button
-      document.querySelectorAll('#picker-footer .unit-btn').forEach(b =>
-        b.classList.toggle('active', b.dataset.unit === unit));
-
-      // Update suffix
-      const sfx = document.getElementById('picker-unit-suffix');
-      if (sfx) sfx.textContent = unit;
-
-      // Update input: step + converted value
-      const inp = document.getElementById('picker-qty');
-      if (inp) {
-        const cfg = UNIT_CONFIGS[unit];
-        inp.step  = cfg.step;
-        inp.value = fromGrams(grams, unit);
-      }
-
-      renderPresets();
-      updatePickerPreview();
-    }
-
-    function setQuickAmount(val) {
-      const inp = document.getElementById('picker-qty');
-      if (inp) { inp.value = val; updatePickerPreview(); }
-    }
-
-    // ── State for the food picker
-    const PICKER = {
-      slotId:       null,
-      activeFilter: '',
-      selectedFood: null,
-      source:       'all',       // 'recent' | 'frequent' | 'library' | 'all'
-      cache:        new Map(),   // temp key -> food object for external results
-      multiMode:    false,
-      multiSel:     new Set(),   // selected food keys in multi-add mode
-      unit:         'g',         // active measurement unit
-      slotName:     null,          // display name of current meal slot
-    };
-
-    // Debounce handle for external search
-    const XSEARCH = { timer: null, ctrl: null };
-
-
-    // ── Home tab (goal-adaptive) ───────────────────────────────
-    async function loadHomeTab() {
-      const hr       = new Date().getHours();
-      const greeting = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
-      const name     = APP.profile?.full_name?.split(' ')[0] || '';
-      document.getElementById('home-greeting').textContent =
-        name ? `${greeting}, ${name}` : greeting;
-      document.getElementById('home-date-sub').textContent =
-        new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
-
-      // Goal config lookup
-      const phase  = APP.profile?.phase || 'maintain';
-      const cfg    = GOAL_CONFIGS[phase] || GOAL_CONFIGS.maintain;
-
-      // ── Inject goal banner (replaces if already exists) ───
-      let banner = document.getElementById('home-goal-banner');
-      if (!banner) {
-        banner = document.createElement('div');
-        banner.id = 'home-goal-banner';
-        const greetEl = document.getElementById('home-greeting')?.parentElement;
-        if (greetEl) greetEl.parentElement.insertBefore(banner, greetEl.nextSibling);
-      }
-      banner.innerHTML = `
-        <div class="card" style="margin-bottom:1rem;padding:1rem 1.125rem;
-             border-left:3px solid ${cfg.accent};background:${cfg.bg}">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-            <div>
-              <div style="font-size:0.7rem;font-weight:600;letter-spacing:.08em;
-                          text-transform:uppercase;color:${cfg.accent};margin-bottom:3px">
-                Current Phase
-              </div>
-              <div style="display:flex;align-items:center;gap:8px">
-              <div style="font-size:1rem;font-weight:700">${cfg.icon} ${cfg.label}</div>
-              <button onclick="openGoalModal()"
-                      style="font-size:0.7rem;padding:3px 8px;border-radius:4px;
-                             border:0.5px solid ${cfg.accent};color:${cfg.accent};
-                             background:transparent;cursor:pointer;font-family:inherit;
-                             opacity:0.8">Edit</button>
-            </div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:0.7rem;color:var(--text-3);margin-bottom:2px">${cfg.heroLabel}</div>
-              <div id="home-hero-val" style="font-size:1.1rem;font-weight:700;color:${cfg.accent}">...</div>
-            </div>
-          </div>
-        </div>`;
-
-      // ── Inject priorities card ─────────────────────────────
-      let priCard = document.getElementById('home-priorities');
-      if (!priCard) {
-        priCard = document.createElement('div');
-        priCard.id = 'home-priorities';
-        priCard.className = 'card';
-        priCard.style.cssText = 'margin-bottom:1rem;padding:1rem 1.125rem';
-        const tileGrid = document.querySelector('#panel-home [style*="grid-template-columns:1fr 1fr"]');
-        if (tileGrid) tileGrid.parentElement.insertBefore(priCard, tileGrid);
-      }
-      priCard.innerHTML = `
-        <div style="font-size:0.75rem;font-weight:600;letter-spacing:.08em;
-                    text-transform:uppercase;color:var(--text-3);margin-bottom:0.75rem">
-          Today's Priorities
-        </div>
-        ${cfg.priorities.map(p => `
-          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:7px;font-size:0.875rem">
-            <span style="color:${cfg.accent};flex-shrink:0;margin-top:1px">&#x25CF;</span>
-            <span style="color:var(--text-2)">${p}</span>
-          </div>`).join('')}
-        <div style="margin-top:0.875rem;padding-top:0.875rem;border-top:0.5px solid var(--border)">
-          <div style="font-size:0.75rem;font-weight:600;color:var(--text-3);margin-bottom:4px">
-            Training Focus
-          </div>
-          <div style="font-size:0.875rem;font-weight:500;color:${cfg.accent};margin-bottom:4px">
-            ${cfg.trainingFocus}
-          </div>
-          <div style="font-size:0.8125rem;color:var(--text-3);line-height:1.5">
-            ${cfg.trainingDetail}
-          </div>
-        </div>`;
-
-      // ── Load nutrition for ring + bars ─────────────────────
       try {
-        const { totals, plan } = await ApexNutrition.MealPlan.getOrCreateToday();
-        // Always prefer APP.profile — it has the freshly recalculated targets
-        const kcalTarget = APP.profile?.calorie_target || plan?.kcal_target || 2000;
-        const rem  = kcalTarget - Math.round(totals?.kcal || 0);
-        const pct  = Math.min(100, ((totals?.kcal || 0) / kcalTarget) * 100);
-        const circ = 2 * Math.PI * 40;
-        const tgts = {
-          proteinG: APP.profile?.protein_target_g ?? plan?.protein_target ?? 1,
-          carbsG:   APP.profile?.carb_target_g    ?? plan?.carb_target    ?? 1,
-          fatG:     APP.profile?.fat_target_g     ?? plan?.fat_target     ?? 1,
-          kcal:     kcalTarget,
-        };
+        const user = await ApexCore.Auth.getUser();
 
-        // Hero value
-        const heroEl = document.getElementById('home-hero-val');
-        if (heroEl) heroEl.textContent = cfg.heroFn(totals||{}, tgts);
-
-        // Animated ring
-        const arc = document.getElementById('home-ring-arc');
-        if (arc) arc.setAttribute('stroke-dasharray', `${(pct/100)*circ} ${circ}`);
-        arc?.setAttribute('stroke', phase==='cut' ? '#EF4444' : 'var(--accent)');
-
-        // Animated counter for remaining kcal
-        const remEl = document.getElementById('home-kcal-rem');
-        animateNum(remEl, Math.max(0, rem));
-
-        // Macro bars + animated text
-        const bars = [
-          { bar:'home-p-bar', txt:'home-p-txt', val:totals?.proteinG||0, tgt:tgts.proteinG, color:'var(--accent)' },
-          { bar:'home-c-bar', txt:'home-c-txt', val:totals?.carbsG||0,   tgt:tgts.carbsG,   color:'#3B82F6' },
-          { bar:'home-f-bar', txt:'home-f-txt', val:totals?.fatG||0,     tgt:tgts.fatG,     color:'#F59E0B' },
-        ];
-        bars.forEach(b => {
-          const barEl = document.getElementById(b.bar);
-          const txtEl = document.getElementById(b.txt);
-          if (barEl) barEl.style.width = Math.min(100, (b.val/b.tgt)*100) + '%';
-          if (txtEl) txtEl.textContent = `${Math.round(b.val)}/${Math.round(b.tgt)}g`;
-        });
-
-        // Quick-action subtitles
-        const mealsSub = document.getElementById('home-meals-sub');
-        if (mealsSub) {
-          const mealCount = (await ApexNutrition.MealPlan.getOrCreateToday()).slots
-            ?.filter(s => s.meal_items?.length > 0).length || 0;
-          mealsSub.textContent = `${mealCount} meal${mealCount===1?'':'s'} logged`;
+        // Find planned workout for that date
+        const dow = new Date(date + 'T12:00:00').getDay();
+        const dowMon = dow === 0 ? 6 : dow - 1;
+        const { data: prog } = await ApexCore.getClient()
+          .from('programs').select('id').eq('user_id', user.id).eq('is_active', true).maybeSingle();
+        let plannedWorkoutId = null;
+        if (prog) {
+          const { data: pw } = await ApexCore.getClient()
+            .from('workout_days').select('id')
+            .eq('program_id', prog.id).eq('day_of_week', dowMon).maybeSingle();
+          if (pw) plannedWorkoutId = pw.id;
         }
-      } catch(e) { console.warn('home nutrition:', e); }
-    }
 
-    // ── Diary date navigation ──────────────────────────────────
-    const DIARY = { date: new Date() };
+        const insertRow = {
+          user_id:      user.id,
+          log_date:     date,
+          duration_min: duration,
+          rpe_overall:  _backlogRPE,
+          notes:        notes ? '[Backlog] ' + notes : '[Backlog]',
+        };
+        if (plannedWorkoutId) insertRow.workout_day_id = plannedWorkoutId;
 
-    function changeDate(delta) {
-      DIARY.date.setDate(DIARY.date.getDate() + delta);
-      updateDiaryDateHeader();
-      APP.loadedTabs.delete('diary');
-      loadNutritionTab();
-    }
+        const { error } = await ApexCore.getClient().from('workout_logs').insert(insertRow);
+        if (error) throw new Error(error.message);
 
-    function updateDiaryDateHeader() {
-      const now   = new Date();
-      const isToday = DIARY.date.toDateString() === now.toDateString();
-      const isYest  = new Date(now - 86400000).toDateString() === DIARY.date.toDateString();
-      const label   = isToday ? 'Today' : isYest ? 'Yesterday'
-        : DIARY.date.toLocaleDateString('en-US', { month:'short', day:'numeric' });
-      const btn = document.getElementById('diary-date-btn');
-      if (btn) btn.textContent = label;
-      // Disable next arrow if today
-      const nextBtn = document.getElementById('diary-next-btn');
-      if (nextBtn) nextBtn.style.opacity = isToday ? '.3' : '1';
-      if (nextBtn) nextBtn.style.pointerEvents = isToday ? 'none' : 'auto';
-    }
-
-    function openDatePicker() {
-      const inp = document.getElementById('diary-date-input');
-      inp.value = DIARY.date.toISOString().slice(0,10);
-      inp.showPicker ? inp.showPicker() : inp.click();
-    }
-
-    function onDatePickerChange() {
-      const val = document.getElementById('diary-date-input').value;
-      if (!val) return;
-      DIARY.date = new Date(val + 'T12:00:00');
-      updateDiaryDateHeader();
-      APP.loadedTabs.delete('diary');
-      loadNutritionTab();
-    }
-
-    function updateCalorieBanner(totals, plan, exerciseKcal = 0) {
-      const goal = APP.profile?.calorie_target || plan?.kcal_target || 0;
-      const food = totals?.kcal || 0;
-      const ex   = exerciseKcal || 0;
-      const rem  = goal - food + ex;
-
-      animateNum(document.getElementById('cal-goal'),      goal, 320, v=>Math.round(v).toLocaleString());
-      animateNum(document.getElementById('cal-food'),      food, 320, v=>Math.round(v).toLocaleString());
-      animateNum(document.getElementById('cal-exercise'),  ex,   320, v=>Math.round(v).toLocaleString());
-
-      const remEl = document.getElementById('cal-remaining');
-      if (remEl) {
-        animateNum(remEl, Math.abs(rem), 380, v => (rem<0?'-':'') + Math.round(v).toLocaleString());
-        setTimeout(() => { remEl.style.color = rem < 0 ? 'var(--danger)' : 'var(--accent)'; }, 10);
+        closeBacklogModal();
+        showToast('Workout logged ✓', 'success');
+        APP.loadedTabs.delete('training');
+        loadTab('training');
+      } catch(e) {
+        showToast(e.message || 'Could not save', 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Log Workout'; }
       }
     }
 
-    async function loadNutritionTab() {
+        async function loadNutritionTab() {
       const { plan, slots, totals, error } = await ApexNutrition.MealPlan.getOrCreateToday();
       if (error) { showToast('Failed to load meal plan', 'error'); return; }
 
