@@ -1742,30 +1742,37 @@
       btn.disabled    = true;
       btn.textContent = 'Saving…';
 
-      const { log, overload, isPR, error } = await ApexTraining.WorkoutSession.logSet({
-        plannedSetId: ps.id, exerciseId: ps.exercise_id,
-        setNumber: WORKOUT.curSet, weightKg: lbsToKg(wt), reps, rpe,
-      });
+      try {
+        const { log, overload, isPR, error } = await ApexTraining.WorkoutSession.logSet({
+          plannedSetId: ps.id, exerciseId: ps.exercise_id,
+          setNumber: WORKOUT.curSet, weightKg: lbsToKg(wt), reps, rpe,
+        });
 
-      if (error) {
-        showToast(error.message, 'error');
+        if (error) {
+          showToast(error.message, 'error');
+          return;
+        }
+
+        item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
+        item.setsDone++;
+
+        // Flash + haptic feedback
+        void btn.offsetWidth; btn.classList.add('focus-log-flash');
+        if (navigator.vibrate) navigator.vibrate(40);
+
+        if (isPR) showToast(
+          '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' lbs', 'success');
+
+        showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
+
+      } catch(e) {
+        console.error('[Apex] logFocusSet threw:', e);
+        showToast('Could not log set — please try again', 'error');
+      } finally {
+        // Always re-enable the button — rest overlay will hide it anyway
         btn.disabled    = false;
         btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
-        return;
       }
-
-      item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
-      item.setsDone++;
-
-      // Flash + haptic feedback
-      const flashBtn = document.getElementById('log-set-btn');
-      if (flashBtn) { void flashBtn.offsetWidth; flashBtn.classList.add('focus-log-flash'); }
-      if (navigator.vibrate) navigator.vibrate(40);
-
-      if (isPR) showToast(
-        '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' lbs', 'success');
-
-      showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
     }
 
     function getNextSetInfo() {
