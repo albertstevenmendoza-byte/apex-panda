@@ -1780,15 +1780,11 @@
           </div>`).join('')}`;
     }
 
-    async function logFocusSet() {
+    function logFocusSet() {
       const item = WORKOUT.exercises[WORKOUT.curEx];
-      // Guard: curEx may have already advanced past the last exercise
       if (!item) { openCompleteModal(); return; }
 
-      const btn = document.getElementById('log-set-btn');
-      // Prevent double-log if button is already mid-save
-      if (btn?.disabled) return;
-
+      const btn  = document.getElementById('log-set-btn');
       const wt   = parseFloat(document.getElementById('focus-wt').value);
       const reps = parseInt(document.getElementById('focus-reps').value);
       const rpe  = WORKOUT.selectedRPE;
@@ -1797,45 +1793,37 @@
         showToast('Enter weight, reps and RPE', 'error'); return;
       }
 
-      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+      const { ps } = item;
 
-      try {
-        const { ps } = item;   // safe — item is confirmed non-null above
+      // logSet is synchronous — no network call, no await needed
+      const result = ApexTraining.WorkoutSession.logSet({
+        plannedSetId: ps.id,
+        exerciseId:   ps.exercise_id,
+        setNumber:    WORKOUT.curSet,
+        weightKg:     lbsToKg(wt),
+        reps, rpe,
+      });
 
-        const { log, overload, isPR, error } = await ApexTraining.WorkoutSession.logSet({
-          plannedSetId: ps.id, exerciseId: ps.exercise_id,
-          setNumber: WORKOUT.curSet, weightKg: lbsToKg(wt), reps, rpe,
-        });
+      if (result?.error) {
+        showToast(result.error.message, 'error');
+        return;
+      }
 
-        if (error) { showToast(error.message, 'error'); return; }
+      // Record locally
+      item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
+      item.setsDone++;
 
-        item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
-        item.setsDone++;
+      // Haptic + flash
+      if (btn) { void btn.offsetWidth; btn.classList.add('focus-log-flash'); }
+      if (navigator.vibrate) navigator.vibrate(40);
 
-        // Flash + haptic
-        if (btn) { void btn.offsetWidth; btn.classList.add('focus-log-flash'); }
-        if (navigator.vibrate) navigator.vibrate(40);
-
-        if (isPR) showToast(
-          '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' lbs', 'success');
-
-        // If this is the last set of the last exercise, skip rest and finish
-        const isWorkoutDone = WORKOUT.curSet >= item.setsTotal &&
-                              WORKOUT.curEx  >= WORKOUT.exercises.length - 1;
-        if (isWorkoutDone) {
-          advanceWorkout();   // increments curEx past end → openCompleteModal()
-        } else {
-          showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
-        }
-
-      } catch(e) {
-        console.error('[Apex] logFocusSet threw:', e);
-        showToast('Could not log set — please try again', 'error');
-      } finally {
-        if (btn) btn.disabled = false;
-        // Re-read curEx in case advanceWorkout already ran during the await
-        const cur = WORKOUT.exercises[WORKOUT.curEx];
-        if (btn && cur) btn.textContent = `Log Set ${WORKOUT.curSet} / ${cur.setsTotal}`;
+      // Advance: last set of last exercise → complete; otherwise → rest
+      const isWorkoutDone = WORKOUT.curSet >= item.setsTotal &&
+                            WORKOUT.curEx  >= WORKOUT.exercises.length - 1;
+      if (isWorkoutDone) {
+        advanceWorkout();
+      } else {
+        showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
       }
     }
 
