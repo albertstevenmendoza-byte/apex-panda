@@ -1819,7 +1819,14 @@
         if (isPR) showToast(
           '&#x1F3C6; New PR! Est. 1RM: ' + Math.round(wt * (1 + reps / 30)) + ' lbs', 'success');
 
-        showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
+        // If this is the last set of the last exercise, skip rest and finish
+        const isWorkoutDone = WORKOUT.curSet >= item.setsTotal &&
+                              WORKOUT.curEx  >= WORKOUT.exercises.length - 1;
+        if (isWorkoutDone) {
+          advanceWorkout();   // increments curEx past end → openCompleteModal()
+        } else {
+          showRestOverlay(ps.rest_seconds || 90, getNextSetInfo(), advanceWorkout);
+        }
 
       } catch(e) {
         console.error('[Apex] logFocusSet threw:', e);
