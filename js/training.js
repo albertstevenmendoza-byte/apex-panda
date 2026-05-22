@@ -514,12 +514,10 @@ window.ApexTraining = (function () {
     }
 
     async function generate({ userId, profile, startDate }) {
+      if (!userId || !profile) return { error: new Error('generate() requires userId and profile') };
+
       const phase      = profile.phase ?? 'maintain';
-      const splitKey   = profile.preferred_split || _selectSplit(profile.experience)
-                                                      .name === 'Full-body 3×/week'
-                          ? 'beginner' : (profile.experience ?? 'intermediate');
-      // Resolve splitKey properly
-      const resolvedKey = profile.preferred_split && _SPLITS[profile.preferred_split]
+      const resolvedKey = (profile.preferred_split && _SPLITS[profile.preferred_split])
         ? profile.preferred_split
         : (profile.experience ?? 'intermediate');
       const split = _SPLITS[resolvedKey] ?? _SPLITS.intermediate;
