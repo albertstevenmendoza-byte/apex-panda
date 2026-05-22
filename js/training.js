@@ -1093,9 +1093,16 @@ window.ApexTraining = (function () {
 
         overloadResult = Core.Overload.evaluate({ weightKg, reps, rpe, repsMax, muscleGroup });
 
-        // Upsert PR
-        const prResult = await Core.Overload.upsertPR(exerciseId, weightKg, reps);
-        isPR = prResult.isPR;
+        // PR check — non-critical, 4 s timeout so it never blocks the set log
+        try {
+          const prResult = await Promise.race([
+            Core.Overload.upsertPR(exerciseId, weightKg, reps),
+            new Promise(resolve => setTimeout(() => resolve({ isPR: false }), 4000)),
+          ]);
+          isPR = prResult?.isPR ?? false;
+        } catch(e) {
+          console.warn('[ApexTraining] PR check failed (non-fatal):', e.message);
+        }
       }
 
       return { log: logEntry, overload: overloadResult, isPR, error: null };
