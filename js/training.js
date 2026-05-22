@@ -532,13 +532,12 @@ window.ApexTraining = (function () {
       const { data: prog, error: pErr } = await Core.getClient()
         .from('programs')
         .insert({
-          user_id:      userId,
-          name:         split.name,
+          user_id:    userId,
+          name:       split.name,
           phase,
-          split_key:    resolvedKey,
-          start_date:   startDate,
-          deload_every: 4,
-          is_active:    true,
+          split_key:  resolvedKey,
+          start_date: startDate,
+          is_active:  true,
         })
         .select('id').single();
 
@@ -642,7 +641,7 @@ window.ApexTraining = (function () {
         return { program: null, workouts: [], week: null, error: pErr };
 
       const weekNum  = _weekNumber(program.start_date);
-      const isDeload = _isDeload(weekNum, program.deload_every ?? 4);
+      const isDeload = _isDeload(weekNum, 4);
 
       // Workout days for this program
       const { data: days } = await Core.getClient()
@@ -679,7 +678,7 @@ window.ApexTraining = (function () {
         .from('workout_days')
         .select(`
           id, label, workout_type, day_of_week,
-          programs!inner(id, phase, deload_every, start_date),
+          programs!inner(id, phase, start_date),
           workout_exercises(
             id, exercise_id, sets, reps_min, reps_max,
             rpe_target, rest_seconds, sort_order,
@@ -694,7 +693,7 @@ window.ApexTraining = (function () {
       const prog     = data.programs;
       const weekNum  = Math.max(0, Math.floor(
         (Date.now() - new Date(prog.start_date).getTime()) / (7*24*60*60*1000)));
-      const isDeload = _isDeload(weekNum, prog.deload_every ?? 4);
+      const isDeload = _isDeload(weekNum, 4);
 
       // Sort exercises
       const exercises = (data.workout_exercises ?? []).sort((a,b) => a.sort_order - b.sort_order);
