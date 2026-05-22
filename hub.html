@@ -402,6 +402,39 @@
     </div><!-- /focus-body -->
   </div><!-- /focus-mode -->
 
+
+  <!-- ── Workout intro overlay (appears briefly on start) ── -->
+  <div id="focus-intro" class="focus-intro-panel fm-hidden">
+    <div class="fi-excount" id="fi-excount"></div>
+    <div class="fi-name"    id="fi-name"></div>
+    <div class="fi-cue">Get ready</div>
+    <div class="fi-dots">
+      <div class="fi-dot"></div><div class="fi-dot"></div><div class="fi-dot"></div>
+    </div>
+  </div>
+
+  <!-- ── Post-workout summary ──────────────────────────────── -->
+  <div id="workout-summary" class="fm-hidden workout-summary">
+    <div class="ws-topbar">
+      <button class="ws-close-btn" onclick="closeSummary()">&#x2715;</button>
+      <div class="ws-title">Session complete</div>
+      <div style="width:40px"></div>
+    </div>
+    <div class="ws-scroll">
+      <div class="ws-hero">
+        <div class="ws-emoji">&#x1F3AF;</div>
+        <div class="ws-duration" id="ws-duration">—</div>
+        <div class="ws-duration-lbl">total time</div>
+      </div>
+      <div class="ws-stats-row" id="ws-stats-row"></div>
+      <div class="ws-section-lbl">Exercise breakdown</div>
+      <div id="ws-exercises"></div>
+      <button class="btn btn-primary btn-full ws-done-btn" onclick="closeSummary()">
+        Back to Training
+      </button>
+    </div>
+  </div>
+
   <!-- ── Rest countdown ───────────────────────────────────── -->
   <div id="rest-overlay" class="fm-hidden">
     <div class="rest-label">Rest</div>
@@ -1599,10 +1632,28 @@
       WORKOUT.curSet      = 1;
       WORKOUT.selectedRPE = null;
 
-      // True focus mode — hide bottom nav completely
+      // Hide bottom nav, reveal dark focus shell
       document.querySelector('.bottom-nav').style.setProperty('display','none','important');
       document.getElementById('focus-mode').classList.remove('fm-hidden');
-      renderFocusExercise();
+
+      // Show the intro overlay — workout name + "get ready" for 1.4 s
+      const intro = document.getElementById('focus-intro');
+      document.getElementById('fi-name').textContent =
+        APP.selectedWorkout.label || 'Workout';
+      document.getElementById('fi-excount').textContent =
+        `${WORKOUT.exercises.length} exercise${WORKOUT.exercises.length !== 1 ? 's' : ''}`;
+      intro.classList.remove('fm-hidden');
+      intro.classList.remove('fi-exit');
+
+      // After 1.4 s, slide the intro away and reveal the first exercise
+      setTimeout(() => {
+        intro.classList.add('fi-exit');
+        setTimeout(() => {
+          intro.classList.add('fm-hidden');
+          intro.classList.remove('fi-exit');
+          renderFocusExercise();
+        }, 380);
+      }, 1400);
 
       APP.timerInterval = setInterval(() => {
         const s  = ApexTraining.WorkoutSession.getState();
@@ -1859,18 +1910,121 @@
       const rpeVal   = parseFloat(document.getElementById('sess-rpe').value) || null;
       const notesVal = document.getElementById('sess-notes').value.trim() || null;
 
+      const saveBtn = document.querySelector('#complete-modal .btn-primary');
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+
+      // Grab a snapshot of set logs BEFORE the session is cleared
+      const state = ApexTraining.WorkoutSession.getState();
+      const setLogsSnapshot = [...(state.setLogs || [])];
+      const plannedSets     = [...(state.plannedSets || [])];
+
       const { deloadCheck, error } = await ApexTraining.WorkoutSession.completeSession({
         rpeOverall: rpeVal, notes: notesVal,
       });
+
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save session'; }
       if (error) { showToast(error.message, 'error'); return; }
 
-      closeFocusMode();
-      showToast('Session saved! Great work.', 'success');
-      APP.loadedTabs.delete('training');
-      await loadTab('training');
+      // Close the complete modal and show the summary screen
+      document.getElementById('complete-modal').classList.add('hidden');
+      await openWorkoutSummary(setLogsSnapshot, plannedSets, state.timer);
 
       if (deloadCheck?.shouldDeload)
         showToast(`Deload recommended: ${deloadCheck.reason}`, 'warning');
+    }
+
+    function closeSummary() {
+      document.getElementById('workout-summary').classList.add('fm-hidden');
+      closeFocusMode();
+      APP.loadedTabs.delete('training');
+      loadTab('training');
+    }
+
+    async function openWorkoutSummary(setLogs, plannedSets, timer) {
+      // ── Stats ────────────────────────────────────────────
+      const durationMin = timer ? Math.round(ApexTraining.SessionTimer.elapsedSeconds(timer) / 60) : 0;
+      const totalSets   = setLogs.filter(s => !s.is_warmup).length;
+      const totalVol    = setLogs.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
+      const volLbs      = Math.round(totalVol * 2.20462);
+
+      document.getElementById('ws-duration').textContent =
+        durationMin >= 60
+          ? `${Math.floor(durationMin/60)}h ${durationMin%60}m`
+          : `${durationMin}m`;
+
+      document.getElementById('ws-stats-row').innerHTML = `
+        <div class="ws-stat"><div class="ws-stat-val">${totalSets}</div><div class="ws-stat-lbl">Sets</div></div>
+        <div class="ws-stat"><div class="ws-stat-val">${volLbs.toLocaleString()}</div><div class="ws-stat-lbl">lbs lifted</div></div>
+      `;
+
+      // ── Per-exercise breakdown + comparison ──────────────
+      const byEx = {};
+      for (const s of setLogs) {
+        if (s.is_warmup) continue;
+        if (!byEx[s.exercise_id]) byEx[s.exercise_id] = { sets: [], weightLbs: 0, reps: 0 };
+        byEx[s.exercise_id].sets.push(s);
+        byEx[s.exercise_id].weightLbs = Math.max(byEx[s.exercise_id].weightLbs, Math.round((s.weight_kg||0)*2.20462));
+      }
+
+      const exIds = Object.keys(byEx);
+      const exMap = {};
+      for (const ps of plannedSets) {
+        if (ps.exercise_id && ps.exercises) exMap[ps.exercise_id] = ps.exercises;
+      }
+
+      // Fetch previous bests for these exercises
+      let prevBest = {};
+      try {
+        const user = await ApexCore.Auth.getUser();
+        const today = new Date().toISOString().slice(0,10);
+        const { data: prev } = await ApexCore.getClient()
+          .from('set_logs')
+          .select('exercise_id, weight_kg, reps, workout_logs!inner(log_date)')
+          .in('exercise_id', exIds)
+          .eq('is_warmup', false)
+          .lt('workout_logs.log_date', today)
+          .order('weight_kg', { ascending: false })
+          .limit(exIds.length * 8);
+
+        for (const s of prev || []) {
+          const lbs = Math.round((s.weight_kg||0)*2.20462);
+          if (!prevBest[s.exercise_id] || lbs > prevBest[s.exercise_id]) {
+            prevBest[s.exercise_id] = lbs;
+          }
+        }
+      } catch(e) { /* non-critical */ }
+
+      const exEl = document.getElementById('ws-exercises');
+      exEl.innerHTML = exIds.map(exId => {
+        const data = byEx[exId];
+        const ex   = exMap[exId] || {};
+        const name = ex.name || 'Exercise';
+        const sets = data.sets.length;
+        const topWt = data.weightLbs;
+        const prev  = prevBest[exId];
+
+        let delta = '';
+        if (prev !== undefined && prev > 0) {
+          const diff = topWt - prev;
+          if (diff > 0)      delta = `<span class="ws-delta ws-delta-up">&#x25B2; ${diff} lbs</span>`;
+          else if (diff < 0) delta = `<span class="ws-delta ws-delta-dn">&#x25BC; ${Math.abs(diff)} lbs</span>`;
+          else               delta = `<span class="ws-delta ws-delta-eq">&#x2015; Same</span>`;
+        } else {
+          delta = `<span class="ws-delta ws-delta-new">&#x2605; First time</span>`;
+        }
+
+        return `
+          <div class="ws-ex-card">
+            <div class="ws-ex-name">${name}</div>
+            <div class="ws-ex-row">
+              <div class="ws-ex-stat"><span class="ws-ex-val">${sets}</span> sets</div>
+              <div class="ws-ex-stat"><span class="ws-ex-val">${topWt}</span> lbs top weight</div>
+              ${delta}
+            </div>
+          </div>`;
+      }).join('');
+
+      document.getElementById('workout-summary').classList.remove('fm-hidden');
     }
 
     function confirmAbandon() {
