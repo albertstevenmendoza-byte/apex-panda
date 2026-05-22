@@ -1721,3 +1721,11 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   border-radius: 16px;
 }
 
+
+/* ── Wolf mascot in workout summary ────────────────────────*/
+.ws-wolf {
+  display: flex; justify-content: center;
+  margin-bottom: 4px;
+  animation: fi-fade-up 0.5s 0.05s var(--ease) both;
+  filter: drop-shadow(0 0 18px rgba(99,102,241,0.35));
+}
