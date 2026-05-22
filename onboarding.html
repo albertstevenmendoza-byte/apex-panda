@@ -417,7 +417,12 @@
 
       // Step 2: Generate program
       status.textContent = 'Generating your training program…'; bar.style.width = '55%';
-      const { error: genErr } = await ApexTraining.ProgramBuilder.generate({ totalWeeks: 12 });
+      const user = await ApexCore.Auth.getUser();
+      const { error: genErr } = await ApexTraining.ProgramBuilder.generate({
+        userId:    user.id,
+        profile:   { ...profileData, preferred_split: selections.preferred_split ?? null },
+        startDate: new Date().toISOString().slice(0, 10),
+      });
       if (genErr) { showErr(genErr.message); return; }
 
       // Step 3: Mark onboarding done
