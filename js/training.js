@@ -1181,22 +1181,29 @@ window.ApexTraining = (function () {
           });
       }
 
-      // Batch-insert set_logs
+      // Batch-insert set_logs — explicitly map to snake_case column names
       if (_state.setLogs.length > 0) {
-        const rows = _state.setLogs.map(({ planned_set_id: _, logged_at: __, ...row }) => ({
-          ...row, workout_log_id: workoutLogId,
+        const rows = _state.setLogs.map(s => ({
+          workout_log_id:  workoutLogId,
+          exercise_id:     s.exerciseId,
+          planned_set_id:  s.plannedSetId  ?? null,
+          set_number:      s.setNumber,
+          weight_kg:       s.weightKg,
+          reps:            s.reps,
+          rpe:             s.rpe            ?? null,
+          is_warmup:       s.isWarmup       ?? false,
         }));
         const { error: slErr } = await Core.getClient().from('set_logs').insert(rows);
-        if (slErr) console.error('[ApexTraining] set_logs insert failed:', slErr);
+        if (slErr) console.error('[ApexTraining] set_logs insert failed:', slErr.message);
       }
 
       // Clear localStorage crash backup
       try { localStorage.removeItem('apex_active_session'); } catch(e) {}
 
-      // Deload check
+      // Deload check — use maybeSingle() so missing program doesn't throw
       const { data: program } = await Core.getClient()
         .from('programs').select('id')
-        .eq('user_id', user.id).eq('is_active', true).single();
+        .eq('user_id', user.id).eq('is_active', true).maybeSingle();
 
       let deloadCheck = null;
       if (program) {
