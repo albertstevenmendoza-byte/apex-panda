@@ -1922,32 +1922,84 @@
     async function completeSession() {
       const rpeVal   = parseFloat(document.getElementById('sess-rpe').value) || null;
       const notesVal = document.getElementById('sess-notes').value.trim() || null;
-
-      const saveBtn = document.querySelector('#complete-modal .btn-primary');
+      const saveBtn  = document.querySelector('#complete-modal .btn-primary');
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
-      // Snapshot state BEFORE the session is cleared by completeSession()
-      const state           = ApexTraining.WorkoutSession.getState();
-      const setLogsSnapshot = [...(state.setLogs   || [])];
-      const plannedSets     = [...(state.plannedSets || [])];
-      const timerSnapshot   = state.timer;
-
       try {
-        const { deloadCheck, error } = await ApexTraining.WorkoutSession.completeSession({
-          rpeOverall: rpeVal, notes: notesVal,
-        });
+        const user = await ApexCore.Auth.getUser();
+        if (!user) throw new Error('Not signed in');
 
-        if (error) { showToast(error.message, 'error'); return; }
+        // Parse duration from the on-screen timer (avoids any internal timer state issues)
+        const elapsedText = document.getElementById('focus-elapsed')?.textContent || '00:00';
+        const parts       = elapsedText.split(':').map(Number);
+        const totalSecs   = parts.length === 3
+          ? parts[0]*3600 + parts[1]*60 + parts[2]
+          : parts[0]*60  + (parts[1] || 0);
+        const durationMin = Math.max(1, Math.round(totalSecs / 60));
+
+        // Collect all logged sets directly from WORKOUT (local hub.html state)
+        const allLogs = [];
+        for (const ex of (WORKOUT.exercises || [])) {
+          for (const log of (ex.logs || [])) {
+            allLogs.push({
+              exercise_id:    ex.ps.exercise_id,
+              planned_set_id: ex.ps.id,
+              set_number:     log.set,
+              weight_kg:      lbsToKg(log.wt),
+              reps:           log.reps,
+              rpe:            log.rpe ?? null,
+              is_warmup:      false,
+            });
+          }
+        }
+
+        // ── 1. INSERT workout_log ──────────────────────────
+        const { data: wl, error: wlErr } = await ApexCore.getClient()
+          .from('workout_logs')
+          .insert({
+            user_id:            user.id,
+            planned_workout_id: APP.selectedWorkout?.id ?? null,
+            log_date:           new Date().toISOString().slice(0, 10),
+            duration_min:       durationMin,
+            rpe_overall:        rpeVal,
+            notes:              notesVal || null,
+          })
+          .select('id')
+          .single();
+
+        if (wlErr) throw new Error('Could not save workout: ' + wlErr.message);
+        const workoutLogId = wl.id;
+
+        // ── 2. INSERT set_logs ─────────────────────────────
+        if (allLogs.length > 0) {
+          const rows = allLogs.map(l => ({ ...l, workout_log_id: workoutLogId }));
+          const { error: slErr } = await ApexCore.getClient()
+            .from('set_logs').insert(rows);
+          if (slErr) console.warn('[Apex] set_logs insert partial failure:', slErr.message);
+        }
+
+        // ── 3. Fire-and-forget training.js cleanup ─────────
+        try { ApexTraining.WorkoutSession.abandon('handled by hub'); } catch(e) {}
+        try { localStorage.removeItem('apex_active_session'); } catch(e) {}
+
+        // ── 4. Build typed snapshot for summary ────────────
+        const setLogsForSummary = allLogs.map(l => ({
+          exerciseId: l.exercise_id,
+          weightKg:   l.weight_kg,
+          reps:       l.reps,
+          rpe:        l.rpe,
+          isWarmup:   false,
+        }));
+        const plannedSetsForSummary = (WORKOUT.exercises || []).map(ex => ex.ps);
 
         document.getElementById('complete-modal').classList.add('hidden');
-        await openWorkoutSummary(setLogsSnapshot, plannedSets, timerSnapshot);
+        await openWorkoutSummary(setLogsForSummary, plannedSetsForSummary, null);
 
-        if (deloadCheck?.shouldDeload)
-          showToast(`Deload recommended: ${deloadCheck.reason}`, 'warning');
+        APP.loadedTabs.delete('training');
 
       } catch(e) {
-        console.error('[Apex] completeSession error:', e);
-        showToast('Could not save session — please try again', 'error');
+        console.error('[Apex] completeSession failed:', e);
+        showToast(e.message || 'Could not save — please try again', 'error');
       } finally {
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save session'; }
       }
