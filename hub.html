@@ -19,7 +19,7 @@
   <script src="js/training.js"></script>
   <script src="js/nutrition.js"></script>
   <script src="js/stats.js"></script>
-  <script src="js/panda.js"></script>
+  <script src="js/wolf.js"></script>
 </head>
 <body class="app-shell">
 
@@ -200,11 +200,11 @@
     </div>
 
     <!-- Empty state -->
-    <div id="training-empty" class="card hidden" style="text-align:center;padding:3rem">
-      <div style="font-size:2.5rem;margin-bottom:1rem">🗓️</div>
-      <div class="t-subhead" style="margin-bottom:6px">No active program</div>
-      <div class="t-muted t-small" style="margin-bottom:1.25rem">Generate a program to get started.</div>
-      <button class="btn btn-primary" onclick="generateProgram()">Generate program</button>
+    <div id="training-empty" class="card hidden" style="text-align:center;padding:3rem 2rem">
+      <div id="training-empty-wolf" style="margin-bottom:1rem;opacity:0.9;display:inline-block"></div>
+      <div class="t-subhead" style="margin-bottom:6px">Your wolf is ready to hunt</div>
+      <div class="t-muted t-small" style="margin-bottom:1.5rem">Generate a training program to get started.</div>
+      <button class="btn btn-primary" onclick="generateProgram()">Generate My Program</button>
     </div>
 
   </section>
@@ -422,7 +422,7 @@
     </div>
     <div class="ws-scroll">
       <div class="ws-hero">
-        <div class="ws-emoji">&#x1F3AF;</div>
+        <div class="ws-wolf" id="ws-wolf"></div>
         <div class="ws-duration" id="ws-duration">—</div>
         <div class="ws-duration-lbl">total time</div>
       </div>
@@ -1178,7 +1178,7 @@
       const scene = sceneMap[tab] ?? 'login';
 
       await Promise.all([
-        PandaLoader.show(scene, 1700),
+        WolfLoader.show(scene, 1700),
         loadTab(tab),
       ]);
 
@@ -1210,6 +1210,8 @@
 
       if (error || !program) {
         document.getElementById('training-empty').classList.remove('hidden');
+      const emptyWolf = document.getElementById('training-empty-wolf');
+      if (emptyWolf && window.WolfMascot) WolfMascot.render(emptyWolf, 100, { bg: '#4F46E5' });
         return;
       }
 
@@ -2029,6 +2031,9 @@
       }).join('');
 
       document.getElementById('workout-summary').classList.remove('fm-hidden');
+      // Render wolf mascot in summary hero
+      const wolfEl = document.getElementById('ws-wolf');
+      if (wolfEl && window.WolfMascot) WolfMascot.render(wolfEl, 110);
     }
 
     function confirmAbandon() {
