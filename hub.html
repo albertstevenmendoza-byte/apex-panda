@@ -1926,24 +1926,31 @@
       const saveBtn = document.querySelector('#complete-modal .btn-primary');
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
-      // Grab a snapshot of set logs BEFORE the session is cleared
-      const state = ApexTraining.WorkoutSession.getState();
-      const setLogsSnapshot = [...(state.setLogs || [])];
+      // Snapshot state BEFORE the session is cleared by completeSession()
+      const state           = ApexTraining.WorkoutSession.getState();
+      const setLogsSnapshot = [...(state.setLogs   || [])];
       const plannedSets     = [...(state.plannedSets || [])];
+      const timerSnapshot   = state.timer;
 
-      const { deloadCheck, error } = await ApexTraining.WorkoutSession.completeSession({
-        rpeOverall: rpeVal, notes: notesVal,
-      });
+      try {
+        const { deloadCheck, error } = await ApexTraining.WorkoutSession.completeSession({
+          rpeOverall: rpeVal, notes: notesVal,
+        });
 
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save session'; }
-      if (error) { showToast(error.message, 'error'); return; }
+        if (error) { showToast(error.message, 'error'); return; }
 
-      // Close the complete modal and show the summary screen
-      document.getElementById('complete-modal').classList.add('hidden');
-      await openWorkoutSummary(setLogsSnapshot, plannedSets, state.timer);
+        document.getElementById('complete-modal').classList.add('hidden');
+        await openWorkoutSummary(setLogsSnapshot, plannedSets, timerSnapshot);
 
-      if (deloadCheck?.shouldDeload)
-        showToast(`Deload recommended: ${deloadCheck.reason}`, 'warning');
+        if (deloadCheck?.shouldDeload)
+          showToast(`Deload recommended: ${deloadCheck.reason}`, 'warning');
+
+      } catch(e) {
+        console.error('[Apex] completeSession error:', e);
+        showToast('Could not save session — please try again', 'error');
+      } finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save session'; }
+      }
     }
 
     function closeSummary() {
