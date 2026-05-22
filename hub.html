@@ -1780,7 +1780,13 @@
 
     async function logFocusSet() {
       const item = WORKOUT.exercises[WORKOUT.curEx];
-      const { ps } = item;
+      // Guard: curEx may have already advanced past the last exercise
+      if (!item) { openCompleteModal(); return; }
+
+      const btn = document.getElementById('log-set-btn');
+      // Prevent double-log if button is already mid-save
+      if (btn?.disabled) return;
+
       const wt   = parseFloat(document.getElementById('focus-wt').value);
       const reps = parseInt(document.getElementById('focus-reps').value);
       const rpe  = WORKOUT.selectedRPE;
@@ -1789,26 +1795,23 @@
         showToast('Enter weight, reps and RPE', 'error'); return;
       }
 
-      const btn = document.getElementById('log-set-btn');
-      btn.disabled    = true;
-      btn.textContent = 'Saving…';
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
       try {
+        const { ps } = item;   // safe — item is confirmed non-null above
+
         const { log, overload, isPR, error } = await ApexTraining.WorkoutSession.logSet({
           plannedSetId: ps.id, exerciseId: ps.exercise_id,
           setNumber: WORKOUT.curSet, weightKg: lbsToKg(wt), reps, rpe,
         });
 
-        if (error) {
-          showToast(error.message, 'error');
-          return;
-        }
+        if (error) { showToast(error.message, 'error'); return; }
 
         item.logs.push({ set: WORKOUT.curSet, wt, reps, rpe });
         item.setsDone++;
 
-        // Flash + haptic feedback
-        void btn.offsetWidth; btn.classList.add('focus-log-flash');
+        // Flash + haptic
+        if (btn) { void btn.offsetWidth; btn.classList.add('focus-log-flash'); }
         if (navigator.vibrate) navigator.vibrate(40);
 
         if (isPR) showToast(
@@ -1820,9 +1823,10 @@
         console.error('[Apex] logFocusSet threw:', e);
         showToast('Could not log set — please try again', 'error');
       } finally {
-        // Always re-enable the button — rest overlay will hide it anyway
-        btn.disabled    = false;
-        btn.textContent = `Log Set ${WORKOUT.curSet} / ${item.setsTotal}`;
+        if (btn) btn.disabled = false;
+        // Re-read curEx in case advanceWorkout already ran during the await
+        const cur = WORKOUT.exercises[WORKOUT.curEx];
+        if (btn && cur) btn.textContent = `Log Set ${WORKOUT.curSet} / ${cur.setsTotal}`;
       }
     }
 
